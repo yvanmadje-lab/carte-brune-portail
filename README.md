@@ -25,6 +25,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
    actuel du site)
 3. `supabase/settings_schema.sql` (paramètres du site, dont le logo)
 4. `supabase/speakers_schema.sql` (section "Ils portent l'événement")
+5. `supabase/menu_schema.sql` (menu de navigation)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -47,6 +48,15 @@ site** :
 - **Logo** : téléchargez le logo officiel de l'événement — il
   remplace automatiquement le sceau par défaut dans l'en-tête et le
   bandeau d'accueil, partout sur le site.
+- **Contenu du bandeau** : le numéro d'édition (42), le titre et le
+  sous-titre (en FR/EN/PT), le thème de la réunion (affiché dans un
+  bandeau dédié sur la page d'accueil s'il est rempli — laissez vide
+  pour le masquer), les dates courtes, le mois/année, le lieu, la
+  ville et le pays.
+- **Menu** : ajoutez/modifiez/réordonnez les liens du menu de
+  navigation (nom en FR/EN/PT + cible : une section de la page comme
+  `event-section`, `hotels-section`, `tourism-section`, `top` pour
+  l'accueil, ou une URL complète).
 - **Ils portent l'événement** : ajoutez les membres du comité
   d'organisation ou partenaires (nom, titre/rôle en FR/EN/PT, photo).
 - **Carrousel d'accueil** : ajoutez des images qui défileront en
@@ -69,6 +79,14 @@ npm install
 cp .env.example .env   # puis remplir avec vos clés Supabase
 npm run dev
 ```
+
+## Limite connue
+
+Le préfixe des numéros d'inscription (`CB-2026-AG42-...`) est fixé
+dans la base de données (trigger SQL), pas dans le contenu du
+bandeau — le modifier nécessite d'éditer `supabase/schema.sql`
+directement, pour rester cohérent avec les inscriptions déjà
+enregistrées.
 
 ## Prochaines étapes possibles
 
