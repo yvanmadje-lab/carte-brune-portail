@@ -1,7 +1,7 @@
 # Portail Carte Brune CEDEAO — 42e Assemblée Générale
 
-Site React (Vite + Tailwind) avec back-office admin connecté à une vraie
-base de données (Supabase : Postgres + Auth), déployable sur Vercel.
+Site React (Vite + Tailwind) avec back-office CMS complet, connecté à
+Supabase (Postgres + Auth + Storage), déployable sur Vercel.
 
 ## Architecture
 
@@ -9,62 +9,63 @@ base de données (Supabase : Postgres + Auth), déployable sur Vercel.
   sécurisée (`register_participant`) — les visiteurs n'ont jamais
   d'accès direct à la table des participants.
 - Le tableau de bord admin (bouton "Administration" en bas de page)
-  est protégé par une connexion (email + mot de passe), gérée par
-  Supabase Auth. Sans connexion, impossible de voir la liste des
-  participants.
+  est protégé par connexion (email + mot de passe / Supabase Auth),
+  avec deux onglets :
+  - **Participants** : inscriptions, recherche, filtres, export CSV
+  - **Contenu du site** : gestion du carrousel d'accueil, des sites
+    touristiques et des hôtels — avec upload d'images, publication/
+    brouillon, ordre d'affichage. C'est le CMS.
 
-## Étape 1 — Créer le projet Supabase (5 min)
+## Étape 1 — Base de données (si pas déjà fait)
 
-1. Allez sur https://supabase.com → "New project" (offre gratuite).
-2. Une fois le projet créé, ouvrez **SQL Editor** → **New query**,
-   collez le contenu du fichier `supabase/schema.sql` de ce dossier,
-   puis cliquez **Run**. Cela crée la table `participants`, la
-   numérotation automatique des inscriptions, et les règles de
-   sécurité (RLS).
-3. Allez dans **Authentication → Users → Add user**, créez votre
-   compte administrateur (email + mot de passe). C'est ce compte qui
-   vous servira à vous connecter à l'espace admin du site.
-4. Allez dans **Project Settings → API** : notez votre **Project URL**
-   et votre clé **anon public**.
+Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
+1. `supabase/schema.sql` (table des participants)
+2. `supabase/cms_schema.sql` (carrousel, tourisme, hôtels, stockage
+   d'images — inclut des données de départ reprenant le contenu
+   actuel du site)
 
-## Étape 2 — Connecter le site à Supabase
+Dans **Authentication → Users → Add user**, créez votre compte admin.
 
-En local, copiez `.env.example` en `.env` et remplissez les deux
-valeurs récupérées à l'étape précédente :
+Dans **Project Settings → API**, notez votre Project URL et votre clé
+`anon public`.
+
+## Étape 2 — Variables d'environnement sur Vercel
+
+Project → Settings → Environment Variables :
 ```
 VITE_SUPABASE_URL=https://xxxxxxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
+Puis **Deployments → ⋯ → Redeploy**.
 
-Sur **Vercel** (votre site déjà déployé) : allez dans
-**Project → Settings → Environment Variables**, ajoutez les deux
-mêmes variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`),
-puis relancez un déploiement (**Deployments → ⋯ → Redeploy**).
+## Étape 3 — Utiliser le CMS
 
-## Étape 3 — Tester
+Site en ligne → "Administration" → connexion → onglet **Contenu du
+site** :
+- **Carrousel d'accueil** : ajoutez des images qui défileront en
+  fond du bandeau "42e Assemblée Générale". Sans image, le fond reste
+  uni (comme avant).
+- **Tourisme** : ajoutez/modifiez/supprimez les sites touristiques
+  affichés sur la page publique (nom et description en FR/EN/PT +
+  photo).
+- **Hôtels** : idem pour les hôtels recommandés (nom, distance,
+  description, commodités, prix, photo).
+
+Chaque élément a un statut **Publié / Brouillon** — seul le contenu
+publié apparaît sur le site public. L'ordre d'affichage se règle
+avec le champ numérique correspondant (0 = premier).
+
+## Tester en local
 
 ```
 npm install
+cp .env.example .env   # puis remplir avec vos clés Supabase
 npm run dev
 ```
 
-- Sur le site public, faites une inscription test → vous devez
-  obtenir un numéro `CB-2026-AG42-000001`.
-- Cliquez sur "Administration" en bas de page, connectez-vous avec le
-  compte créé à l'étape 1 → vous devez voir cette inscription dans le
-  tableau de bord, avec recherche, filtre par pays et export CSV.
-
-## Ajouter d'autres administrateurs
-
-Authentication → Users → Add user, dans votre projet Supabase. Aucune
-inscription publique n'est possible : seuls les comptes que vous créez
-vous-même peuvent se connecter à l'espace admin.
-
 ## Prochaines étapes possibles
 
-- Gestion des rôles (super admin / logistique / lecture seule)
-- Emails automatiques de confirmation (via une fonction Supabase Edge
-  + un service d'envoi comme Resend)
-- Gestion des événements/hôtels/tourisme depuis le back-office plutôt
-  que dans le code (tables `events`, `hotels`, `tourist_sites`)
+- Gestion des rôles admin (super admin / logistique / lecture seule)
+- Emails automatiques de confirmation
+- Gestion des événements multi-années depuis le back-office
 - QR code et badge PDF
