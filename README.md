@@ -23,6 +23,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 2. `supabase/cms_schema.sql` (carrousel, tourisme, hôtels, stockage
    d'images — inclut des données de départ reprenant le contenu
    actuel du site)
+3. `supabase/settings_schema.sql` (paramètres du site, dont le logo)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -42,6 +43,9 @@ Puis **Deployments → ⋯ → Redeploy**.
 
 Site en ligne → "Administration" → connexion → onglet **Contenu du
 site** :
+- **Logo** : téléchargez le logo officiel de l'événement — il
+  remplace automatiquement le sceau par défaut dans l'en-tête et le
+  bandeau d'accueil, partout sur le site.
 - **Carrousel d'accueil** : ajoutez des images qui défileront en
   fond du bandeau "42e Assemblée Générale". Sans image, le fond reste
   uni (comme avant).

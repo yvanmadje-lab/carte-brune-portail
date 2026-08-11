@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff } from "lucide-react";
-import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia } from "./lib/supabaseClient";
+import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting } from "./lib/supabaseClient";
 
 /* ---------------------------------------------------------
    TOKENS — alignés sur l'identité officielle Carte Brune CEDEAO
@@ -133,6 +133,8 @@ const T = {
   confirm_delete: { fr: "Supprimer cet élément ?", en: "Delete this item?", pt: "Eliminar este item?" },
   no_items: { fr: "Aucun élément pour le moment.", en: "No items yet.", pt: "Ainda sem itens." },
   hero_carousel_help: { fr: "Ces images défilent en arrière-plan du bandeau d'accueil. Sans image ajoutée, le fond reste uni.", en: "These images rotate behind the homepage hero banner. With none added, the background stays plain.", pt: "Estas imagens alternam no fundo do banner inicial. Sem imagens, o fundo permanece liso." },
+  logo_tab: { fr: "Logo", en: "Logo", pt: "Logótipo" },
+  logo_help: { fr: "Ce logo remplace le sceau par défaut dans l'en-tête et le bandeau d'accueil du site.", en: "This logo replaces the default seal in the header and homepage banner.", pt: "Este logótipo substitui o selo padrão no cabeçalho e no banner inicial." },
   view_site: { fr: "Voir le site public", en: "View public site", pt: "Ver site público" },
   hotel_none: { fr: "Hébergement personnel", en: "Own accommodation", pt: "Alojamento próprio" },
   bureau: { fr: "Bureau National", en: "National Bureau", pt: "Bureau Nacional" },
@@ -186,13 +188,15 @@ export default function App() {
   const [hotels, setHotels] = useState(DEFAULT_HOTELS);
   const [tourism, setTourism] = useState(DEFAULT_TOURISM);
   const [heroSlides, setHeroSlides] = useState([]);
+  const [logoUrl, setLogoUrl] = useState("");
 
-  // Contenu public (tourisme, hôtels, carrousel) — visible sans connexion.
+  // Contenu public (tourisme, hôtels, carrousel, logo) — visible sans connexion.
   async function loadPublicContent() {
-    const [t, h, s] = await Promise.all([
+    const [t, h, s, logo] = await Promise.all([
       fetchPublished("tourist_sites"),
       fetchPublished("cms_hotels"),
       fetchPublished("hero_slides"),
+      getSetting("event_logo"),
     ]);
     if (t.length) setTourism(t.map(r => ({
       id: r.id,
@@ -210,6 +214,7 @@ export default function App() {
       rooms: [{ id: r.id + "-r1", type: r.room_type || "Standard", price: Number(r.price) || 0, cur: r.currency || "FCFA" }],
     })));
     if (s.length) setHeroSlides(s.map(r => r.image_url));
+    if (logo) setLogoUrl(logo);
   }
 
   useEffect(() => { loadPublicContent(); }, []);
@@ -336,12 +341,16 @@ export default function App() {
       <header style={{ background: "var(--navy)" }} className="text-white sticky top-0 z-40">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-5 py-3">
           <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-3 text-left">
-            <div className="seal w-9 h-9 flex-shrink-0">
-              <div className="seal-ring" />
-              <div style={{ position: "absolute", inset: 3, background: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <ShieldCheck size={14} color="var(--vert-fonce)" />
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="w-9 h-9 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
+            ) : (
+              <div className="seal w-9 h-9 flex-shrink-0">
+                <div className="seal-ring" />
+                <div style={{ position: "absolute", inset: 3, background: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ShieldCheck size={14} color="var(--vert-fonce)" />
+                </div>
               </div>
-            </div>
+            )}
             <div>
               <div className="font-display font-semibold leading-tight" style={{ fontSize: "1.05rem" }}>Carte Brune CEDEAO</div>
               <div className="text-[11px] opacity-75 leading-tight hidden sm:block">{t("council", lang)}</div>
@@ -380,7 +389,7 @@ export default function App() {
       <div className="weave" />
 
       {view === "public" && (
-        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} />
+        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} logoUrl={logoUrl} />
       )}
 
       {view === "register" && step < 6 && (
@@ -392,7 +401,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} logoUrl={logoUrl} onLogoChange={setLogoUrl} />
       )}
 
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
@@ -425,7 +434,7 @@ function HeroCarousel({ images }) {
   );
 }
 
-function PublicSite({ lang, setView, hotels, tourism, heroSlides }) {
+function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl }) {
   return (
     <>
       {/* HERO — fond noir + trame de points, dans l'esprit du bandeau vidéo */}
@@ -444,7 +453,11 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides }) {
 
           <div className="inline-flex flex-wrap items-stretch gap-0 mb-8" style={{ background: "var(--vert-fonce)" }}>
             <div className="flex items-center gap-3 px-5 py-3">
-              <div className="seal w-8 h-8 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:2, background:"#fff", borderRadius:"50%" }} /></div>
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+              ) : (
+                <div className="seal w-8 h-8 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:2, background:"#fff", borderRadius:"50%" }} /></div>
+              )}
               <div className="text-sm leading-tight">
                 <div className="font-semibold">{t("council", lang).split("—")[0]}</div>
               </div>
@@ -729,7 +742,7 @@ function AdminLogin({ lang }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, setView, adminUser, authChecked, participantsLoading, onRefresh }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, setView, adminUser, authChecked, participantsLoading, onRefresh, logoUrl, onLogoChange }) {
   const [tab, setTab] = useState("participants");
   if (!authChecked) return null;
   if (!adminUser) return <AdminLogin lang={lang} />;
@@ -826,7 +839,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       </>
       )}
 
-      {tab === "content" && <ContentManager lang={lang} />}
+      {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} />}
     </div>
   );
 }
@@ -877,23 +890,64 @@ function StatusBadge({ status }) {
   );
 }
 
-function ContentManager({ lang }) {
-  const [sub, setSub] = useState("hero");
+function ContentManager({ lang, logoUrl, onLogoChange }) {
+  const [sub, setSub] = useState("logo");
   const subs = [
+    ["logo", t("logo_tab", lang)],
     ["hero", t("hero_carousel_tab", lang)],
     ["tourism", t("tourism_tab", lang)],
     ["hotels", t("hotels_tab", lang)],
   ];
   return (
     <div>
-      <div className="flex gap-4 mb-6 text-sm">
+      <div className="flex gap-4 mb-6 text-sm flex-wrap">
         {subs.map(([key, label]) => (
           <button key={key} onClick={() => setSub(key)} className="px-3 py-1.5" style={{ background: sub === key ? "var(--vert-fonce)" : "#fff", color: sub === key ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{label}</button>
         ))}
       </div>
+      {sub === "logo" && <LogoManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} />}
       {sub === "hero" && <HeroSlidesManager lang={lang} />}
       {sub === "tourism" && <TourismManager lang={lang} />}
       {sub === "hotels" && <HotelsManager lang={lang} />}
+    </div>
+  );
+}
+
+function LogoManager({ lang, logoUrl, onLogoChange }) {
+  const [draft, setDraft] = useState(logoUrl || "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await setSetting("event_logo", draft || null);
+      onLogoChange(draft);
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  async function handleRemove() {
+    setSaving(true);
+    try {
+      await setSetting("event_logo", null);
+      setDraft("");
+      onLogoChange("");
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  return (
+    <div className="bg-white border p-5 max-w-sm space-y-4" style={{ borderColor: "#CFC4A3" }}>
+      <p className="text-xs text-black/50">{t("logo_help", lang)}</p>
+      <ImageUploader lang={lang} value={draft} onChange={setDraft} folder="logo" />
+      <div className="flex gap-2">
+        <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+        {draft && <button onClick={handleRemove} className="cb-btn-outline text-sm" disabled={saving}>{t("delete", lang)}</button>}
+      </div>
+      {saved && <div className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓ {t("save", lang)}</div>}
     </div>
   );
 }

@@ -42,3 +42,14 @@ export async function deleteRow(table, id) {
   const { error } = await supabase.from(table).delete().eq("id", id);
   if (error) throw error;
 }
+
+export async function getSetting(key) {
+  const { data, error } = await supabase.from("site_settings").select("value").eq("key", key).maybeSingle();
+  if (error) return null;
+  return data?.value || null;
+}
+
+export async function setSetting(key, value) {
+  const { error } = await supabase.from("site_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+  if (error) throw error;
+}
