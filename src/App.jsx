@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw } from "lucide-react";
-import { supabase } from "./lib/supabaseClient";
+import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff } from "lucide-react";
+import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia } from "./lib/supabaseClient";
 
 /* ---------------------------------------------------------
    TOKENS — alignés sur l'identité officielle Carte Brune CEDEAO
@@ -15,13 +15,13 @@ import { supabase } from "./lib/supabaseClient";
 
 const COUNTRIES = ["Bénin","Cabo Verde","Côte d'Ivoire","Gambie","Ghana","Guinée","Guinée-Bissau","Liberia","Nigeria","Sénégal","Sierra Leone","Togo"];
 
-const HOTELS = [
+const DEFAULT_HOTELS = [
   { id: "h1", name: "Hôtel Pullman Dakar", distance: "Lieu officiel de l'Assemblée Générale", desc: { fr: "Hôtel hôte de la 42ᵉ Assemblée Générale, en front de mer sur la Corniche.", en: "Host hotel of the 42nd General Assembly, on the seafront Corniche.", pt: "Hotel anfitrião da 42ª Assembleia Geral, à beira-mar na Corniche." }, amenities: ["Wi‑Fi", "Piscine", "Salles de conférence", "Restaurant"], rooms: [ { id: "h1r1", type: "Standard", price: 85000, cur: "FCFA" }, { id: "h1r2", type: "Deluxe", price: 120000, cur: "FCFA" } ] },
   { id: "h2", name: "Radisson Blu Dakar Sea Plaza", distance: "2,1 km du lieu de réunion", desc: { fr: "Établissement moderne surplombant la baie de Dakar.", en: "Modern property overlooking Dakar bay.", pt: "Estabelecimento moderno com vista para a baía de Dakar." }, amenities: ["Wi‑Fi", "Salle de sport", "Climatisation", "Parking"], rooms: [ { id: "h2r1", type: "Standard", price: 75000, cur: "FCFA" }, { id: "h2r2", type: "Suite", price: 140000, cur: "FCFA" } ] },
   { id: "h3", name: "Novotel Dakar", distance: "3,4 km du lieu de réunion", desc: { fr: "Option confortable au centre-ville, proche du Plateau.", en: "Comfortable downtown option, near Le Plateau.", pt: "Opção confortável no centro, perto do Plateau." }, amenities: ["Wi‑Fi", "Petit-déjeuner", "Climatisation"], rooms: [ { id: "h3r1", type: "Standard", price: 55000, cur: "FCFA" } ] },
 ];
 
-const TOURISM = [
+const DEFAULT_TOURISM = [
   { name: { fr: "Île de Gorée", en: "Gorée Island", pt: "Ilha de Gorée" }, desc: { fr: "Site mémoriel classé UNESCO, à 20 minutes en ferry du port de Dakar.", en: "UNESCO memorial site, a 20-minute ferry ride from Dakar's port.", pt: "Local memorial classificado pela UNESCO, a 20 minutos de ferry do porto de Dakar." } },
   { name: { fr: "Monument de la Renaissance", en: "African Renaissance Monument", pt: "Monumento do Renascimento Africano" }, desc: { fr: "Plus haute statue d'Afrique, surplombant les Mamelles.", en: "Africa's tallest statue, overlooking the Mamelles hills.", pt: "A estátua mais alta de África, com vista para as Mamelles." } },
   { name: { fr: "Lac Rose (Retba)", en: "Pink Lake (Lake Retba)", pt: "Lago Rosa (Retba)" }, desc: { fr: "Lac aux eaux roses, ancien terminus du rallye Paris-Dakar.", en: "Pink-hued lake, former finish line of the Paris-Dakar rally.", pt: "Lago de águas rosadas, antiga meta do rali Paris-Dakar." } },
@@ -104,6 +104,35 @@ const T = {
   refresh: { fr: "Actualiser", en: "Refresh", pt: "Atualizar" },
   submit_error: { fr: "Une erreur est survenue. Merci de réessayer.", en: "Something went wrong. Please try again.", pt: "Ocorreu um erro. Tente novamente." },
   submitting: { fr: "Envoi en cours…", en: "Submitting…", pt: "A enviar…" },
+  content_tab: { fr: "Contenu du site", en: "Site content", pt: "Conteúdo do site" },
+  participants_tab: { fr: "Participants", en: "Participants", pt: "Participantes" },
+  hero_carousel_tab: { fr: "Carrousel d'accueil", en: "Homepage carousel", pt: "Carrossel inicial" },
+  tourism_tab: { fr: "Tourisme", en: "Tourism", pt: "Turismo" },
+  hotels_tab: { fr: "Hôtels", en: "Hotels", pt: "Hotéis" },
+  add_new: { fr: "Ajouter", en: "Add", pt: "Adicionar" },
+  edit: { fr: "Modifier", en: "Edit", pt: "Editar" },
+  delete: { fr: "Supprimer", en: "Delete", pt: "Eliminar" },
+  save: { fr: "Enregistrer", en: "Save", pt: "Guardar" },
+  cancel: { fr: "Annuler", en: "Cancel", pt: "Cancelar" },
+  published: { fr: "Publié", en: "Published", pt: "Publicado" },
+  draft: { fr: "Brouillon", en: "Draft", pt: "Rascunho" },
+  image: { fr: "Image", en: "Image", pt: "Imagem" },
+  upload_image: { fr: "Choisir une image", en: "Choose image", pt: "Escolher imagem" },
+  uploading: { fr: "Envoi de l'image…", en: "Uploading image…", pt: "A enviar imagem…" },
+  display_order: { fr: "Ordre d'affichage", en: "Display order", pt: "Ordem de exibição" },
+  amenities_help: { fr: "Commodités, séparées par des virgules", en: "Amenities, comma-separated", pt: "Comodidades, separadas por vírgulas" },
+  price: { fr: "Prix / nuit", en: "Price / night", pt: "Preço / noite" },
+  currency: { fr: "Devise", en: "Currency", pt: "Moeda" },
+  room_type: { fr: "Type de chambre", en: "Room type", pt: "Tipo de quarto" },
+  name_fr: { fr: "Nom (Français)", en: "Name (French)", pt: "Nome (Francês)" },
+  name_en: { fr: "Nom (Anglais)", en: "Name (English)", pt: "Nome (Inglês)" },
+  name_pt: { fr: "Nom (Portugais)", en: "Name (Portuguese)", pt: "Nome (Português)" },
+  desc_fr: { fr: "Description (Français)", en: "Description (French)", pt: "Descrição (Francês)" },
+  desc_en: { fr: "Description (Anglais)", en: "Description (English)", pt: "Descrição (Inglês)" },
+  desc_pt: { fr: "Description (Portugais)", en: "Description (Portuguese)", pt: "Descrição (Português)" },
+  confirm_delete: { fr: "Supprimer cet élément ?", en: "Delete this item?", pt: "Eliminar este item?" },
+  no_items: { fr: "Aucun élément pour le moment.", en: "No items yet.", pt: "Ainda sem itens." },
+  hero_carousel_help: { fr: "Ces images défilent en arrière-plan du bandeau d'accueil. Sans image ajoutée, le fond reste uni.", en: "These images rotate behind the homepage hero banner. With none added, the background stays plain.", pt: "Estas imagens alternam no fundo do banner inicial. Sem imagens, o fundo permanece liso." },
   view_site: { fr: "Voir le site public", en: "View public site", pt: "Ver site público" },
   hotel_none: { fr: "Hébergement personnel", en: "Own accommodation", pt: "Alojamento próprio" },
   bureau: { fr: "Bureau National", en: "National Bureau", pt: "Bureau Nacional" },
@@ -136,7 +165,7 @@ function downloadCSV(csv, filename) {
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
-const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: "bureau", orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: HOTELS[0].id, roomId: HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", transfer: "yes" };
+const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: "bureau", orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: DEFAULT_HOTELS[0].id, roomId: DEFAULT_HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", transfer: "yes" };
 
 export default function App() {
   const [lang, setLang] = useState("fr");
@@ -154,6 +183,36 @@ export default function App() {
   const [adminUser, setAdminUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [participantsLoading, setParticipantsLoading] = useState(false);
+  const [hotels, setHotels] = useState(DEFAULT_HOTELS);
+  const [tourism, setTourism] = useState(DEFAULT_TOURISM);
+  const [heroSlides, setHeroSlides] = useState([]);
+
+  // Contenu public (tourisme, hôtels, carrousel) — visible sans connexion.
+  async function loadPublicContent() {
+    const [t, h, s] = await Promise.all([
+      fetchPublished("tourist_sites"),
+      fetchPublished("cms_hotels"),
+      fetchPublished("hero_slides"),
+    ]);
+    if (t.length) setTourism(t.map(r => ({
+      id: r.id,
+      name: { fr: r.name_fr, en: r.name_en, pt: r.name_pt },
+      desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
+      image: r.image_url,
+    })));
+    if (h.length) setHotels(h.map(r => ({
+      id: r.id,
+      name: r.name,
+      distance: r.distance,
+      desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
+      amenities: (r.amenities || "").split(",").map(a => a.trim()).filter(Boolean),
+      image: r.image_url,
+      rooms: [{ id: r.id + "-r1", type: r.room_type || "Standard", price: Number(r.price) || 0, cur: r.currency || "FCFA" }],
+    })));
+    if (s.length) setHeroSlides(s.map(r => r.image_url));
+  }
+
+  useEffect(() => { loadPublicContent(); }, []);
 
   // Session admin : suit l'état de connexion Supabase Auth.
   useEffect(() => {
@@ -201,7 +260,7 @@ export default function App() {
 
   function update(field, value) { setForm(f => ({ ...f, [field]: value })); }
 
-  const selectedHotel = HOTELS.find(h => h.id === form.hotelId) || HOTELS[0];
+  const selectedHotel = hotels.find(h => h.id === form.hotelId) || hotels[0] || DEFAULT_HOTELS[0];
   const selectedRoom = selectedHotel.rooms.find(r => r.id === form.roomId) || selectedHotel.rooms[0];
 
   async function submitRegistration() {
@@ -321,11 +380,11 @@ export default function App() {
       <div className="weave" />
 
       {view === "public" && (
-        <PublicSite lang={lang} setView={setView} />
+        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} />
       )}
 
       {view === "register" && step < 6 && (
-        <RegistrationWizard lang={lang} step={step} setStep={setStep} form={form} update={update} selectedHotel={selectedHotel} selectedRoom={selectedRoom} onSubmit={submitRegistration} setView={setView} submitting={submitting} submitError={submitError} />
+        <RegistrationWizard lang={lang} step={step} setStep={setStep} form={form} update={update} selectedHotel={selectedHotel} selectedRoom={selectedRoom} onSubmit={submitRegistration} setView={setView} submitting={submitting} submitError={submitError} hotels={hotels} />
       )}
 
       {view === "register" && step === 6 && confirmed && (
@@ -348,11 +407,30 @@ export default function App() {
   );
 }
 
-function PublicSite({ lang, setView }) {
+function HeroCarousel({ images }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (images.length < 2) return;
+    const id = setInterval(() => setI(n => (n + 1) % images.length), 5000);
+    return () => clearInterval(id);
+  }, [images.length]);
+  if (!images.length) return null;
+  return (
+    <div className="absolute inset-0 pointer-events-none">
+      {images.map((src, idx) => (
+        <div key={idx} className="absolute inset-0 transition-opacity duration-[1500ms]" style={{ opacity: idx === i ? 1 : 0, backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+      ))}
+      <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(11,13,12,.55), rgba(11,13,12,.9))" }} />
+    </div>
+  );
+}
+
+function PublicSite({ lang, setView, hotels, tourism, heroSlides }) {
   return (
     <>
       {/* HERO — fond noir + trame de points, dans l'esprit du bandeau vidéo */}
       <section id="event-section" style={{ background: "var(--noir)" }} className="relative text-white px-5 py-20 overflow-hidden">
+        <HeroCarousel images={heroSlides} />
         <div className="dots absolute inset-0 pointer-events-none" style={{ maskImage: "radial-gradient(ellipse at bottom left, black, transparent 70%)" }} />
         <div className="max-w-6xl mx-auto relative">
           <div className="flex items-start gap-3 mb-6">
@@ -406,9 +484,13 @@ function PublicSite({ lang, setView }) {
         <div className="max-w-6xl mx-auto">
           <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("tourism_title", lang)}</h2>
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5">
-            {TOURISM.map((site, i) => (
-              <div key={i} className="bg-white">
-                <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "110px" }} />
+            {tourism.map((site, i) => (
+              <div key={site.id || i} className="bg-white">
+                {site.image ? (
+                  <div style={{ height: "110px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+                ) : (
+                  <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "110px" }} />
+                )}
                 <div className="p-4">
                   <div className="font-semibold text-sm mb-1">{site.name[lang]}</div>
                   <div className="text-xs text-black/60 leading-relaxed">{site.desc[lang]}</div>
@@ -423,11 +505,17 @@ function PublicSite({ lang, setView }) {
       <section id="hotels-section" className="max-w-6xl mx-auto px-5 py-14">
         <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("hotels_title", lang)}</h2>
         <div className="grid md:grid-cols-3 gap-6">
-          {HOTELS.map(h => (
+          {hotels.map(h => (
             <div key={h.id} className="border" style={{ borderColor: "#CFC4A3" }}>
-              <div style={{ background: "var(--navy)" }} className="h-24 flex items-end p-3">
-                <span className="text-white font-display font-semibold text-lg">{h.name}</span>
-              </div>
+              {h.image ? (
+                <div className="h-24 flex items-end p-3" style={{ backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center" }}>
+                  <span className="text-white font-display font-semibold text-lg" style={{ textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>{h.name}</span>
+                </div>
+              ) : (
+                <div style={{ background: "var(--navy)" }} className="h-24 flex items-end p-3">
+                  <span className="text-white font-display font-semibold text-lg">{h.name}</span>
+                </div>
+              )}
               <div className="p-4">
                 <div className="text-xs text-black/50 mb-2 flex items-center gap-1"><MapPin size={12} /> {h.distance}</div>
                 <p className="text-sm mb-3 leading-relaxed">{h.desc[lang]}</p>
@@ -450,7 +538,7 @@ function Field({ label, children }) {
   return <div><label className="cb-label">{label}</label>{children}</div>;
 }
 
-function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError }) {
+function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels }) {
   const titles = ["step1_title","step2_title","step3_title","step4_title","step5_title"];
   return (
     <div className="max-w-3xl mx-auto px-5 py-12">
@@ -515,8 +603,8 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
           {form.wantsHotel === "yes" && (
             <>
               <Field label={t("nav_hotels", lang)}>
-                <select className="cb-input" value={form.hotelId} onChange={e=>{ const h = HOTELS.find(x=>x.id===e.target.value); update("hotelId", e.target.value); update("roomId", h.rooms[0].id); }}>
-                  {HOTELS.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                <select className="cb-input" value={form.hotelId} onChange={e=>{ const h = hotels.find(x=>x.id===e.target.value); update("hotelId", e.target.value); update("roomId", h.rooms[0].id); }}>
+                  {hotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                 </select>
               </Field>
               <Field label="Type de chambre">
@@ -642,21 +730,30 @@ function AdminLogin({ lang }) {
 }
 
 function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, setView, adminUser, authChecked, participantsLoading, onRefresh }) {
+  const [tab, setTab] = useState("participants");
   if (!authChecked) return null;
   if (!adminUser) return <AdminLogin lang={lang} />;
   return (
     <div className="max-w-6xl mx-auto px-5 py-10">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <LayoutDashboard size={20} color="var(--navy)" />
           <h2 className="font-display font-semibold text-2xl" style={{ color: "var(--navy)" }}>{t("dashboard", lang)}</h2>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={onRefresh} className="cb-btn-outline text-sm py-1.5 px-3"><RefreshCw size={14} className={participantsLoading ? "animate-spin" : ""} /> {t("refresh", lang)}</button>
+          {tab === "participants" && <button onClick={onRefresh} className="cb-btn-outline text-sm py-1.5 px-3"><RefreshCw size={14} className={participantsLoading ? "animate-spin" : ""} /> {t("refresh", lang)}</button>}
           <button onClick={() => supabase.auth.signOut()} className="text-sm flex items-center gap-1 text-black/60 hover:text-black"><LogOut size={14} /> {t("admin_logout", lang)}</button>
         </div>
       </div>
 
+      <div className="flex gap-1 mb-8 border-b" style={{ borderColor: "#CFC4A3" }}>
+        {[["participants", t("participants_tab", lang)], ["content", t("content_tab", lang)]].map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)} className="px-4 py-2.5 text-sm font-semibold" style={{ color: tab === key ? "var(--vert-fonce)" : "#8a8168", borderBottom: tab === key ? "2px solid var(--vert-fonce)" : "2px solid transparent" }}>{label}</button>
+        ))}
+      </div>
+
+      {tab === "participants" && (
+      <>
       <div className="grid sm:grid-cols-3 gap-5 mb-10">
         <div className="bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
           <div className="cb-label">{t("total_reg", lang)}</div>
@@ -726,6 +823,295 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           </tbody>
         </table>
       </div>
+      </>
+      )}
+
+      {tab === "content" && <ContentManager lang={lang} />}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   CMS — gestion du contenu (carrousel, tourisme, hôtels)
+--------------------------------------------------------- */
+
+function ImageUploader({ lang, value, onChange, folder }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const url = await uploadMedia(file, folder);
+      onChange(url);
+    } catch (err) {
+      setError(String(err.message || err));
+    }
+    setUploading(false);
+  }
+
+  return (
+    <div>
+      <label className="cb-label">{t("image", lang)}</label>
+      {value && (
+        <div className="mb-2 w-full h-28" style={{ backgroundImage: `url(${value})`, backgroundSize: "cover", backgroundPosition: "center", border: "1px solid #CFC4A3" }} />
+      )}
+      <label className="cb-btn-outline text-sm cursor-pointer inline-flex">
+        <ImageIcon size={14} /> {uploading ? t("uploading", lang) : t("upload_image", lang)}
+        <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
+      </label>
+      {error && <div className="text-xs mt-1" style={{ color: "#8A2A2A" }}>{error}</div>}
+    </div>
+  );
+}
+
+function StatusBadge({ status }) {
+  const published = status === "published";
+  return (
+    <span className="text-[11px] px-2 py-0.5 inline-flex items-center gap-1" style={{ background: published ? "#EAF6EE" : "#F1EEE4", color: published ? "var(--vert-fonce)" : "#8a8168" }}>
+      {published ? <Eye size={11} /> : <EyeOff size={11} />}
+    </span>
+  );
+}
+
+function ContentManager({ lang }) {
+  const [sub, setSub] = useState("hero");
+  const subs = [
+    ["hero", t("hero_carousel_tab", lang)],
+    ["tourism", t("tourism_tab", lang)],
+    ["hotels", t("hotels_tab", lang)],
+  ];
+  return (
+    <div>
+      <div className="flex gap-4 mb-6 text-sm">
+        {subs.map(([key, label]) => (
+          <button key={key} onClick={() => setSub(key)} className="px-3 py-1.5" style={{ background: sub === key ? "var(--vert-fonce)" : "#fff", color: sub === key ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{label}</button>
+        ))}
+      </div>
+      {sub === "hero" && <HeroSlidesManager lang={lang} />}
+      {sub === "tourism" && <TourismManager lang={lang} />}
+      {sub === "hotels" && <HotelsManager lang={lang} />}
+    </div>
+  );
+}
+
+function HeroSlidesManager({ lang }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAll("hero_slides")); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (!editing.image_url) return;
+    await upsertRow("hero_slides", editing);
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("hero_slides", id);
+    load();
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-black/50 mb-4 max-w-lg">{t("hero_carousel_help", lang)}</p>
+      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
+            <div className="h-28" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+            <div className="p-3 flex items-center justify-between">
+              <StatusBadge status={it.status} />
+              <div className="flex gap-2">
+                <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
+                <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-sm space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <ImageUploader lang={lang} value={editing.image_url} onChange={url => setEditing(e => ({ ...e, image_url: url }))} folder="hero" />
+          <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+          <div>
+            <label className="cb-label">{t("published", lang)}</label>
+            <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+              <option value="published">{t("published", lang)}</option>
+              <option value="draft">{t("draft", lang)}</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setEditing({ image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function TourismManager({ lang }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAll("tourist_sites")); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (!editing.name_fr) return;
+    await upsertRow("tourist_sites", editing);
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("tourist_sites", id);
+    load();
+  }
+
+  return (
+    <div>
+      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
+            {it.image_url ? <div className="h-24" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-24" style={{ background: "var(--sable-deep)" }} />}
+            <div className="p-3">
+              <div className="text-sm font-semibold mb-1">{it.name_fr}</div>
+              <div className="flex items-center justify-between">
+                <StatusBadge status={it.status} />
+                <div className="flex gap-2">
+                  <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
+                  <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <ImageUploader lang={lang} value={editing.image_url} onChange={url => setEditing(e => ({ ...e, image_url: url }))} folder="tourism" />
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.name_fr || ""} onChange={e=>setEditing(x=>({ ...x, name_fr: e.target.value }))} /></Field>
+            <Field label={t("name_en", lang)}><input className="cb-input" value={editing.name_en || ""} onChange={e=>setEditing(x=>({ ...x, name_en: e.target.value }))} /></Field>
+            <Field label={t("name_pt", lang)}><input className="cb-input" value={editing.name_pt || ""} onChange={e=>setEditing(x=>({ ...x, name_pt: e.target.value }))} /></Field>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("desc_fr", lang)}><textarea className="cb-input" rows={3} value={editing.desc_fr || ""} onChange={e=>setEditing(x=>({ ...x, desc_fr: e.target.value }))} /></Field>
+            <Field label={t("desc_en", lang)}><textarea className="cb-input" rows={3} value={editing.desc_en || ""} onChange={e=>setEditing(x=>({ ...x, desc_en: e.target.value }))} /></Field>
+            <Field label={t("desc_pt", lang)}><textarea className="cb-input" rows={3} value={editing.desc_pt || ""} onChange={e=>setEditing(x=>({ ...x, desc_pt: e.target.value }))} /></Field>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setEditing({ name_fr: "", name_en: "", name_pt: "", desc_fr: "", desc_en: "", desc_pt: "", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function HotelsManager({ lang }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAll("cms_hotels")); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (!editing.name) return;
+    await upsertRow("cms_hotels", editing);
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("cms_hotels", id);
+    load();
+  }
+
+  return (
+    <div>
+      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
+            {it.image_url ? <div className="h-24" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-24" style={{ background: "var(--navy)" }} />}
+            <div className="p-3">
+              <div className="text-sm font-semibold mb-1">{it.name}</div>
+              <div className="text-xs text-black/50 mb-2">{Number(it.price || 0).toLocaleString()} {it.currency}</div>
+              <div className="flex items-center justify-between">
+                <StatusBadge status={it.status} />
+                <div className="flex gap-2">
+                  <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
+                  <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <ImageUploader lang={lang} value={editing.image_url} onChange={url => setEditing(e => ({ ...e, image_url: url }))} folder="hotels" />
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("organization", lang) === "Organization" ? "Hotel name" : "Nom de l'hôtel"}><input className="cb-input" value={editing.name || ""} onChange={e=>setEditing(x=>({ ...x, name: e.target.value }))} /></Field>
+            <Field label="Distance"><input className="cb-input" value={editing.distance || ""} onChange={e=>setEditing(x=>({ ...x, distance: e.target.value }))} /></Field>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("desc_fr", lang)}><textarea className="cb-input" rows={3} value={editing.desc_fr || ""} onChange={e=>setEditing(x=>({ ...x, desc_fr: e.target.value }))} /></Field>
+            <Field label={t("desc_en", lang)}><textarea className="cb-input" rows={3} value={editing.desc_en || ""} onChange={e=>setEditing(x=>({ ...x, desc_en: e.target.value }))} /></Field>
+            <Field label={t("desc_pt", lang)}><textarea className="cb-input" rows={3} value={editing.desc_pt || ""} onChange={e=>setEditing(x=>({ ...x, desc_pt: e.target.value }))} /></Field>
+          </div>
+          <Field label={t("amenities_help", lang)}><input className="cb-input" value={editing.amenities || ""} onChange={e=>setEditing(x=>({ ...x, amenities: e.target.value }))} placeholder="Wi-Fi, Piscine, Parking" /></Field>
+          <div className="grid sm:grid-cols-4 gap-3">
+            <Field label={t("price", lang)}><input type="number" className="cb-input" value={editing.price || 0} onChange={e=>setEditing(x=>({ ...x, price: Number(e.target.value) }))} /></Field>
+            <Field label={t("currency", lang)}><input className="cb-input" value={editing.currency || "FCFA"} onChange={e=>setEditing(x=>({ ...x, currency: e.target.value }))} /></Field>
+            <Field label={t("room_type", lang)}><input className="cb-input" value={editing.room_type || "Standard"} onChange={e=>setEditing(x=>({ ...x, room_type: e.target.value }))} /></Field>
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+          </div>
+          <div>
+            <label className="cb-label">{t("published", lang)}</label>
+            <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+              <option value="published">{t("published", lang)}</option>
+              <option value="draft">{t("draft", lang)}</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities: "", price: 0, currency: "FCFA", room_type: "Standard", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
     </div>
   );
 }
