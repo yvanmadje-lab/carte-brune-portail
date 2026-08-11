@@ -53,3 +53,11 @@ export async function setSetting(key, value) {
   const { error } = await supabase.from("site_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
   if (error) throw error;
 }
+
+export async function getAllSettings() {
+  const { data, error } = await supabase.from("site_settings").select("key, value");
+  if (error || !data) return {};
+  const map = {};
+  data.forEach(row => { map[row.key] = row.value; });
+  return map;
+}

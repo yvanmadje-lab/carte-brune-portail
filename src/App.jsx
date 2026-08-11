@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff } from "lucide-react";
-import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting } from "./lib/supabaseClient";
+import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings } from "./lib/supabaseClient";
 
 /* ---------------------------------------------------------
    TOKENS — alignés sur l'identité officielle Carte Brune CEDEAO
@@ -28,14 +28,21 @@ const DEFAULT_TOURISM = [
   { name: { fr: "Plage de N'Gor", en: "N'Gor Beach", pt: "Praia de N'Gor" }, desc: { fr: "Plage animée face à l'île de N'Gor, surf et couchers de soleil.", en: "Lively beach facing N'Gor island, surf spots and sunsets.", pt: "Praia animada em frente à ilha de N'Gor, surf e pôr do sol." } },
 ];
 
-const EVENT = {
-  code: "AG42", year: 2026, edition: "42ᵉ",
-  title: { fr: "42ᵉ Assemblée Générale", en: "42nd General Assembly", pt: "42ª Assembleia Geral" },
-  theme: { fr: "Assemblée Générale annuelle du Conseil des Bureaux du Système d'Assurance Carte Brune CEDEAO", en: "Annual General Assembly of the Council of Bureaux of the ECOWAS Brown Card Insurance Scheme", pt: "Assembleia Geral anual do Conselho de Bureaux do Sistema de Seguro Cartão Castanho da CEDEAO" },
-  dates: "19 – 22 octobre 2026", dateShort: "DU 19 AU 22", monthYear: "OCTOBRE 2026",
+const DEFAULT_EVENT = {
+  code: "AG42", year: 2026, edition: "42",
+  title: { fr: "Assemblée Générale", en: "General Assembly", pt: "Assembleia Geral" },
+  theme: { fr: "", en: "", pt: "" },
+  dateShort: "DU 19 AU 22", monthYear: "OCTOBRE 2026",
   city: "Dakar", country: "Sénégal", venue: "Hôtel Pullman Dakar",
   desc: { fr: "Le Conseil des Bureaux du Système d'Assurance Carte Brune CEDEAO réunit à Dakar les Bureaux Nationaux, régulateurs et partenaires techniques pour sa 42ᵉ Assemblée Générale annuelle, en collaboration avec la Fédération Sénégalaise des Sociétés d'Assurances (FSSA).", en: "The Council of Bureaux of the ECOWAS Brown Card Insurance Scheme convenes National Bureaux, regulators and technical partners in Dakar for its 42nd annual General Assembly, in partnership with the Senegalese Federation of Insurance Companies (FSSA).", pt: "O Conselho de Bureaux do Sistema de Seguro Cartão Castanho da CEDEAO reúne em Dakar os Bureaux Nacionais, reguladores e parceiros técnicos para a sua 42ª Assembleia Geral anual, em parceria com a Federação Senegalesa das Sociedades de Seguros (FSSA)." },
 };
+
+const DEFAULT_MENU = [
+  { id: "m1", label: { fr: "Accueil", en: "Home", pt: "Início" }, target: "top" },
+  { id: "m2", label: { fr: "Événements", en: "Events", pt: "Eventos" }, target: "event-section" },
+  { id: "m3", label: { fr: "Hôtels", en: "Hotels", pt: "Hotéis" }, target: "hotels-section" },
+  { id: "m4", label: { fr: "Tourisme", en: "Tourism", pt: "Turismo" }, target: "tourism-section" },
+];
 
 const DEFAULT_SPEAKERS = [
   { name: "Mme Audrey Tiam", role: { fr: "Secrétaire Exécutive, Bureau National Sénégalais de la Carte Brune CEDEAO", en: "Executive Secretary, Senegalese National Bureau of the ECOWAS Brown Card", pt: "Secretária Executiva, Bureau Nacional Senegalês do Cartão Castanho da CEDEAO" } },
@@ -140,6 +147,27 @@ const T = {
   role_en: { fr: "Titre / rôle (Anglais)", en: "Title / role (English)", pt: "Título / função (Inglês)" },
   role_pt: { fr: "Titre / rôle (Portugais)", en: "Title / role (Portuguese)", pt: "Título / função (Português)" },
   full_name: { fr: "Nom complet", en: "Full name", pt: "Nome completo" },
+  theme_label: { fr: "Thème de la réunion", en: "Meeting theme", pt: "Tema da reunião" },
+  hero_content_tab: { fr: "Contenu du bandeau", en: "Hero content", pt: "Conteúdo do banner" },
+  menu_tab: { fr: "Menu", en: "Menu", pt: "Menu" },
+  edition_number: { fr: "Numéro d'édition (ex: 42)", en: "Edition number (e.g. 42)", pt: "Número da edição (ex: 42)" },
+  title_fr: { fr: "Titre (Français)", en: "Title (French)", pt: "Título (Francês)" },
+  title_en: { fr: "Titre (Anglais)", en: "Title (English)", pt: "Título (Inglês)" },
+  title_pt: { fr: "Titre (Portugais)", en: "Title (Portuguese)", pt: "Título (Português)" },
+  subtitle_fr: { fr: "Sous-titre / description (Français)", en: "Subtitle / description (French)", pt: "Subtítulo / descrição (Francês)" },
+  subtitle_en: { fr: "Sous-titre / description (Anglais)", en: "Subtitle / description (English)", pt: "Subtítulo / descrição (Inglês)" },
+  subtitle_pt: { fr: "Sous-titre / description (Portugais)", en: "Subtitle / description (Portuguese)", pt: "Subtítulo / descrição (Português)" },
+  theme_fr: { fr: "Thème de la réunion (Français)", en: "Meeting theme (French)", pt: "Tema da reunião (Francês)" },
+  theme_en: { fr: "Thème de la réunion (Anglais)", en: "Meeting theme (English)", pt: "Tema da reunião (Inglês)" },
+  theme_pt: { fr: "Thème de la réunion (Portugais)", en: "Meeting theme (Portuguese)", pt: "Tema da reunião (Português)" },
+  date_short_label: { fr: "Dates (format court, ex: DU 19 AU 22)", en: "Dates (short format, e.g. FROM 19 TO 22)", pt: "Datas (formato curto)" },
+  month_year_label: { fr: "Mois et année (ex: OCTOBRE 2026)", en: "Month and year (e.g. OCTOBER 2026)", pt: "Mês e ano" },
+  venue_label: { fr: "Lieu (nom de l'hôtel/salle)", en: "Venue name", pt: "Nome do local" },
+  city_label: { fr: "Ville", en: "City", pt: "Cidade" },
+  country_label: { fr: "Pays", en: "Country", pt: "País" },
+  hero_theme_help: { fr: "Si rempli, un bandeau \"Thème de la réunion\" apparaît sur la page d'accueil. Laissez vide pour le masquer.", en: "If filled, a \"Meeting theme\" banner appears on the homepage. Leave empty to hide it.", pt: "Se preenchido, um banner \"Tema da reunião\" aparece na página inicial. Deixe vazio para ocultar." },
+  menu_target_help: { fr: "Où mène ce lien : event-section (haut de page), hotels-section, tourism-section, top (accueil), ou une URL complète (https://...)", en: "Where this link goes: event-section (top), hotels-section, tourism-section, top (home), or a full URL (https://...)", pt: "Para onde este link vai: event-section, hotels-section, tourism-section, top, ou um URL completo" },
+  menu_target: { fr: "Cible du lien", en: "Link target", pt: "Destino do link" },
   view_site: { fr: "Voir le site public", en: "View public site", pt: "Ver site público" },
   hotel_none: { fr: "Hébergement personnel", en: "Own accommodation", pt: "Alojamento próprio" },
   bureau: { fr: "Bureau National", en: "National Bureau", pt: "Bureau Nacional" },
@@ -152,7 +180,7 @@ const t = (k, lang) => (T[k] ? T[k][lang] : k);
 const ORG_TYPES = ["bureau", "insurer", "regulator", "other"];
 
 function regNumber(seq) {
-  return `CB-${EVENT.year}-${EVENT.code}-${String(seq).padStart(6, "0")}`;
+  return `CB-${DEFAULT_EVENT.year}-${DEFAULT_EVENT.code}-${String(seq).padStart(6, "0")}`;
 }
 
 function toCSV(rows) {
@@ -195,15 +223,45 @@ export default function App() {
   const [heroSlides, setHeroSlides] = useState([]);
   const [logoUrl, setLogoUrl] = useState("");
   const [speakers, setSpeakers] = useState(DEFAULT_SPEAKERS);
+  const [eventData, setEventData] = useState(DEFAULT_EVENT);
+  const [menu, setMenu] = useState(DEFAULT_MENU);
 
-  // Contenu public (tourisme, hôtels, carrousel, logo, intervenants) — visible sans connexion.
+  function buildEventFromSettings(s) {
+    return {
+      ...DEFAULT_EVENT,
+      edition: s.event_edition || DEFAULT_EVENT.edition,
+      title: {
+        fr: s.event_title_fr || DEFAULT_EVENT.title.fr,
+        en: s.event_title_en || DEFAULT_EVENT.title.en,
+        pt: s.event_title_pt || DEFAULT_EVENT.title.pt,
+      },
+      desc: {
+        fr: s.event_subtitle_fr || DEFAULT_EVENT.desc.fr,
+        en: s.event_subtitle_en || DEFAULT_EVENT.desc.en,
+        pt: s.event_subtitle_pt || DEFAULT_EVENT.desc.pt,
+      },
+      theme: {
+        fr: s.event_theme_fr || DEFAULT_EVENT.theme.fr,
+        en: s.event_theme_en || DEFAULT_EVENT.theme.en,
+        pt: s.event_theme_pt || DEFAULT_EVENT.theme.pt,
+      },
+      dateShort: s.event_date_short || DEFAULT_EVENT.dateShort,
+      monthYear: s.event_month_year || DEFAULT_EVENT.monthYear,
+      venue: s.event_venue || DEFAULT_EVENT.venue,
+      city: s.event_city || DEFAULT_EVENT.city,
+      country: s.event_country || DEFAULT_EVENT.country,
+    };
+  }
+
+  // Contenu public (tourisme, hôtels, carrousel, logo, intervenants, bandeau, menu) — visible sans connexion.
   async function loadPublicContent() {
-    const [t, h, s, logo, sp] = await Promise.all([
+    const [t, h, s, settings, sp, mn] = await Promise.all([
       fetchPublished("tourist_sites"),
       fetchPublished("cms_hotels"),
       fetchPublished("hero_slides"),
-      getSetting("event_logo"),
+      getAllSettings(),
       fetchPublished("cms_speakers"),
+      fetchPublished("cms_menu_items"),
     ]);
     if (t.length) setTourism(t.map(r => ({
       id: r.id,
@@ -221,16 +279,29 @@ export default function App() {
       rooms: [{ id: r.id + "-r1", type: r.room_type || "Standard", price: Number(r.price) || 0, cur: r.currency || "FCFA" }],
     })));
     if (s.length) setHeroSlides(s.map(r => r.image_url));
-    if (logo) setLogoUrl(logo);
+    if (settings.event_logo) setLogoUrl(settings.event_logo);
+    setEventData(buildEventFromSettings(settings));
     if (sp.length) setSpeakers(sp.map(r => ({
       id: r.id,
       name: r.name,
       role: { fr: r.role_fr, en: r.role_en, pt: r.role_pt },
       image: r.image_url,
     })));
+    if (mn.length) setMenu(mn.map(r => ({
+      id: r.id,
+      label: { fr: r.label_fr, en: r.label_en, pt: r.label_pt },
+      target: r.target,
+    })));
   }
 
   useEffect(() => { loadPublicContent(); }, []);
+
+  function goToMenuTarget(target) {
+    if (!target || target === "top") { setView("public"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (target.startsWith("http")) { window.open(target, "_blank"); return; }
+    setView("public");
+    setTimeout(() => document.getElementById(target)?.scrollIntoView({ behavior: "smooth" }), 50);
+  }
 
   // Session admin : suit l'état de connexion Supabase Auth.
   useEffect(() => {
@@ -370,10 +441,9 @@ export default function App() {
             </div>
           </button>
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-            <button onClick={() => setView("public")} className="hover:opacity-80">{t("nav_home", lang)}</button>
-            <button onClick={() => { setView("public"); document.getElementById("event-section")?.scrollIntoView({behavior:"smooth"}); }} className="hover:opacity-80">{t("nav_events", lang)}</button>
-            <button onClick={() => { setView("public"); document.getElementById("hotels-section")?.scrollIntoView({behavior:"smooth"}); }} className="hover:opacity-80">{t("nav_hotels", lang)}</button>
-            <button onClick={() => { setView("public"); document.getElementById("tourism-section")?.scrollIntoView({behavior:"smooth"}); }} className="hover:opacity-80">{t("nav_tourism", lang)}</button>
+            {menu.map(item => (
+              <button key={item.id} onClick={() => goToMenuTarget(item.target)} className="hover:opacity-80">{item.label[lang]}</button>
+            ))}
           </nav>
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -394,7 +464,9 @@ export default function App() {
         </div>
         {mobileNav && (
           <div className="md:hidden flex flex-col gap-3 px-5 pb-4 text-sm">
-            <button onClick={() => { setView("public"); setMobileNav(false); }} className="text-left">{t("nav_home", lang)}</button>
+            {menu.map(item => (
+              <button key={item.id} onClick={() => { goToMenuTarget(item.target); setMobileNav(false); }} className="text-left">{item.label[lang]}</button>
+            ))}
             <button onClick={() => setView("register")} className="cb-btn text-sm justify-center">{t("register", lang)}</button>
           </div>
         )}
@@ -402,7 +474,7 @@ export default function App() {
       <div className="weave" />
 
       {view === "public" && (
-        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} logoUrl={logoUrl} speakers={speakers} />
+        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} logoUrl={logoUrl} speakers={speakers} event={eventData} />
       )}
 
       {view === "register" && step < 6 && (
@@ -414,12 +486,12 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} logoUrl={logoUrl} onLogoChange={setLogoUrl} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={setEventData} />
       )}
 
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between gap-3">
-          <div>© {EVENT.year} Système d'Assurance Carte Brune CEDEAO</div>
+          <div>© {DEFAULT_EVENT.year} Système d'Assurance Carte Brune CEDEAO</div>
           <button onClick={() => setView(view === "admin" ? "public" : "admin")} className="underline hover:text-white">
             {view === "admin" ? t("view_site", lang) : t("admin", lang)}
           </button>
@@ -447,7 +519,8 @@ function HeroCarousel({ images }) {
   );
 }
 
-function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speakers }) {
+function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speakers, event }) {
+  const hasTheme = event.theme && (event.theme.fr || event.theme.en || event.theme.pt);
   return (
     <>
       {/* HERO — fond noir + trame de points, dans l'esprit du bandeau vidéo */}
@@ -456,13 +529,13 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
         <div className="dots absolute inset-0 pointer-events-none" style={{ maskImage: "radial-gradient(ellipse at bottom left, black, transparent 70%)" }} />
         <div className="max-w-6xl mx-auto relative">
           <div className="flex items-start gap-3 mb-6">
-            <span className="font-display font-bold leading-none" style={{ fontSize: "5rem", color: "var(--vert)" }}>{EVENT.edition.replace("ᵉ","")}</span>
+            <span className="font-display font-bold leading-none" style={{ fontSize: "5rem", color: "var(--vert)" }}>{event.edition}</span>
             <span className="font-display" style={{ fontSize: "1.6rem", color: "var(--brun-clair)", marginTop: "0.6rem" }}>e</span>
           </div>
           <h1 className="font-display font-semibold leading-tight -mt-10 mb-6" style={{ fontSize: "2.4rem" }}>
-            {lang === "fr" ? "Assemblée Générale" : lang === "en" ? "General Assembly" : "Assembleia Geral"}
+            {event.title[lang]}
           </h1>
-          <p className="text-white/80 max-w-xl leading-relaxed mb-8">{EVENT.desc[lang]}</p>
+          <p className="text-white/80 max-w-xl leading-relaxed mb-8">{event.desc[lang]}</p>
 
           <div className="inline-flex flex-wrap items-stretch gap-0 mb-8" style={{ background: "var(--vert-fonce)" }}>
             <div className="flex items-center gap-3 px-5 py-3">
@@ -476,11 +549,11 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
               </div>
             </div>
             <div className="ribbon flex items-center px-5 py-3" style={{ background: "var(--brun)" }}>
-              <span className="font-display font-bold text-lg tracking-wide">{EVENT.dateShort}</span>
+              <span className="font-display font-bold text-lg tracking-wide">{event.dateShort}</span>
             </div>
-            <div className="flex items-center px-5 py-3 text-sm">{EVENT.monthYear}</div>
+            <div className="flex items-center px-5 py-3 text-sm">{event.monthYear}</div>
             <div className="flex items-center gap-1.5 px-5 py-3 text-sm border-l border-white/10">
-              <MapPin size={14} color="var(--vert)" /> <span className="font-semibold">{EVENT.venue}</span>&nbsp;{EVENT.city}
+              <MapPin size={14} color="var(--vert)" /> <span className="font-semibold">{event.venue}</span>&nbsp;{event.city}
             </div>
           </div>
           <div>
@@ -488,6 +561,15 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
           </div>
         </div>
       </section>
+
+      {hasTheme && (
+        <section className="px-5 py-12" style={{ background: "var(--vert-fonce)" }}>
+          <div className="max-w-4xl mx-auto text-center text-white">
+            <div className="cb-label mb-2" style={{ color: "var(--vert)" }}>{t("theme_label", lang)}</div>
+            <p className="font-display leading-relaxed" style={{ fontSize: "1.3rem" }}>{event.theme[lang]}</p>
+          </div>
+        </section>
+      )}
 
       {/* PARTENAIRES & INTERVENANTS */}
       <section className="max-w-6xl mx-auto px-5 py-14">
@@ -713,7 +795,7 @@ function Confirmation({ lang, record, onDone }) {
     <div className="max-w-xl mx-auto px-5 py-16 text-center">
       <div className="stamp mx-auto mb-8" style={{ color: "var(--argile)" }}>
         <ShieldCheck size={28} />
-        <span className="font-mono text-[10px] mt-1">{EVENT.year}</span>
+        <span className="font-mono text-[10px] mt-1">{DEFAULT_EVENT.year}</span>
       </div>
       <h2 className="font-display font-semibold text-2xl mb-2" style={{ color: "var(--navy)" }}>{t("confirmed_title", lang)}</h2>
       <p className="text-sm text-black/60 mb-6">{record.firstName} {record.lastName}</p>
@@ -759,7 +841,7 @@ function AdminLogin({ lang }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, setView, adminUser, authChecked, participantsLoading, onRefresh, logoUrl, onLogoChange }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, setView, adminUser, authChecked, participantsLoading, onRefresh, logoUrl, onLogoChange, eventData, onEventChange }) {
   const [tab, setTab] = useState("participants");
   if (!authChecked) return null;
   if (!adminUser) return <AdminLogin lang={lang} />;
@@ -823,7 +905,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <option value="">{t("all_countries", lang)}</option>
           {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button onClick={() => downloadCSV(toCSV(filtered), `participants-${EVENT.code}-${EVENT.year}.csv`)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_csv", lang)}</button>
+        <button onClick={() => downloadCSV(toCSV(filtered), `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.csv`)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_csv", lang)}</button>
       </div>
 
       <div className="bg-white border overflow-auto" style={{ borderColor: "#CFC4A3" }}>
@@ -856,7 +938,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       </>
       )}
 
-      {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} />}
+      {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} eventData={eventData} onEventChange={onEventChange} />}
     </div>
   );
 }
@@ -907,11 +989,13 @@ function StatusBadge({ status }) {
   );
 }
 
-function ContentManager({ lang, logoUrl, onLogoChange }) {
+function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange }) {
   const [sub, setSub] = useState("logo");
   const subs = [
     ["logo", t("logo_tab", lang)],
-    ["hero", t("hero_carousel_tab", lang)],
+    ["herocontent", t("hero_content_tab", lang)],
+    ["carousel", t("hero_carousel_tab", lang)],
+    ["menu", t("menu_tab", lang)],
     ["tourism", t("tourism_tab", lang)],
     ["hotels", t("hotels_tab", lang)],
     ["speakers", t("speakers_tab", lang)],
@@ -924,7 +1008,9 @@ function ContentManager({ lang, logoUrl, onLogoChange }) {
         ))}
       </div>
       {sub === "logo" && <LogoManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} />}
-      {sub === "hero" && <HeroSlidesManager lang={lang} />}
+      {sub === "herocontent" && <EventHeroManager lang={lang} eventData={eventData} onEventChange={onEventChange} />}
+      {sub === "carousel" && <HeroSlidesManager lang={lang} />}
+      {sub === "menu" && <MenuManager lang={lang} />}
       {sub === "tourism" && <TourismManager lang={lang} />}
       {sub === "hotels" && <HotelsManager lang={lang} />}
       {sub === "speakers" && <SpeakersManager lang={lang} />}
@@ -1261,6 +1347,146 @@ function SpeakersManager({ lang }) {
         </div>
       ) : (
         <button onClick={() => setEditing({ name: "", role_fr: "", role_en: "", role_pt: "", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function EventHeroManager({ lang, eventData, onEventChange }) {
+  const [draft, setDraft] = useState({
+    event_edition: eventData.edition || "",
+    event_title_fr: eventData.title.fr || "", event_title_en: eventData.title.en || "", event_title_pt: eventData.title.pt || "",
+    event_subtitle_fr: eventData.desc.fr || "", event_subtitle_en: eventData.desc.en || "", event_subtitle_pt: eventData.desc.pt || "",
+    event_theme_fr: eventData.theme.fr || "", event_theme_en: eventData.theme.en || "", event_theme_pt: eventData.theme.pt || "",
+    event_date_short: eventData.dateShort || "", event_month_year: eventData.monthYear || "",
+    event_venue: eventData.venue || "", event_city: eventData.city || "", event_country: eventData.country || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  function set(key, value) { setDraft(d => ({ ...d, [key]: value })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await Promise.all(Object.entries(draft).map(([key, value]) => setSetting(key, value)));
+      onEventChange({
+        ...eventData,
+        edition: draft.event_edition,
+        title: { fr: draft.event_title_fr, en: draft.event_title_en, pt: draft.event_title_pt },
+        desc: { fr: draft.event_subtitle_fr, en: draft.event_subtitle_en, pt: draft.event_subtitle_pt },
+        theme: { fr: draft.event_theme_fr, en: draft.event_theme_en, pt: draft.event_theme_pt },
+        dateShort: draft.event_date_short, monthYear: draft.event_month_year,
+        venue: draft.event_venue, city: draft.event_city, country: draft.event_country,
+      });
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  return (
+    <div className="bg-white border p-5 max-w-2xl space-y-5" style={{ borderColor: "#CFC4A3" }}>
+      <div className="grid sm:grid-cols-4 gap-3">
+        <Field label={t("edition_number", lang)}><input className="cb-input" value={draft.event_edition} onChange={e=>set("event_edition", e.target.value)} /></Field>
+        <Field label={t("date_short_label", lang)}><input className="cb-input" value={draft.event_date_short} onChange={e=>set("event_date_short", e.target.value)} /></Field>
+        <Field label={t("month_year_label", lang)}><input className="cb-input" value={draft.event_month_year} onChange={e=>set("event_month_year", e.target.value)} /></Field>
+        <Field label={t("venue_label", lang)}><input className="cb-input" value={draft.event_venue} onChange={e=>set("event_venue", e.target.value)} /></Field>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label={t("city_label", lang)}><input className="cb-input" value={draft.event_city} onChange={e=>set("event_city", e.target.value)} /></Field>
+        <Field label={t("country_label", lang)}><input className="cb-input" value={draft.event_country} onChange={e=>set("event_country", e.target.value)} /></Field>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-3">
+        <Field label={t("title_fr", lang)}><input className="cb-input" value={draft.event_title_fr} onChange={e=>set("event_title_fr", e.target.value)} /></Field>
+        <Field label={t("title_en", lang)}><input className="cb-input" value={draft.event_title_en} onChange={e=>set("event_title_en", e.target.value)} /></Field>
+        <Field label={t("title_pt", lang)}><input className="cb-input" value={draft.event_title_pt} onChange={e=>set("event_title_pt", e.target.value)} /></Field>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-3">
+        <Field label={t("subtitle_fr", lang)}><textarea className="cb-input" rows={3} value={draft.event_subtitle_fr} onChange={e=>set("event_subtitle_fr", e.target.value)} /></Field>
+        <Field label={t("subtitle_en", lang)}><textarea className="cb-input" rows={3} value={draft.event_subtitle_en} onChange={e=>set("event_subtitle_en", e.target.value)} /></Field>
+        <Field label={t("subtitle_pt", lang)}><textarea className="cb-input" rows={3} value={draft.event_subtitle_pt} onChange={e=>set("event_subtitle_pt", e.target.value)} /></Field>
+      </div>
+      <div>
+        <p className="text-xs text-black/50 mb-3">{t("hero_theme_help", lang)}</p>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <Field label={t("theme_fr", lang)}><textarea className="cb-input" rows={3} value={draft.event_theme_fr} onChange={e=>set("event_theme_fr", e.target.value)} /></Field>
+          <Field label={t("theme_en", lang)}><textarea className="cb-input" rows={3} value={draft.event_theme_en} onChange={e=>set("event_theme_en", e.target.value)} /></Field>
+          <Field label={t("theme_pt", lang)}><textarea className="cb-input" rows={3} value={draft.event_theme_pt} onChange={e=>set("event_theme_pt", e.target.value)} /></Field>
+        </div>
+      </div>
+      <div className="flex gap-2 items-center">
+        <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+        {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
+      </div>
+    </div>
+  );
+}
+
+function MenuManager({ lang }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAll("cms_menu_items")); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (!editing.label_fr || !editing.target) return;
+    await upsertRow("cms_menu_items", editing);
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("cms_menu_items", id);
+    load();
+  }
+
+  return (
+    <div>
+      <div className="space-y-2 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="flex items-center justify-between bg-white border px-4 py-3" style={{ borderColor: "#CFC4A3" }}>
+            <div>
+              <div className="text-sm font-semibold">{it.label_fr}</div>
+              <div className="text-xs text-black/50 font-mono">{it.target}</div>
+            </div>
+            <div className="flex items-center gap-3">
+              <StatusBadge status={it.status} />
+              <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
+              <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.label_fr || ""} onChange={e=>setEditing(x=>({ ...x, label_fr: e.target.value }))} /></Field>
+            <Field label={t("name_en", lang)}><input className="cb-input" value={editing.label_en || ""} onChange={e=>setEditing(x=>({ ...x, label_en: e.target.value }))} /></Field>
+            <Field label={t("name_pt", lang)}><input className="cb-input" value={editing.label_pt || ""} onChange={e=>setEditing(x=>({ ...x, label_pt: e.target.value }))} /></Field>
+          </div>
+          <Field label={t("menu_target", lang)}><input className="cb-input" value={editing.target || ""} onChange={e=>setEditing(x=>({ ...x, target: e.target.value }))} placeholder="event-section" /></Field>
+          <p className="text-xs text-black/50">{t("menu_target_help", lang)}</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", target: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
