@@ -37,7 +37,7 @@ const EVENT = {
   desc: { fr: "Le Conseil des Bureaux du Système d'Assurance Carte Brune CEDEAO réunit à Dakar les Bureaux Nationaux, régulateurs et partenaires techniques pour sa 42ᵉ Assemblée Générale annuelle, en collaboration avec la Fédération Sénégalaise des Sociétés d'Assurances (FSSA).", en: "The Council of Bureaux of the ECOWAS Brown Card Insurance Scheme convenes National Bureaux, regulators and technical partners in Dakar for its 42nd annual General Assembly, in partnership with the Senegalese Federation of Insurance Companies (FSSA).", pt: "O Conselho de Bureaux do Sistema de Seguro Cartão Castanho da CEDEAO reúne em Dakar os Bureaux Nacionais, reguladores e parceiros técnicos para a sua 42ª Assembleia Geral anual, em parceria com a Federação Senegalesa das Sociedades de Seguros (FSSA)." },
 };
 
-const SPEAKERS = [
+const DEFAULT_SPEAKERS = [
   { name: "Mme Audrey Tiam", role: { fr: "Secrétaire Exécutive, Bureau National Sénégalais de la Carte Brune CEDEAO", en: "Executive Secretary, Senegalese National Bureau of the ECOWAS Brown Card", pt: "Secretária Executiva, Bureau Nacional Senegalês do Cartão Castanho da CEDEAO" } },
   { name: "FSSA", role: { fr: "Fédération Sénégalaise des Sociétés d'Assurances — partenaire hôte", en: "Senegalese Federation of Insurance Companies — host partner", pt: "Federação Senegalesa das Sociedades de Seguros — parceiro anfitrião" } },
 ];
@@ -135,6 +135,11 @@ const T = {
   hero_carousel_help: { fr: "Ces images défilent en arrière-plan du bandeau d'accueil. Sans image ajoutée, le fond reste uni.", en: "These images rotate behind the homepage hero banner. With none added, the background stays plain.", pt: "Estas imagens alternam no fundo do banner inicial. Sem imagens, o fundo permanece liso." },
   logo_tab: { fr: "Logo", en: "Logo", pt: "Logótipo" },
   logo_help: { fr: "Ce logo remplace le sceau par défaut dans l'en-tête et le bandeau d'accueil du site.", en: "This logo replaces the default seal in the header and homepage banner.", pt: "Este logótipo substitui o selo padrão no cabeçalho e no banner inicial." },
+  speakers_tab: { fr: "Ils portent l'événement", en: "Event partners", pt: "Parceiros do evento" },
+  role_fr: { fr: "Titre / rôle (Français)", en: "Title / role (French)", pt: "Título / função (Francês)" },
+  role_en: { fr: "Titre / rôle (Anglais)", en: "Title / role (English)", pt: "Título / função (Inglês)" },
+  role_pt: { fr: "Titre / rôle (Portugais)", en: "Title / role (Portuguese)", pt: "Título / função (Português)" },
+  full_name: { fr: "Nom complet", en: "Full name", pt: "Nome completo" },
   view_site: { fr: "Voir le site public", en: "View public site", pt: "Ver site público" },
   hotel_none: { fr: "Hébergement personnel", en: "Own accommodation", pt: "Alojamento próprio" },
   bureau: { fr: "Bureau National", en: "National Bureau", pt: "Bureau Nacional" },
@@ -189,14 +194,16 @@ export default function App() {
   const [tourism, setTourism] = useState(DEFAULT_TOURISM);
   const [heroSlides, setHeroSlides] = useState([]);
   const [logoUrl, setLogoUrl] = useState("");
+  const [speakers, setSpeakers] = useState(DEFAULT_SPEAKERS);
 
-  // Contenu public (tourisme, hôtels, carrousel, logo) — visible sans connexion.
+  // Contenu public (tourisme, hôtels, carrousel, logo, intervenants) — visible sans connexion.
   async function loadPublicContent() {
-    const [t, h, s, logo] = await Promise.all([
+    const [t, h, s, logo, sp] = await Promise.all([
       fetchPublished("tourist_sites"),
       fetchPublished("cms_hotels"),
       fetchPublished("hero_slides"),
       getSetting("event_logo"),
+      fetchPublished("cms_speakers"),
     ]);
     if (t.length) setTourism(t.map(r => ({
       id: r.id,
@@ -215,6 +222,12 @@ export default function App() {
     })));
     if (s.length) setHeroSlides(s.map(r => r.image_url));
     if (logo) setLogoUrl(logo);
+    if (sp.length) setSpeakers(sp.map(r => ({
+      id: r.id,
+      name: r.name,
+      role: { fr: r.role_fr, en: r.role_en, pt: r.role_pt },
+      image: r.image_url,
+    })));
   }
 
   useEffect(() => { loadPublicContent(); }, []);
@@ -389,7 +402,7 @@ export default function App() {
       <div className="weave" />
 
       {view === "public" && (
-        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} logoUrl={logoUrl} />
+        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} logoUrl={logoUrl} speakers={speakers} />
       )}
 
       {view === "register" && step < 6 && (
@@ -434,7 +447,7 @@ function HeroCarousel({ images }) {
   );
 }
 
-function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl }) {
+function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speakers }) {
   return (
     <>
       {/* HERO — fond noir + trame de points, dans l'esprit du bandeau vidéo */}
@@ -480,9 +493,13 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl }) {
       <section className="max-w-6xl mx-auto px-5 py-14">
         <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--vert-fonce)" }}>{t("speakers_title", lang)}</h2>
         <div className="grid sm:grid-cols-2 gap-5">
-          {SPEAKERS.map((s, i) => (
-            <div key={i} className="flex items-start gap-4 bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
-              <div className="seal w-11 h-11 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:3, background:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}><Quote size={16} color="var(--vert-fonce)" /></div></div>
+          {speakers.map((s, i) => (
+            <div key={s.id || i} className="flex items-start gap-4 bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
+              {s.image ? (
+                <img src={s.image} alt={s.name} className="w-11 h-11 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
+              ) : (
+                <div className="seal w-11 h-11 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:3, background:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}><Quote size={16} color="var(--vert-fonce)" /></div></div>
+              )}
               <div>
                 <div className="font-semibold text-sm">{s.name}</div>
                 <div className="text-xs text-black/60 mt-1 leading-relaxed">{s.role[lang]}</div>
@@ -897,6 +914,7 @@ function ContentManager({ lang, logoUrl, onLogoChange }) {
     ["hero", t("hero_carousel_tab", lang)],
     ["tourism", t("tourism_tab", lang)],
     ["hotels", t("hotels_tab", lang)],
+    ["speakers", t("speakers_tab", lang)],
   ];
   return (
     <div>
@@ -909,6 +927,7 @@ function ContentManager({ lang, logoUrl, onLogoChange }) {
       {sub === "hero" && <HeroSlidesManager lang={lang} />}
       {sub === "tourism" && <TourismManager lang={lang} />}
       {sub === "hotels" && <HotelsManager lang={lang} />}
+      {sub === "speakers" && <SpeakersManager lang={lang} />}
     </div>
   );
 }
@@ -1165,6 +1184,83 @@ function HotelsManager({ lang }) {
         </div>
       ) : (
         <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities: "", price: 0, currency: "FCFA", room_type: "Standard", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function SpeakersManager({ lang }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAll("cms_speakers")); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (!editing.name) return;
+    await upsertRow("cms_speakers", editing);
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("cms_speakers", id);
+    load();
+  }
+
+  return (
+    <div>
+      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="flex items-start gap-3 bg-white border p-4" style={{ borderColor: "#CFC4A3" }}>
+            {it.image_url ? (
+              <img src={it.image_url} alt={it.name} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+            ) : (
+              <div className="w-12 h-12 rounded-full flex-shrink-0" style={{ background: "var(--sable-deep)" }} />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate">{it.name}</div>
+              <div className="text-xs text-black/50 truncate mb-2">{it.role_fr}</div>
+              <div className="flex items-center justify-between">
+                <StatusBadge status={it.status} />
+                <div className="flex gap-2">
+                  <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
+                  <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <ImageUploader lang={lang} value={editing.image_url} onChange={url => setEditing(e => ({ ...e, image_url: url }))} folder="speakers" />
+          <Field label={t("full_name", lang)}><input className="cb-input" value={editing.name || ""} onChange={e=>setEditing(x=>({ ...x, name: e.target.value }))} /></Field>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("role_fr", lang)}><textarea className="cb-input" rows={3} value={editing.role_fr || ""} onChange={e=>setEditing(x=>({ ...x, role_fr: e.target.value }))} /></Field>
+            <Field label={t("role_en", lang)}><textarea className="cb-input" rows={3} value={editing.role_en || ""} onChange={e=>setEditing(x=>({ ...x, role_en: e.target.value }))} /></Field>
+            <Field label={t("role_pt", lang)}><textarea className="cb-input" rows={3} value={editing.role_pt || ""} onChange={e=>setEditing(x=>({ ...x, role_pt: e.target.value }))} /></Field>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setEditing({ name: "", role_fr: "", role_en: "", role_pt: "", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );

@@ -24,6 +24,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
    d'images — inclut des données de départ reprenant le contenu
    actuel du site)
 3. `supabase/settings_schema.sql` (paramètres du site, dont le logo)
+4. `supabase/speakers_schema.sql` (section "Ils portent l'événement")
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -46,6 +47,8 @@ site** :
 - **Logo** : téléchargez le logo officiel de l'événement — il
   remplace automatiquement le sceau par défaut dans l'en-tête et le
   bandeau d'accueil, partout sur le site.
+- **Ils portent l'événement** : ajoutez les membres du comité
+  d'organisation ou partenaires (nom, titre/rôle en FR/EN/PT, photo).
 - **Carrousel d'accueil** : ajoutez des images qui défileront en
   fond du bandeau "42e Assemblée Générale". Sans image, le fond reste
   uni (comme avant).
