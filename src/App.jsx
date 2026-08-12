@@ -30,12 +30,23 @@ const DEFAULT_TOURISM = [
 
 const DEFAULT_EVENT = {
   code: "AG42", year: 2026, edition: "42",
+  ordinal: { fr: "e", en: "nd", pt: "ª" },
+  brand: { fr: "Carte Brune CEDEAO", en: "ECOWAS Brown Card", pt: "Cartão Castanho CEDEAO" },
   title: { fr: "Assemblée Générale", en: "General Assembly", pt: "Assembleia Geral" },
   theme: { fr: "", en: "", pt: "" },
-  dateShort: "DU 19 AU 22", monthYear: "OCTOBRE 2026",
-  city: "Dakar", country: "Sénégal", venue: "Hôtel Pullman Dakar",
+  dateShort: { fr: "DU 19 AU 22", en: "FROM 19 TO 22", pt: "DE 19 A 22" },
+  monthYear: { fr: "OCTOBRE 2026", en: "OCTOBER 2026", pt: "OUTUBRO 2026" },
+  venue: { fr: "Hôtel Pullman Dakar", en: "Hôtel Pullman Dakar", pt: "Hôtel Pullman Dakar" },
+  city: "Dakar", country: "Sénégal",
   desc: { fr: "Le Conseil des Bureaux du Système d'Assurance Carte Brune CEDEAO réunit à Dakar les Bureaux Nationaux, régulateurs et partenaires techniques pour sa 42ᵉ Assemblée Générale annuelle, en collaboration avec la Fédération Sénégalaise des Sociétés d'Assurances (FSSA).", en: "The Council of Bureaux of the ECOWAS Brown Card Insurance Scheme convenes National Bureaux, regulators and technical partners in Dakar for its 42nd annual General Assembly, in partnership with the Senegalese Federation of Insurance Companies (FSSA).", pt: "O Conselho de Bureaux do Sistema de Seguro Cartão Castanho da CEDEAO reúne em Dakar os Bureaux Nacionais, reguladores e parceiros técnicos para a sua 42ª Assembleia Geral anual, em parceria com a Federação Senegalesa das Sociedades de Seguros (FSSA)." },
 };
+
+const DEFAULT_ORG_TYPES = [
+  { id: "bureau", label: { fr: "Bureau National", en: "National Bureau", pt: "Bureau Nacional" }, isOther: false },
+  { id: "insurer", label: { fr: "Compagnie d'assurance", en: "Insurance company", pt: "Companhia de seguros" }, isOther: false },
+  { id: "regulator", label: { fr: "Direction des Assurances", en: "Insurance Directorate", pt: "Direção de Seguros" }, isOther: false },
+  { id: "other", label: { fr: "Autre", en: "Other", pt: "Outro" }, isOther: true },
+];
 
 const DEFAULT_MENU = [
   { id: "m1", label: { fr: "Accueil", en: "Home", pt: "Início" }, target: "top" },
@@ -168,6 +179,10 @@ const T = {
   hero_theme_help: { fr: "Si rempli, un bandeau \"Thème de la réunion\" apparaît sur la page d'accueil. Laissez vide pour le masquer.", en: "If filled, a \"Meeting theme\" banner appears on the homepage. Leave empty to hide it.", pt: "Se preenchido, um banner \"Tema da reunião\" aparece na página inicial. Deixe vazio para ocultar." },
   menu_target_help: { fr: "Où mène ce lien : event-section (haut de page), hotels-section, tourism-section, top (accueil), ou une URL complète (https://...)", en: "Where this link goes: event-section (top), hotels-section, tourism-section, top (home), or a full URL (https://...)", pt: "Para onde este link vai: event-section, hotels-section, tourism-section, top, ou um URL completo" },
   menu_target: { fr: "Cible du lien", en: "Link target", pt: "Destino do link" },
+  ordinal_label: { fr: "Lettre en exposant (ex: e, nd, ª)", en: "Superscript suffix (e.g. e, nd, ª)", pt: "Sufixo sobrescrito" },
+  brand_help: { fr: "Nom affiché dans l'en-tête et le bandeau d'accueil, dans chaque langue.", en: "Name shown in the header and homepage banner, in each language.", pt: "Nome exibido no cabeçalho e no banner inicial, em cada idioma." },
+  org_types_tab: { fr: "Types d'organisme", en: "Organization types", pt: "Tipos de organização" },
+  is_other_label: { fr: "Déclenche le champ \"précisez\" (option \"Autre\")", en: "Triggers the \"please specify\" field (the \"Other\" option)", pt: "Ativa o campo \"especifique\" (opção \"Outro\")" },
   view_site: { fr: "Voir le site public", en: "View public site", pt: "Ver site público" },
   hotel_none: { fr: "Hébergement personnel", en: "Own accommodation", pt: "Alojamento próprio" },
   bureau: { fr: "Bureau National", en: "National Bureau", pt: "Bureau Nacional" },
@@ -176,8 +191,6 @@ const T = {
   other: { fr: "Autre", en: "Other", pt: "Outro" },
 };
 const t = (k, lang) => (T[k] ? T[k][lang] : k);
-
-const ORG_TYPES = ["bureau", "insurer", "regulator", "other"];
 
 function regNumber(seq) {
   return `CB-${DEFAULT_EVENT.year}-${DEFAULT_EVENT.code}-${String(seq).padStart(6, "0")}`;
@@ -200,7 +213,7 @@ function downloadCSV(csv, filename) {
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
-const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: "bureau", orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: DEFAULT_HOTELS[0].id, roomId: DEFAULT_HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", transfer: "yes" };
+const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: DEFAULT_ORG_TYPES[0].label.fr, orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: DEFAULT_HOTELS[0].id, roomId: DEFAULT_HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", transfer: "yes" };
 
 export default function App() {
   const [lang, setLang] = useState("fr");
@@ -225,11 +238,22 @@ export default function App() {
   const [speakers, setSpeakers] = useState(DEFAULT_SPEAKERS);
   const [eventData, setEventData] = useState(DEFAULT_EVENT);
   const [menu, setMenu] = useState(DEFAULT_MENU);
+  const [orgTypes, setOrgTypes] = useState(DEFAULT_ORG_TYPES);
 
   function buildEventFromSettings(s) {
     return {
       ...DEFAULT_EVENT,
       edition: s.event_edition || DEFAULT_EVENT.edition,
+      ordinal: {
+        fr: s.event_ordinal_fr || DEFAULT_EVENT.ordinal.fr,
+        en: s.event_ordinal_en || DEFAULT_EVENT.ordinal.en,
+        pt: s.event_ordinal_pt || DEFAULT_EVENT.ordinal.pt,
+      },
+      brand: {
+        fr: s.event_brand_fr || DEFAULT_EVENT.brand.fr,
+        en: s.event_brand_en || DEFAULT_EVENT.brand.en,
+        pt: s.event_brand_pt || DEFAULT_EVENT.brand.pt,
+      },
       title: {
         fr: s.event_title_fr || DEFAULT_EVENT.title.fr,
         en: s.event_title_en || DEFAULT_EVENT.title.en,
@@ -245,9 +269,21 @@ export default function App() {
         en: s.event_theme_en || DEFAULT_EVENT.theme.en,
         pt: s.event_theme_pt || DEFAULT_EVENT.theme.pt,
       },
-      dateShort: s.event_date_short || DEFAULT_EVENT.dateShort,
-      monthYear: s.event_month_year || DEFAULT_EVENT.monthYear,
-      venue: s.event_venue || DEFAULT_EVENT.venue,
+      dateShort: {
+        fr: s.event_date_short_fr || DEFAULT_EVENT.dateShort.fr,
+        en: s.event_date_short_en || DEFAULT_EVENT.dateShort.en,
+        pt: s.event_date_short_pt || DEFAULT_EVENT.dateShort.pt,
+      },
+      monthYear: {
+        fr: s.event_month_year_fr || DEFAULT_EVENT.monthYear.fr,
+        en: s.event_month_year_en || DEFAULT_EVENT.monthYear.en,
+        pt: s.event_month_year_pt || DEFAULT_EVENT.monthYear.pt,
+      },
+      venue: {
+        fr: s.event_venue_fr || DEFAULT_EVENT.venue.fr,
+        en: s.event_venue_en || DEFAULT_EVENT.venue.en,
+        pt: s.event_venue_pt || DEFAULT_EVENT.venue.pt,
+      },
       city: s.event_city || DEFAULT_EVENT.city,
       country: s.event_country || DEFAULT_EVENT.country,
     };
@@ -255,13 +291,14 @@ export default function App() {
 
   // Contenu public (tourisme, hôtels, carrousel, logo, intervenants, bandeau, menu) — visible sans connexion.
   async function loadPublicContent() {
-    const [t, h, s, settings, sp, mn] = await Promise.all([
+    const [t, h, s, settings, sp, mn, ot] = await Promise.all([
       fetchPublished("tourist_sites"),
       fetchPublished("cms_hotels"),
       fetchPublished("hero_slides"),
       getAllSettings(),
       fetchPublished("cms_speakers"),
       fetchPublished("cms_menu_items"),
+      fetchPublished("cms_org_types"),
     ]);
     if (t.length) setTourism(t.map(r => ({
       id: r.id,
@@ -291,6 +328,11 @@ export default function App() {
       id: r.id,
       label: { fr: r.label_fr, en: r.label_en, pt: r.label_pt },
       target: r.target,
+    })));
+    if (ot.length) setOrgTypes(ot.map(r => ({
+      id: r.id,
+      label: { fr: r.label_fr, en: r.label_en, pt: r.label_pt },
+      isOther: !!r.is_other,
     })));
   }
 
@@ -436,7 +478,7 @@ export default function App() {
               </div>
             )}
             <div>
-              <div className="font-display font-semibold leading-tight" style={{ fontSize: "1.05rem" }}>Carte Brune CEDEAO</div>
+              <div className="font-display font-semibold leading-tight" style={{ fontSize: "1.05rem" }}>{eventData.brand[lang]}</div>
               <div className="text-[11px] opacity-75 leading-tight hidden sm:block">{t("council", lang)}</div>
             </div>
           </button>
@@ -478,7 +520,7 @@ export default function App() {
       )}
 
       {view === "register" && step < 6 && (
-        <RegistrationWizard lang={lang} step={step} setStep={setStep} form={form} update={update} selectedHotel={selectedHotel} selectedRoom={selectedRoom} onSubmit={submitRegistration} setView={setView} submitting={submitting} submitError={submitError} hotels={hotels} />
+        <RegistrationWizard lang={lang} step={step} setStep={setStep} form={form} update={update} selectedHotel={selectedHotel} selectedRoom={selectedRoom} onSubmit={submitRegistration} setView={setView} submitting={submitting} submitError={submitError} hotels={hotels} orgTypes={orgTypes} />
       )}
 
       {view === "register" && step === 6 && confirmed && (
@@ -491,7 +533,7 @@ export default function App() {
 
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between gap-3">
-          <div>© {DEFAULT_EVENT.year} Système d'Assurance Carte Brune CEDEAO</div>
+          <div>© {DEFAULT_EVENT.year} {eventData.brand[lang]}</div>
           <button onClick={() => setView(view === "admin" ? "public" : "admin")} className="underline hover:text-white">
             {view === "admin" ? t("view_site", lang) : t("admin", lang)}
           </button>
@@ -530,7 +572,7 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
         <div className="max-w-6xl mx-auto relative">
           <div className="flex items-start gap-3 mb-6">
             <span className="font-display font-bold leading-none" style={{ fontSize: "5rem", color: "var(--vert)" }}>{event.edition}</span>
-            <span className="font-display" style={{ fontSize: "1.6rem", color: "var(--brun-clair)", marginTop: "0.6rem" }}>e</span>
+            <span className="font-display" style={{ fontSize: "1.6rem", color: "var(--brun-clair)", marginTop: "0.6rem" }}>{event.ordinal[lang]}</span>
           </div>
           <h1 className="font-display font-semibold leading-tight -mt-10 mb-6" style={{ fontSize: "2.4rem" }}>
             {event.title[lang]}
@@ -545,15 +587,15 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
                 <div className="seal w-8 h-8 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:2, background:"#fff", borderRadius:"50%" }} /></div>
               )}
               <div className="text-sm leading-tight">
-                <div className="font-semibold">{t("council", lang).split("—")[0]}</div>
+                <div className="font-semibold">{event.brand[lang]}</div>
               </div>
             </div>
             <div className="ribbon flex items-center px-5 py-3" style={{ background: "var(--brun)" }}>
-              <span className="font-display font-bold text-lg tracking-wide">{event.dateShort}</span>
+              <span className="font-display font-bold text-lg tracking-wide">{event.dateShort[lang]}</span>
             </div>
-            <div className="flex items-center px-5 py-3 text-sm">{event.monthYear}</div>
+            <div className="flex items-center px-5 py-3 text-sm">{event.monthYear[lang]}</div>
             <div className="flex items-center gap-1.5 px-5 py-3 text-sm border-l border-white/10">
-              <MapPin size={14} color="var(--vert)" /> <span className="font-semibold">{event.venue}</span>&nbsp;{event.city}
+              <MapPin size={14} color="var(--vert)" /> <span className="font-semibold">{event.venue[lang]}</span>&nbsp;{event.city}
             </div>
           </div>
           <div>
@@ -650,7 +692,7 @@ function Field({ label, children }) {
   return <div><label className="cb-label">{label}</label>{children}</div>;
 }
 
-function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels }) {
+function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels, orgTypes }) {
   const titles = ["step1_title","step2_title","step3_title","step4_title","step5_title"];
   return (
     <div className="max-w-3xl mx-auto px-5 py-12">
@@ -673,14 +715,14 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
           <div className="sm:col-span-2">
             <label className="cb-label">{t("org_type", lang)}</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {ORG_TYPES.map(ot => (
-                <div key={ot} onClick={() => update("orgType", ot)} className={`radio-card ${form.orgType===ot ? "active":""}`}>
-                  {form.orgType===ot && <Check size={14} color="var(--lagune)" />} {t(ot === "bureau" ? "bureau" : ot === "insurer" ? "insurer" : ot === "regulator" ? "regulator" : "other", lang)}
+              {orgTypes.map(ot => (
+                <div key={ot.id} onClick={() => update("orgType", ot.label.fr)} className={`radio-card ${form.orgType===ot.label.fr ? "active":""}`}>
+                  {form.orgType===ot.label.fr && <Check size={14} color="var(--lagune)" />} {ot.label[lang]}
                 </div>
               ))}
             </div>
           </div>
-          {form.orgType === "other" && (
+          {orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther && (
             <div className="sm:col-span-2"><Field label={t("org_other", lang)}><input className="cb-input" value={form.orgOther} onChange={e=>update("orgOther", e.target.value)} /></Field></div>
           )}
         </div>
@@ -885,7 +927,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <div className="space-y-1 text-sm">
             {Object.entries(stats.byOrg).length === 0 && <span className="text-black/40">—</span>}
             {Object.entries(stats.byOrg).map(([o,n]) => (
-              <div key={o} className="flex justify-between"><span>{t(o, lang)}</span><span className="font-mono">{n}</span></div>
+              <div key={o} className="flex justify-between"><span>{o}</span><span className="font-mono">{n}</span></div>
             ))}
           </div>
         </div>
@@ -996,6 +1038,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange 
     ["herocontent", t("hero_content_tab", lang)],
     ["carousel", t("hero_carousel_tab", lang)],
     ["menu", t("menu_tab", lang)],
+    ["orgtypes", t("org_types_tab", lang)],
     ["tourism", t("tourism_tab", lang)],
     ["hotels", t("hotels_tab", lang)],
     ["speakers", t("speakers_tab", lang)],
@@ -1011,6 +1054,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange 
       {sub === "herocontent" && <EventHeroManager lang={lang} eventData={eventData} onEventChange={onEventChange} />}
       {sub === "carousel" && <HeroSlidesManager lang={lang} />}
       {sub === "menu" && <MenuManager lang={lang} />}
+      {sub === "orgtypes" && <OrgTypesManager lang={lang} />}
       {sub === "tourism" && <TourismManager lang={lang} />}
       {sub === "hotels" && <HotelsManager lang={lang} />}
       {sub === "speakers" && <SpeakersManager lang={lang} />}
@@ -1355,11 +1399,15 @@ function SpeakersManager({ lang }) {
 function EventHeroManager({ lang, eventData, onEventChange }) {
   const [draft, setDraft] = useState({
     event_edition: eventData.edition || "",
+    event_ordinal_fr: eventData.ordinal.fr || "", event_ordinal_en: eventData.ordinal.en || "", event_ordinal_pt: eventData.ordinal.pt || "",
+    event_brand_fr: eventData.brand.fr || "", event_brand_en: eventData.brand.en || "", event_brand_pt: eventData.brand.pt || "",
     event_title_fr: eventData.title.fr || "", event_title_en: eventData.title.en || "", event_title_pt: eventData.title.pt || "",
     event_subtitle_fr: eventData.desc.fr || "", event_subtitle_en: eventData.desc.en || "", event_subtitle_pt: eventData.desc.pt || "",
     event_theme_fr: eventData.theme.fr || "", event_theme_en: eventData.theme.en || "", event_theme_pt: eventData.theme.pt || "",
-    event_date_short: eventData.dateShort || "", event_month_year: eventData.monthYear || "",
-    event_venue: eventData.venue || "", event_city: eventData.city || "", event_country: eventData.country || "",
+    event_date_short_fr: eventData.dateShort.fr || "", event_date_short_en: eventData.dateShort.en || "", event_date_short_pt: eventData.dateShort.pt || "",
+    event_month_year_fr: eventData.monthYear.fr || "", event_month_year_en: eventData.monthYear.en || "", event_month_year_pt: eventData.monthYear.pt || "",
+    event_venue_fr: eventData.venue.fr || "", event_venue_en: eventData.venue.en || "", event_venue_pt: eventData.venue.pt || "",
+    event_city: eventData.city || "", event_country: eventData.country || "",
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1373,11 +1421,15 @@ function EventHeroManager({ lang, eventData, onEventChange }) {
       onEventChange({
         ...eventData,
         edition: draft.event_edition,
+        ordinal: { fr: draft.event_ordinal_fr, en: draft.event_ordinal_en, pt: draft.event_ordinal_pt },
+        brand: { fr: draft.event_brand_fr, en: draft.event_brand_en, pt: draft.event_brand_pt },
         title: { fr: draft.event_title_fr, en: draft.event_title_en, pt: draft.event_title_pt },
         desc: { fr: draft.event_subtitle_fr, en: draft.event_subtitle_en, pt: draft.event_subtitle_pt },
         theme: { fr: draft.event_theme_fr, en: draft.event_theme_en, pt: draft.event_theme_pt },
-        dateShort: draft.event_date_short, monthYear: draft.event_month_year,
-        venue: draft.event_venue, city: draft.event_city, country: draft.event_country,
+        dateShort: { fr: draft.event_date_short_fr, en: draft.event_date_short_en, pt: draft.event_date_short_pt },
+        monthYear: { fr: draft.event_month_year_fr, en: draft.event_month_year_en, pt: draft.event_month_year_pt },
+        venue: { fr: draft.event_venue_fr, en: draft.event_venue_en, pt: draft.event_venue_pt },
+        city: draft.event_city, country: draft.event_country,
       });
       setSaved(true);
     } catch (e) { /* best effort */ }
@@ -1386,12 +1438,48 @@ function EventHeroManager({ lang, eventData, onEventChange }) {
 
   return (
     <div className="bg-white border p-5 max-w-2xl space-y-5" style={{ borderColor: "#CFC4A3" }}>
-      <div className="grid sm:grid-cols-4 gap-3">
+      <div className="grid sm:grid-cols-2 gap-3">
         <Field label={t("edition_number", lang)}><input className="cb-input" value={draft.event_edition} onChange={e=>set("event_edition", e.target.value)} /></Field>
-        <Field label={t("date_short_label", lang)}><input className="cb-input" value={draft.event_date_short} onChange={e=>set("event_date_short", e.target.value)} /></Field>
-        <Field label={t("month_year_label", lang)}><input className="cb-input" value={draft.event_month_year} onChange={e=>set("event_month_year", e.target.value)} /></Field>
-        <Field label={t("venue_label", lang)}><input className="cb-input" value={draft.event_venue} onChange={e=>set("event_venue", e.target.value)} /></Field>
+        <div>
+          <label className="cb-label">{t("ordinal_label", lang)}</label>
+          <div className="grid grid-cols-3 gap-2">
+            <input className="cb-input" placeholder="FR" value={draft.event_ordinal_fr} onChange={e=>set("event_ordinal_fr", e.target.value)} />
+            <input className="cb-input" placeholder="EN" value={draft.event_ordinal_en} onChange={e=>set("event_ordinal_en", e.target.value)} />
+            <input className="cb-input" placeholder="PT" value={draft.event_ordinal_pt} onChange={e=>set("event_ordinal_pt", e.target.value)} />
+          </div>
+        </div>
       </div>
+
+      <div>
+        <p className="text-xs text-black/50 mb-2">{t("brand_help", lang)}</p>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <Field label="FR"><input className="cb-input" value={draft.event_brand_fr} onChange={e=>set("event_brand_fr", e.target.value)} /></Field>
+          <Field label="EN"><input className="cb-input" value={draft.event_brand_en} onChange={e=>set("event_brand_en", e.target.value)} /></Field>
+          <Field label="PT"><input className="cb-input" value={draft.event_brand_pt} onChange={e=>set("event_brand_pt", e.target.value)} /></Field>
+        </div>
+      </div>
+
+      <div>
+        <label className="cb-label mb-1 block">{t("date_short_label", lang)}</label>
+        <div className="grid sm:grid-cols-3 gap-3 mb-3">
+          <input className="cb-input" placeholder="FR" value={draft.event_date_short_fr} onChange={e=>set("event_date_short_fr", e.target.value)} />
+          <input className="cb-input" placeholder="EN" value={draft.event_date_short_en} onChange={e=>set("event_date_short_en", e.target.value)} />
+          <input className="cb-input" placeholder="PT" value={draft.event_date_short_pt} onChange={e=>set("event_date_short_pt", e.target.value)} />
+        </div>
+        <label className="cb-label mb-1 block">{t("month_year_label", lang)}</label>
+        <div className="grid sm:grid-cols-3 gap-3 mb-3">
+          <input className="cb-input" placeholder="FR" value={draft.event_month_year_fr} onChange={e=>set("event_month_year_fr", e.target.value)} />
+          <input className="cb-input" placeholder="EN" value={draft.event_month_year_en} onChange={e=>set("event_month_year_en", e.target.value)} />
+          <input className="cb-input" placeholder="PT" value={draft.event_month_year_pt} onChange={e=>set("event_month_year_pt", e.target.value)} />
+        </div>
+        <label className="cb-label mb-1 block">{t("venue_label", lang)}</label>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <input className="cb-input" placeholder="FR" value={draft.event_venue_fr} onChange={e=>set("event_venue_fr", e.target.value)} />
+          <input className="cb-input" placeholder="EN" value={draft.event_venue_en} onChange={e=>set("event_venue_en", e.target.value)} />
+          <input className="cb-input" placeholder="PT" value={draft.event_venue_pt} onChange={e=>set("event_venue_pt", e.target.value)} />
+        </div>
+      </div>
+
       <div className="grid sm:grid-cols-2 gap-3">
         <Field label={t("city_label", lang)}><input className="cb-input" value={draft.event_city} onChange={e=>set("event_city", e.target.value)} /></Field>
         <Field label={t("country_label", lang)}><input className="cb-input" value={draft.event_country} onChange={e=>set("event_country", e.target.value)} /></Field>
@@ -1487,6 +1575,78 @@ function MenuManager({ lang }) {
         </div>
       ) : (
         <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", target: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function OrgTypesManager({ lang }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAll("cms_org_types")); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (!editing.label_fr) return;
+    await upsertRow("cms_org_types", editing);
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("cms_org_types", id);
+    load();
+  }
+
+  return (
+    <div>
+      <div className="space-y-2 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="flex items-center justify-between bg-white border px-4 py-3" style={{ borderColor: "#CFC4A3" }}>
+            <div>
+              <div className="text-sm font-semibold">{it.label_fr} {it.is_other && <span className="text-[10px] px-1.5 py-0.5 ml-1" style={{ background: "var(--sable-deep)" }}>Autre</span>}</div>
+              <div className="text-xs text-black/50">{it.label_en} · {it.label_pt}</div>
+            </div>
+            <div className="flex items-center gap-3">
+              <StatusBadge status={it.status} />
+              <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
+              <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.label_fr || ""} onChange={e=>setEditing(x=>({ ...x, label_fr: e.target.value }))} /></Field>
+            <Field label={t("name_en", lang)}><input className="cb-input" value={editing.label_en || ""} onChange={e=>setEditing(x=>({ ...x, label_en: e.target.value }))} /></Field>
+            <Field label={t("name_pt", lang)}><input className="cb-input" value={editing.label_pt || ""} onChange={e=>setEditing(x=>({ ...x, label_pt: e.target.value }))} /></Field>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!!editing.is_other} onChange={e=>setEditing(x=>({ ...x, is_other: e.target.checked }))} />
+            {t("is_other_label", lang)}
+          </label>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", is_other: false, display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
