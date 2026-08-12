@@ -27,6 +27,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 4. `supabase/speakers_schema.sql` (section "Ils portent l'événement")
 5. `supabase/menu_schema.sql` (menu de navigation)
 6. `supabase/org_types_schema.sql` (types d'organisme du formulaire d'inscription)
+7. `supabase/form_fields_schema.sql` (champs dynamiques du formulaire + capture complète des réponses)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -64,6 +65,14 @@ site** :
   formulaire d'inscription (nom en FR/EN/PT, et une case à cocher
   pour indiquer si ce choix doit faire apparaître le champ "précisez"
   — comme pour l'option "Autre").
+- **Champs du formulaire** : ajoutez, modifiez, retirez (statut
+  Brouillon) ou rendez obligatoires les champs simples des étapes
+  Identité, Coordonnées et Voyage (nom en FR/EN/PT, type — texte
+  court, texte long, email, téléphone, date, nombre —, ordre
+  d'affichage). Les champs structurants (pays, type d'organisme,
+  choix hôtel/chambre, transfert aéroport) restent fixes car ils
+  pilotent une logique dépendante, mais sont gérables depuis leurs
+  propres onglets respectifs.
 - **Ils portent l'événement** : ajoutez les membres du comité
   d'organisation ou partenaires (nom, titre/rôle en FR/EN/PT, photo).
 - **Carrousel d'accueil** : ajoutez des images qui défileront en
@@ -94,6 +103,19 @@ dans la base de données (trigger SQL), pas dans le contenu du
 bandeau — le modifier nécessite d'éditer `supabase/schema.sql`
 directement, pour rester cohérent avec les inscriptions déjà
 enregistrées.
+
+Tout champ personnalisé ajouté via "Champs du formulaire" (au-delà
+des onze champs de départ) est bien enregistré — dans la colonne
+`raw_payload` (réponse complète au format JSON) de chaque
+inscription — mais n'apparaît pas encore comme colonne dédiée dans
+le tableau des participants ni dans l'export CSV standard. C'est une
+extension possible pour une prochaine itération.
+
+## Filtres du tableau des participants
+
+Recherche libre (nom/email/organisme), plus filtres combinables par
+pays, hôtel, date d'arrivée et date de départ (ces deux dernières
+correspondant aux dates de séjour à l'hôtel choisies à l'inscription).
 
 ## Prochaines étapes possibles
 
