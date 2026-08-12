@@ -48,6 +48,23 @@ const DEFAULT_ORG_TYPES = [
   { id: "other", label: { fr: "Autre", en: "Other", pt: "Outro" }, isOther: true },
 ];
 
+// Champs "simples" du formulaire d'inscription, gérables depuis l'admin
+// (les champs structurants — pays, type d'organisme, choix hôtel/chambre,
+// transfert — restent fixes car ils pilotent une logique dépendante).
+const DEFAULT_FORM_FIELDS = [
+  { id: "lastName", field_key: "lastName", step: 1, label: { fr: "Nom", en: "Last name", pt: "Apelido" }, field_type: "text", required: false, display_order: 1 },
+  { id: "firstName", field_key: "firstName", step: 1, label: { fr: "Prénom", en: "First name", pt: "Nome próprio" }, field_type: "text", required: false, display_order: 2 },
+  { id: "position", field_key: "position", step: 1, label: { fr: "Fonction", en: "Position", pt: "Função" }, field_type: "text", required: false, display_order: 3 },
+  { id: "organization", field_key: "organization", step: 1, label: { fr: "Organisme", en: "Organization", pt: "Organização" }, field_type: "text", required: false, display_order: 4 },
+  { id: "city", field_key: "city", step: 2, label: { fr: "Ville", en: "City", pt: "Cidade" }, field_type: "text", required: false, display_order: 1 },
+  { id: "phone", field_key: "phone", step: 2, label: { fr: "Téléphone", en: "Phone", pt: "Telefone" }, field_type: "tel", required: false, display_order: 2 },
+  { id: "email", field_key: "email", step: 2, label: { fr: "Email", en: "Email", pt: "Email" }, field_type: "email", required: false, display_order: 3 },
+  { id: "address", field_key: "address", step: 2, label: { fr: "Adresse", en: "Address", pt: "Endereço" }, field_type: "text", required: false, display_order: 4 },
+  { id: "flightNumber", field_key: "flightNumber", step: 4, label: { fr: "Numéro de vol", en: "Flight number", pt: "Número do voo" }, field_type: "text", required: false, display_order: 1 },
+  { id: "airline", field_key: "airline", step: 4, label: { fr: "Compagnie aérienne", en: "Airline", pt: "Companhia aérea" }, field_type: "text", required: false, display_order: 2 },
+  { id: "arrivalDate", field_key: "arrivalDate", step: 4, label: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" }, field_type: "date", required: false, display_order: 3 },
+];
+
 const DEFAULT_MENU = [
   { id: "m1", label: { fr: "Accueil", en: "Home", pt: "Início" }, target: "top" },
   { id: "m2", label: { fr: "Événements", en: "Events", pt: "Eventos" }, target: "event-section" },
@@ -183,6 +200,22 @@ const T = {
   brand_help: { fr: "Nom affiché dans l'en-tête et le bandeau d'accueil, dans chaque langue.", en: "Name shown in the header and homepage banner, in each language.", pt: "Nome exibido no cabeçalho e no banner inicial, em cada idioma." },
   org_types_tab: { fr: "Types d'organisme", en: "Organization types", pt: "Tipos de organização" },
   is_other_label: { fr: "Déclenche le champ \"précisez\" (option \"Autre\")", en: "Triggers the \"please specify\" field (the \"Other\" option)", pt: "Ativa o campo \"especifique\" (opção \"Outro\")" },
+  required_fields_error: { fr: "Merci de compléter les champs obligatoires :", en: "Please complete the required fields:", pt: "Preencha os campos obrigatórios:" },
+  form_fields_tab: { fr: "Champs du formulaire", en: "Form fields", pt: "Campos do formulário" },
+  field_key_label: { fr: "Clé technique (unique, sans espace)", en: "Technical key (unique, no spaces)", pt: "Chave técnica (única, sem espaços)" },
+  field_type_label: { fr: "Type de champ", en: "Field type", pt: "Tipo de campo" },
+  field_step_label: { fr: "Étape du formulaire", en: "Form step", pt: "Etapa do formulário" },
+  required_label: { fr: "Champ obligatoire", en: "Required field", pt: "Campo obrigatório" },
+  field_type_text: { fr: "Texte court", en: "Short text", pt: "Texto curto" },
+  field_type_textarea: { fr: "Texte long", en: "Long text", pt: "Texto longo" },
+  field_type_email: { fr: "Email", en: "Email", pt: "Email" },
+  field_type_tel: { fr: "Téléphone", en: "Phone", pt: "Telefone" },
+  field_type_date: { fr: "Date", en: "Date", pt: "Data" },
+  field_type_number: { fr: "Nombre", en: "Number", pt: "Número" },
+  filter_hotel: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
+  filter_arrival: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
+  filter_departure: { fr: "Date de départ", en: "Departure date", pt: "Data de saída" },
+  reset_filters: { fr: "Réinitialiser les filtres", en: "Reset filters", pt: "Repor filtros" },
   view_site: { fr: "Voir le site public", en: "View public site", pt: "Ver site público" },
   hotel_none: { fr: "Hébergement personnel", en: "Own accommodation", pt: "Alojamento próprio" },
   bureau: { fr: "Bureau National", en: "National Bureau", pt: "Bureau Nacional" },
@@ -225,6 +258,9 @@ export default function App() {
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
+  const [hotelFilter, setHotelFilter] = useState("");
+  const [arrivalFilter, setArrivalFilter] = useState("");
+  const [departureFilter, setDepartureFilter] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -239,6 +275,7 @@ export default function App() {
   const [eventData, setEventData] = useState(DEFAULT_EVENT);
   const [menu, setMenu] = useState(DEFAULT_MENU);
   const [orgTypes, setOrgTypes] = useState(DEFAULT_ORG_TYPES);
+  const [formFields, setFormFields] = useState(DEFAULT_FORM_FIELDS);
 
   function buildEventFromSettings(s) {
     return {
@@ -291,7 +328,7 @@ export default function App() {
 
   // Contenu public (tourisme, hôtels, carrousel, logo, intervenants, bandeau, menu) — visible sans connexion.
   async function loadPublicContent() {
-    const [t, h, s, settings, sp, mn, ot] = await Promise.all([
+    const [t, h, s, settings, sp, mn, ot, ff] = await Promise.all([
       fetchPublished("tourist_sites"),
       fetchPublished("cms_hotels"),
       fetchPublished("hero_slides"),
@@ -299,6 +336,7 @@ export default function App() {
       fetchPublished("cms_speakers"),
       fetchPublished("cms_menu_items"),
       fetchPublished("cms_org_types"),
+      fetchPublished("cms_form_fields"),
     ]);
     if (t.length) setTourism(t.map(r => ({
       id: r.id,
@@ -333,6 +371,15 @@ export default function App() {
       id: r.id,
       label: { fr: r.label_fr, en: r.label_en, pt: r.label_pt },
       isOther: !!r.is_other,
+    })));
+    if (ff.length) setFormFields(ff.map(r => ({
+      id: r.id,
+      field_key: r.field_key,
+      step: r.step,
+      label: { fr: r.label_fr, en: r.label_en, pt: r.label_pt },
+      field_type: r.field_type || "text",
+      required: !!r.required,
+      display_order: r.display_order,
     })));
   }
 
@@ -430,9 +477,14 @@ export default function App() {
       const s = search.toLowerCase();
       const matchesSearch = !s || `${p.lastName} ${p.firstName} ${p.email} ${p.organization}`.toLowerCase().includes(s);
       const matchesCountry = !countryFilter || p.country === countryFilter;
-      return matchesSearch && matchesCountry;
+      const matchesHotel = !hotelFilter || p.hotelName === hotelFilter;
+      const matchesArrival = !arrivalFilter || p.checkIn === arrivalFilter;
+      const matchesDeparture = !departureFilter || p.checkOut === departureFilter;
+      return matchesSearch && matchesCountry && matchesHotel && matchesArrival && matchesDeparture;
     });
-  }, [participants, search, countryFilter]);
+  }, [participants, search, countryFilter, hotelFilter, arrivalFilter, departureFilter]);
+
+  const hotelOptions = useMemo(() => Array.from(new Set(participants.map(p => p.hotelName).filter(Boolean))), [participants]);
 
   return (
     <div style={{ background: "var(--sable)", color: "var(--encre)", minHeight: "100%", fontFamily: "'IBM Plex Sans', sans-serif" }}>
@@ -520,7 +572,7 @@ export default function App() {
       )}
 
       {view === "register" && step < 6 && (
-        <RegistrationWizard lang={lang} step={step} setStep={setStep} form={form} update={update} selectedHotel={selectedHotel} selectedRoom={selectedRoom} onSubmit={submitRegistration} setView={setView} submitting={submitting} submitError={submitError} hotels={hotels} orgTypes={orgTypes} />
+        <RegistrationWizard lang={lang} step={step} setStep={setStep} form={form} update={update} selectedHotel={selectedHotel} selectedRoom={selectedRoom} onSubmit={submitRegistration} setView={setView} submitting={submitting} submitError={submitError} hotels={hotels} orgTypes={orgTypes} formFields={formFields} />
       )}
 
       {view === "register" && step === 6 && confirmed && (
@@ -528,7 +580,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={setEventData} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={setEventData} orgTypes={orgTypes} formFields={formFields} />
       )}
 
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
@@ -692,8 +744,30 @@ function Field({ label, children }) {
   return <div><label className="cb-label">{label}</label>{children}</div>;
 }
 
-function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels, orgTypes }) {
+function DynamicField({ field, lang, value, onChange }) {
+  const label = field.label[lang] + (field.required ? " *" : "");
+  if (field.field_type === "textarea") {
+    return <Field label={label}><textarea className="cb-input" rows={3} value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
+  }
+  const type = ["email", "tel", "date", "number"].includes(field.field_type) ? field.field_type : "text";
+  return <Field label={label}><input type={type} className="cb-input" value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
+}
+
+function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels, orgTypes, formFields }) {
   const titles = ["step1_title","step2_title","step3_title","step4_title","step5_title"];
+  const [stepError, setStepError] = useState("");
+  const fieldsForStep = (n) => formFields.filter(f => f.step === n).sort((a,b) => a.display_order - b.display_order);
+
+  function validateAndAdvance() {
+    const missing = fieldsForStep(step).filter(f => f.required && !String(form[f.field_key] || "").trim());
+    if (missing.length) {
+      setStepError(t("required_fields_error", lang) + " " + missing.map(f => f.label[lang]).join(", "));
+      return;
+    }
+    setStepError("");
+    if (step < 5) setStep(s => s + 1); else onSubmit();
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-5 py-12">
       <div className="flex items-center gap-2 mb-8 text-xs font-mono">
@@ -708,10 +782,9 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
 
       {step === 1 && (
         <div className="grid sm:grid-cols-2 gap-5">
-          <Field label={t("last_name", lang)}><input className="cb-input" value={form.lastName} onChange={e=>update("lastName", e.target.value)} /></Field>
-          <Field label={t("first_name", lang)}><input className="cb-input" value={form.firstName} onChange={e=>update("firstName", e.target.value)} /></Field>
-          <Field label={t("position", lang)}><input className="cb-input" value={form.position} onChange={e=>update("position", e.target.value)} /></Field>
-          <Field label={t("organization", lang)}><input className="cb-input" value={form.organization} onChange={e=>update("organization", e.target.value)} /></Field>
+          {fieldsForStep(1).map(f => (
+            <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />
+          ))}
           <div className="sm:col-span-2">
             <label className="cb-label">{t("org_type", lang)}</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -735,10 +808,9 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
               {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </Field>
-          <Field label={t("city", lang)}><input className="cb-input" value={form.city} onChange={e=>update("city", e.target.value)} /></Field>
-          <Field label={t("phone", lang)}><input className="cb-input" value={form.phone} onChange={e=>update("phone", e.target.value)} /></Field>
-          <Field label={t("email", lang)}><input type="email" className="cb-input" value={form.email} onChange={e=>update("email", e.target.value)} /></Field>
-          <div className="sm:col-span-2"><Field label={t("address", lang)}><input className="cb-input" value={form.address} onChange={e=>update("address", e.target.value)} /></Field></div>
+          {fieldsForStep(2).map(f => (
+            <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />
+          ))}
         </div>
       )}
 
@@ -777,9 +849,9 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
 
       {step === 4 && (
         <div className="grid sm:grid-cols-2 gap-5">
-          <Field label={t("arrival_date", lang)}><input type="date" className="cb-input" value={form.arrivalDate} onChange={e=>update("arrivalDate", e.target.value)} /></Field>
-          <Field label={t("flight_number", lang)}><input className="cb-input" value={form.flightNumber} onChange={e=>update("flightNumber", e.target.value)} /></Field>
-          <Field label={t("airline", lang)}><input className="cb-input" value={form.airline} onChange={e=>update("airline", e.target.value)} /></Field>
+          {fieldsForStep(4).map(f => (
+            <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />
+          ))}
           <div>
             <label className="cb-label">{t("transfer", lang)}</label>
             <div className="flex gap-3">
@@ -814,6 +886,9 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
         </div>
       )}
 
+      {stepError && (
+        <div className="mt-4 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0" }}>{stepError}</div>
+      )}
       {submitError && (
         <div className="mt-4 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0" }}>{submitError}</div>
       )}
@@ -821,9 +896,9 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
       <div className="flex justify-between mt-8">
         <button onClick={() => step === 1 ? setView("public") : setStep(s => s - 1)} className="cb-btn-outline" disabled={submitting}><ChevronLeft size={16} /> {t("back", lang)}</button>
         {step < 5 ? (
-          <button onClick={() => setStep(s => s + 1)} className="cb-btn">{t("next", lang)} <ChevronRight size={16} /></button>
+          <button onClick={validateAndAdvance} className="cb-btn">{t("next", lang)} <ChevronRight size={16} /></button>
         ) : (
-          <button onClick={onSubmit} className="cb-btn" disabled={submitting} style={{ opacity: submitting ? 0.7 : 1 }}>
+          <button onClick={validateAndAdvance} className="cb-btn" disabled={submitting} style={{ opacity: submitting ? 0.7 : 1 }}>
             {submitting ? t("submitting", lang) : t("submit", lang)} {!submitting && <Check size={16} />}
           </button>
         )}
@@ -883,7 +958,7 @@ function AdminLogin({ lang }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, setView, adminUser, authChecked, participantsLoading, onRefresh, logoUrl, onLogoChange, eventData, onEventChange }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields }) {
   const [tab, setTab] = useState("participants");
   if (!authChecked) return null;
   if (!adminUser) return <AdminLogin lang={lang} />;
@@ -938,16 +1013,33 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         <h3 className="font-display font-semibold text-xl" style={{ color: "var(--navy)" }}>{t("participants", lang)}</h3>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-3 mb-2 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
           <input className="cb-input pl-9" placeholder={t("search_ph", lang)} value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
-        <select className="cb-input sm:w-52" value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
+        <button onClick={() => downloadCSV(toCSV(filtered), `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.csv`)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_csv", lang)}</button>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
+        <select className="cb-input sm:w-48" value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
           <option value="">{t("all_countries", lang)}</option>
           {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button onClick={() => downloadCSV(toCSV(filtered), `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.csv`)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_csv", lang)}</button>
+        <select className="cb-input sm:w-48" value={hotelFilter} onChange={e=>setHotelFilter(e.target.value)}>
+          <option value="">{t("filter_hotel", lang)}</option>
+          {hotelOptions.map(h => <option key={h} value={h}>{h}</option>)}
+        </select>
+        <div className="sm:w-44">
+          <label className="cb-label">{t("filter_arrival", lang)}</label>
+          <input type="date" className="cb-input" value={arrivalFilter} onChange={e=>setArrivalFilter(e.target.value)} />
+        </div>
+        <div className="sm:w-44">
+          <label className="cb-label">{t("filter_departure", lang)}</label>
+          <input type="date" className="cb-input" value={departureFilter} onChange={e=>setDepartureFilter(e.target.value)} />
+        </div>
+        {(countryFilter || hotelFilter || arrivalFilter || departureFilter) && (
+          <button onClick={() => { setCountryFilter(""); setHotelFilter(""); setArrivalFilter(""); setDepartureFilter(""); }} className="text-xs text-black/50 underline">{t("reset_filters", lang)}</button>
+        )}
       </div>
 
       <div className="bg-white border overflow-auto" style={{ borderColor: "#CFC4A3" }}>
@@ -1039,6 +1131,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange 
     ["carousel", t("hero_carousel_tab", lang)],
     ["menu", t("menu_tab", lang)],
     ["orgtypes", t("org_types_tab", lang)],
+    ["formfields", t("form_fields_tab", lang)],
     ["tourism", t("tourism_tab", lang)],
     ["hotels", t("hotels_tab", lang)],
     ["speakers", t("speakers_tab", lang)],
@@ -1055,6 +1148,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange 
       {sub === "carousel" && <HeroSlidesManager lang={lang} />}
       {sub === "menu" && <MenuManager lang={lang} />}
       {sub === "orgtypes" && <OrgTypesManager lang={lang} />}
+      {sub === "formfields" && <FormFieldsManager lang={lang} />}
       {sub === "tourism" && <TourismManager lang={lang} />}
       {sub === "hotels" && <HotelsManager lang={lang} />}
       {sub === "speakers" && <SpeakersManager lang={lang} />}
@@ -1647,6 +1741,114 @@ function OrgTypesManager({ lang }) {
         </div>
       ) : (
         <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", is_other: false, display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+const FIELD_TYPE_OPTIONS = ["text", "textarea", "email", "tel", "date", "number"];
+const FIELD_STEP_OPTIONS = [1, 2, 4];
+
+function FormFieldsManager({ lang }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAll("cms_form_fields")); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  function slugify(str) {
+    return (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  }
+
+  async function save() {
+    if (!editing.label_fr) return;
+    const row = { ...editing };
+    if (!row.field_key) row.field_key = slugify(editing.label_fr) + "_" + Date.now().toString(36);
+    await upsertRow("cms_form_fields", row);
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("cms_form_fields", id);
+    load();
+  }
+
+  const stepLabel = (n) => ({ 1: t("step1_title", lang), 2: t("step2_title", lang), 4: t("step4_title", lang) }[n] || n);
+  const typeLabel = (ty) => t("field_type_" + ty, lang);
+
+  return (
+    <div>
+      {[1, 2, 4].map(stepNum => (
+        <div key={stepNum} className="mb-6">
+          <div className="cb-label mb-2">{stepLabel(stepNum)}</div>
+          <div className="space-y-2">
+            {items.filter(it => it.step === stepNum).sort((a,b) => a.display_order - b.display_order).map(it => (
+              <div key={it.id} className="flex items-center justify-between bg-white border px-4 py-3" style={{ borderColor: "#CFC4A3" }}>
+                <div>
+                  <div className="text-sm font-semibold">{it.label_fr} {it.required && <span className="text-[10px] px-1.5 py-0.5 ml-1" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>*</span>}</div>
+                  <div className="text-xs text-black/50 font-mono">{it.field_key} · {typeLabel(it.field_type || "text")}</div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <StatusBadge status={it.status} />
+                  <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
+                  <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                </div>
+              </div>
+            ))}
+            {!loading && items.filter(it => it.step === stepNum).length === 0 && <p className="text-sm text-black/40">{t("no_items", lang)}</p>}
+          </div>
+        </div>
+      ))}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.label_fr || ""} onChange={e=>setEditing(x=>({ ...x, label_fr: e.target.value }))} /></Field>
+            <Field label={t("name_en", lang)}><input className="cb-input" value={editing.label_en || ""} onChange={e=>setEditing(x=>({ ...x, label_en: e.target.value }))} /></Field>
+            <Field label={t("name_pt", lang)}><input className="cb-input" value={editing.label_pt || ""} onChange={e=>setEditing(x=>({ ...x, label_pt: e.target.value }))} /></Field>
+          </div>
+          {editing.id ? (
+            <div className="text-xs text-black/50 font-mono">{t("field_key_label", lang)}: {editing.field_key}</div>
+          ) : (
+            <Field label={t("field_key_label", lang)}><input className="cb-input font-mono" value={editing.field_key || ""} onChange={e=>setEditing(x=>({ ...x, field_key: slugify(e.target.value) }))} placeholder={t("field_key_label", lang)} /></Field>
+          )}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="cb-label">{t("field_type_label", lang)}</label>
+              <select className="cb-input" value={editing.field_type || "text"} onChange={e=>setEditing(x=>({ ...x, field_type: e.target.value }))}>
+                {FIELD_TYPE_OPTIONS.map(ty => <option key={ty} value={ty}>{typeLabel(ty)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="cb-label">{t("field_step_label", lang)}</label>
+              <select className="cb-input" value={editing.step || 1} onChange={e=>setEditing(x=>({ ...x, step: Number(e.target.value) }))}>
+                {FIELD_STEP_OPTIONS.map(s => <option key={s} value={s}>{stepLabel(s)}</option>)}
+              </select>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!!editing.required} onChange={e=>setEditing(x=>({ ...x, required: e.target.checked }))} />
+            {t("required_label", lang)}
+          </label>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", field_key: "", field_type: "text", step: 1, required: false, display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
