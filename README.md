@@ -29,6 +29,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 6. `supabase/org_types_schema.sql` (types d'organisme du formulaire d'inscription)
 7. `supabase/form_fields_schema.sql` (champs dynamiques du formulaire + capture complète des réponses)
 8. `supabase/travel_fields_schema.sql` (heure d'arrivée, date/heure/vol de départ)
+9. `supabase/roles_schema.sql` (rôles administrateurs — super admin / gestionnaire / lecture seule)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -127,6 +128,29 @@ hauteur, avec l'en-tête toujours visible.
 
 Deux boutons d'export : **CSV** et **PDF** (mise en page paysage,
 respecte les filtres actifs).
+
+## Rôles administrateurs
+
+Trois rôles, gérés depuis le nouvel onglet **"Utilisateurs"** (visible
+uniquement pour les super admins) :
+
+- **Super administrateur** : accès complet, y compris la gestion des
+  utilisateurs.
+- **Gestionnaire** : accès complet aux participants et au contenu du
+  site, mais pas à l'onglet Utilisateurs.
+- **Lecture seule** : consultation des participants uniquement (avec
+  recherche, filtres et export), aucune modification possible.
+
+**Comment donner accès à quelqu'un** : créez d'abord son compte dans
+Supabase (Authentication → Users → Add user, comme pour le tout
+premier admin). Dès sa première connexion, il apparaît automatiquement
+dans l'onglet "Utilisateurs" avec le rôle "Lecture seule" — changez
+alors son rôle si besoin. Aucun compte existant avant cette migration
+n'est bloqué : ils deviennent tous super admin automatiquement lors de
+l'exécution de `roles_schema.sql`, à vous d'ajuster ensuite.
+
+Retirer l'accès d'une personne depuis cet onglet ne supprime pas son
+compte Supabase — seulement ses droits d'accès à l'admin du site.
 
 ## Champs "heure"
 

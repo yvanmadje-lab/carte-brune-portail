@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff } from "lucide-react";
-import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings } from "./lib/supabaseClient";
+import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile } from "./lib/supabaseClient";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -226,6 +226,21 @@ const T = {
   flight_departure: { fr: "Vol départ", en: "Departure flight", pt: "Voo de partida" },
   org_type_col: { fr: "Type d'organisme", en: "Organization type", pt: "Tipo de organização" },
   export_pdf: { fr: "Exporter PDF", en: "Export PDF", pt: "Exportar PDF" },
+  users_tab: { fr: "Utilisateurs", en: "Users", pt: "Utilizadores" },
+  role_viewer: { fr: "Lecture seule", en: "Read-only", pt: "Apenas leitura" },
+  role_super_admin: { fr: "Super administrateur", en: "Super admin", pt: "Super administrador" },
+  role_manager: { fr: "Gestionnaire", en: "Manager", pt: "Gestor" },
+  role_label: { fr: "Rôle", en: "Role", pt: "Função" },
+  you_label: { fr: "Vous", en: "You", pt: "Você" },
+  users_help: { fr: "Pour donner accès à l'admin à quelqu'un, créez d'abord son compte dans Supabase (Authentication → Users → Add user). Il apparaîtra automatiquement ici en \"Lecture seule\" — changez ensuite son rôle.", en: "To give someone admin access, first create their account in Supabase (Authentication → Users → Add user). They'll appear here automatically as \"Read-only\" — then change their role.", pt: "Para dar acesso de administrador a alguém, crie primeiro a conta no Supabase (Authentication → Users → Add user). Aparecerá aqui automaticamente como \"Apenas leitura\" — depois altere a função." },
+  no_users: { fr: "Aucun utilisateur pour le moment.", en: "No users yet.", pt: "Ainda sem utilizadores." },
+  remove_access: { fr: "Retirer l'accès admin", en: "Remove admin access", pt: "Remover acesso de administrador" },
+  confirm_remove_user: { fr: "Retirer l'accès admin de cette personne ? Son compte Supabase ne sera pas supprimé.", en: "Remove this person's admin access? Their Supabase account will not be deleted.", pt: "Remover o acesso de administrador desta pessoa? A conta Supabase não será eliminada." },
+  cannot_remove_self: { fr: "Vous ne pouvez pas retirer votre propre accès.", en: "You can't remove your own access.", pt: "Não pode remover o seu próprio acesso." },
+  role_manager_help: { fr: "Gestionnaire : accès complet aux participants et au contenu du site.", en: "Manager: full access to participants and site content.", pt: "Gestor: acesso total aos participantes e ao conteúdo do site." },
+  role_viewer_help: { fr: "Lecture seule : consultation des participants uniquement, pas de modification.", en: "Read-only: can view participants only, no changes.", pt: "Apenas leitura: pode ver os participantes, sem alterações." },
+  role_super_admin_help: { fr: "Super administrateur : accès complet, y compris la gestion des utilisateurs.", en: "Super admin: full access, including user management.", pt: "Super administrador: acesso total, incluindo gestão de utilizadores." },
+  read_only_notice: { fr: "Vous êtes en lecture seule : consultation uniquement, aucune modification possible.", en: "You are in read-only mode: viewing only, no changes possible.", pt: "Está em modo de apenas leitura: apenas consulta, sem alterações possíveis." },
   filter_hotel: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
   filter_arrival: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
   filter_departure: { fr: "Date de départ", en: "Departure date", pt: "Data de saída" },
@@ -290,6 +305,7 @@ export default function App() {
   const [submitError, setSubmitError] = useState("");
   const [adminUser, setAdminUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [myRole, setMyRole] = useState(null);
   const [participantsLoading, setParticipantsLoading] = useState(false);
   const [hotels, setHotels] = useState(DEFAULT_HOTELS);
   const [tourism, setTourism] = useState(DEFAULT_TOURISM);
@@ -424,9 +440,14 @@ export default function App() {
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setAdminUser(session?.user || null);
+      if (!session?.user) setMyRole(null);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (adminUser) getMyProfile().then(p => setMyRole(p?.role || "viewer"));
+  }, [adminUser]);
 
   function mapRow(row) {
     return {
@@ -611,7 +632,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={setEventData} orgTypes={orgTypes} formFields={formFields} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={setEventData} orgTypes={orgTypes} formFields={formFields} myRole={myRole} />
       )}
 
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
@@ -989,16 +1010,20 @@ function AdminLogin({ lang }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole }) {
   const [tab, setTab] = useState("participants");
+  const canEdit = myRole === "super_admin" || myRole === "manager";
+  const isSuperAdmin = myRole === "super_admin";
   if (!authChecked) return null;
   if (!adminUser) return <AdminLogin lang={lang} />;
+  if (myRole === null) return null;
   return (
     <div className="max-w-6xl mx-auto px-5 py-10">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <LayoutDashboard size={20} color="var(--navy)" />
           <h2 className="font-display font-semibold text-2xl" style={{ color: "var(--navy)" }}>{t("dashboard", lang)}</h2>
+          {myRole === "viewer" && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><Eye size={11}/> {t("role_viewer", lang)}</span>}
         </div>
         <div className="flex items-center gap-3">
           {tab === "participants" && <button onClick={onRefresh} className="cb-btn-outline text-sm py-1.5 px-3"><RefreshCw size={14} className={participantsLoading ? "animate-spin" : ""} /> {t("refresh", lang)}</button>}
@@ -1006,8 +1031,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         </div>
       </div>
 
-      <div className="flex gap-1 mb-8 border-b" style={{ borderColor: "#CFC4A3" }}>
-        {[["participants", t("participants_tab", lang)], ["content", t("content_tab", lang)]].map(([key, label]) => (
+      <div className="flex gap-1 mb-8 border-b flex-wrap" style={{ borderColor: "#CFC4A3" }}>
+        {[["participants", t("participants_tab", lang)], ...(canEdit ? [["content", t("content_tab", lang)]] : []), ...(isSuperAdmin ? [["users", t("users_tab", lang)]] : [])].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} className="px-4 py-2.5 text-sm font-semibold" style={{ color: tab === key ? "var(--vert-fonce)" : "#8a8168", borderBottom: tab === key ? "2px solid var(--vert-fonce)" : "2px solid transparent" }}>{label}</button>
         ))}
       </div>
@@ -1112,7 +1137,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       </>
       )}
 
-      {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} eventData={eventData} onEventChange={onEventChange} />}
+      {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} eventData={eventData} onEventChange={onEventChange} canEdit={canEdit} />}
+      {tab === "users" && isSuperAdmin && <UsersManager lang={lang} currentUserId={adminUser.id} />}
     </div>
   );
 }
@@ -1163,7 +1189,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange }) {
+function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange, canEdit }) {
   const [sub, setSub] = useState("logo");
   const subs = [
     ["logo", t("logo_tab", lang)],
@@ -1178,25 +1204,26 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange 
   ];
   return (
     <div>
+      {!canEdit && <div className="text-xs px-3 py-2 mb-4 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
       <div className="flex gap-4 mb-6 text-sm flex-wrap">
         {subs.map(([key, label]) => (
           <button key={key} onClick={() => setSub(key)} className="px-3 py-1.5" style={{ background: sub === key ? "var(--vert-fonce)" : "#fff", color: sub === key ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{label}</button>
         ))}
       </div>
-      {sub === "logo" && <LogoManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} />}
-      {sub === "herocontent" && <EventHeroManager lang={lang} eventData={eventData} onEventChange={onEventChange} />}
-      {sub === "carousel" && <HeroSlidesManager lang={lang} />}
-      {sub === "menu" && <MenuManager lang={lang} />}
-      {sub === "orgtypes" && <OrgTypesManager lang={lang} />}
-      {sub === "formfields" && <FormFieldsManager lang={lang} />}
-      {sub === "tourism" && <TourismManager lang={lang} />}
-      {sub === "hotels" && <HotelsManager lang={lang} />}
-      {sub === "speakers" && <SpeakersManager lang={lang} />}
+      {sub === "logo" && <LogoManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} canEdit={canEdit} />}
+      {sub === "herocontent" && <EventHeroManager lang={lang} eventData={eventData} onEventChange={onEventChange} canEdit={canEdit} />}
+      {sub === "carousel" && <HeroSlidesManager lang={lang} canEdit={canEdit} />}
+      {sub === "menu" && <MenuManager lang={lang} canEdit={canEdit} />}
+      {sub === "orgtypes" && <OrgTypesManager lang={lang} canEdit={canEdit} />}
+      {sub === "formfields" && <FormFieldsManager lang={lang} canEdit={canEdit} />}
+      {sub === "tourism" && <TourismManager lang={lang} canEdit={canEdit} />}
+      {sub === "hotels" && <HotelsManager lang={lang} canEdit={canEdit} />}
+      {sub === "speakers" && <SpeakersManager lang={lang} canEdit={canEdit} />}
     </div>
   );
 }
 
-function LogoManager({ lang, logoUrl, onLogoChange }) {
+function LogoManager({ lang, logoUrl, onLogoChange, canEdit }) {
   const [draft, setDraft] = useState(logoUrl || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1225,17 +1252,23 @@ function LogoManager({ lang, logoUrl, onLogoChange }) {
   return (
     <div className="bg-white border p-5 max-w-sm space-y-4" style={{ borderColor: "#CFC4A3" }}>
       <p className="text-xs text-black/50">{t("logo_help", lang)}</p>
-      <ImageUploader lang={lang} value={draft} onChange={setDraft} folder="logo" />
-      <div className="flex gap-2">
-        <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
-        {draft && <button onClick={handleRemove} className="cb-btn-outline text-sm" disabled={saving}>{t("delete", lang)}</button>}
-      </div>
-      {saved && <div className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓ {t("save", lang)}</div>}
+      {canEdit ? (
+        <>
+          <ImageUploader lang={lang} value={draft} onChange={setDraft} folder="logo" />
+          <div className="flex gap-2">
+            <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+            {draft && <button onClick={handleRemove} className="cb-btn-outline text-sm" disabled={saving}>{t("delete", lang)}</button>}
+          </div>
+          {saved && <div className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓ {t("save", lang)}</div>}
+        </>
+      ) : draft && (
+        <img src={draft} alt="Logo" className="w-24 h-24 rounded-full object-cover" />
+      )}
     </div>
   );
 }
 
-function HeroSlidesManager({ lang }) {
+function HeroSlidesManager({ lang , canEdit }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1265,8 +1298,8 @@ function HeroSlidesManager({ lang }) {
             <div className="p-3 flex items-center justify-between">
               <StatusBadge status={it.status} />
               <div className="flex gap-2">
-                <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
-                <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
               </div>
             </div>
           </div>
@@ -1291,13 +1324,13 @@ function HeroSlidesManager({ lang }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing({ image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
 }
 
-function TourismManager({ lang }) {
+function TourismManager({ lang , canEdit }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1328,8 +1361,8 @@ function TourismManager({ lang }) {
               <div className="flex items-center justify-between">
                 <StatusBadge status={it.status} />
                 <div className="flex gap-2">
-                  <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
-                  <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                  {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                  {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
                 </div>
               </div>
             </div>
@@ -1367,13 +1400,13 @@ function TourismManager({ lang }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing({ name_fr: "", name_en: "", name_pt: "", desc_fr: "", desc_en: "", desc_pt: "", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name_fr: "", name_en: "", name_pt: "", desc_fr: "", desc_en: "", desc_pt: "", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
 }
 
-function HotelsManager({ lang }) {
+function HotelsManager({ lang , canEdit }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1405,8 +1438,8 @@ function HotelsManager({ lang }) {
               <div className="flex items-center justify-between">
                 <StatusBadge status={it.status} />
                 <div className="flex gap-2">
-                  <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
-                  <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                  {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                  {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
                 </div>
               </div>
             </div>
@@ -1447,13 +1480,13 @@ function HotelsManager({ lang }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities: "", price: 0, currency: "FCFA", room_type: "Standard", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities: "", price: 0, currency: "FCFA", room_type: "Standard", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
 }
 
-function SpeakersManager({ lang }) {
+function SpeakersManager({ lang , canEdit }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1489,8 +1522,8 @@ function SpeakersManager({ lang }) {
               <div className="flex items-center justify-between">
                 <StatusBadge status={it.status} />
                 <div className="flex gap-2">
-                  <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
-                  <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                  {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                  {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
                 </div>
               </div>
             </div>
@@ -1524,13 +1557,13 @@ function SpeakersManager({ lang }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing({ name: "", role_fr: "", role_en: "", role_pt: "", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name: "", role_fr: "", role_en: "", role_pt: "", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
 }
 
-function EventHeroManager({ lang, eventData, onEventChange }) {
+function EventHeroManager({ lang, eventData, onEventChange, canEdit }) {
   const [draft, setDraft] = useState({
     event_edition: eventData.edition || "",
     event_ordinal_fr: eventData.ordinal.fr || "", event_ordinal_en: eventData.ordinal.en || "", event_ordinal_pt: eventData.ordinal.pt || "",
@@ -1637,14 +1670,14 @@ function EventHeroManager({ lang, eventData, onEventChange }) {
         </div>
       </div>
       <div className="flex gap-2 items-center">
-        <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+        {canEdit && <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>}
         {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
       </div>
     </div>
   );
 }
 
-function MenuManager({ lang }) {
+function MenuManager({ lang , canEdit }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1675,8 +1708,8 @@ function MenuManager({ lang }) {
             </div>
             <div className="flex items-center gap-3">
               <StatusBadge status={it.status} />
-              <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
-              <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+              {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+              {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
             </div>
           </div>
         ))}
@@ -1708,13 +1741,13 @@ function MenuManager({ lang }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", target: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", target: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
 }
 
-function OrgTypesManager({ lang }) {
+function OrgTypesManager({ lang , canEdit }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1745,8 +1778,8 @@ function OrgTypesManager({ lang }) {
             </div>
             <div className="flex items-center gap-3">
               <StatusBadge status={it.status} />
-              <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
-              <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+              {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+              {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
             </div>
           </div>
         ))}
@@ -1780,7 +1813,7 @@ function OrgTypesManager({ lang }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", is_other: false, display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", is_other: false, display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
@@ -1789,7 +1822,7 @@ function OrgTypesManager({ lang }) {
 const FIELD_TYPE_OPTIONS = ["text", "textarea", "email", "tel", "date", "time", "number"];
 const FIELD_STEP_OPTIONS = [1, 2, 4];
 
-function FormFieldsManager({ lang }) {
+function FormFieldsManager({ lang , canEdit }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1832,8 +1865,8 @@ function FormFieldsManager({ lang }) {
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusBadge status={it.status} />
-                  <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
-                  <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                  {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                  {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
                 </div>
               </div>
             ))}
@@ -1888,8 +1921,101 @@ function FormFieldsManager({ lang }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", field_key: "", field_type: "text", step: 1, required: false, display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", field_key: "", field_type: "text", step: 1, required: false, display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
+    </div>
+  );
+}
+
+const ROLE_OPTIONS = ["super_admin", "manager", "viewer"];
+
+function UsersManager({ lang, currentUserId }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState(null);
+  const [error, setError] = useState("");
+
+  async function load() {
+    setLoading(true);
+    setItems(await listAdminProfiles());
+    setLoading(false);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function handleRoleChange(userId, role) {
+    setSavingId(userId);
+    setError("");
+    try {
+      await updateAdminRole(userId, role);
+      setItems(list => list.map(u => u.user_id === userId ? { ...u, role } : u));
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+    setSavingId(null);
+  }
+
+  async function handleRemove(userId) {
+    if (userId === currentUserId) {
+      setError(t("cannot_remove_self", lang));
+      return;
+    }
+    if (!window.confirm(t("confirm_remove_user", lang))) return;
+    setSavingId(userId);
+    setError("");
+    try {
+      await removeAdminProfile(userId);
+      setItems(list => list.filter(u => u.user_id !== userId));
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+    setSavingId(null);
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-black/50 mb-2 max-w-xl">{t("users_help", lang)}</p>
+      <div className="text-xs text-black/50 mb-6 max-w-xl space-y-1">
+        <div><strong>{t("role_super_admin", lang)}</strong> — {t("role_super_admin_help", lang)}</div>
+        <div><strong>{t("role_manager", lang)}</strong> — {t("role_manager_help", lang)}</div>
+        <div><strong>{t("role_viewer", lang)}</strong> — {t("role_viewer_help", lang)}</div>
+      </div>
+
+      {error && <div className="text-sm px-3 py-2 mb-4" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>{error}</div>}
+
+      <div className="bg-white border overflow-auto" style={{ borderColor: "#CFC4A3" }}>
+        <table className="w-full text-sm">
+          <thead style={{ background: "var(--sable-deep)" }}>
+            <tr className="text-left">
+              <th className="px-3 py-2 font-semibold text-xs uppercase tracking-wide">{t("admin_email", lang)}</th>
+              <th className="px-3 py-2 font-semibold text-xs uppercase tracking-wide">{t("role_label", lang)}</th>
+              <th className="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {!loading && items.length === 0 && (
+              <tr><td colSpan={3} className="px-3 py-8 text-center text-black/40">{t("no_users", lang)}</td></tr>
+            )}
+            {items.map(u => (
+              <tr key={u.user_id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
+                <td className="px-3 py-2">
+                  {u.email}
+                  {u.user_id === currentUserId && <span className="text-[10px] px-1.5 py-0.5 ml-2" style={{ background: "var(--sable-deep)" }}>{t("you_label", lang)}</span>}
+                </td>
+                <td className="px-3 py-2">
+                  <select className="cb-input py-1" style={{ width: "auto" }} value={u.role} disabled={savingId === u.user_id} onChange={e => handleRoleChange(u.user_id, e.target.value)}>
+                    {ROLE_OPTIONS.map(r => <option key={r} value={r}>{t("role_" + r, lang)}</option>)}
+                  </select>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <button onClick={() => handleRemove(u.user_id)} disabled={savingId === u.user_id} title={t("remove_access", lang)}>
+                    <Trash2 size={14} color="#8A2A2A" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

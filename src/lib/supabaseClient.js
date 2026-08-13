@@ -61,3 +61,28 @@ export async function getAllSettings() {
   data.forEach(row => { map[row.key] = row.value; });
   return map;
 }
+
+export async function getMyProfile() {
+  const { data: userData } = await supabase.auth.getUser();
+  const uid = userData?.user?.id;
+  if (!uid) return null;
+  const { data, error } = await supabase.from("admin_profiles").select("*").eq("user_id", uid).maybeSingle();
+  if (error) return null;
+  return data;
+}
+
+export async function listAdminProfiles() {
+  const { data, error } = await supabase.from("admin_profiles").select("*").order("created_at", { ascending: true });
+  if (error) return [];
+  return data || [];
+}
+
+export async function updateAdminRole(userId, role) {
+  const { error } = await supabase.from("admin_profiles").update({ role }).eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function removeAdminProfile(userId) {
+  const { error } = await supabase.from("admin_profiles").delete().eq("user_id", userId);
+  if (error) throw error;
+}
