@@ -28,6 +28,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 5. `supabase/menu_schema.sql` (menu de navigation)
 6. `supabase/org_types_schema.sql` (types d'organisme du formulaire d'inscription)
 7. `supabase/form_fields_schema.sql` (champs dynamiques du formulaire + capture complète des réponses)
+8. `supabase/travel_fields_schema.sql` (heure d'arrivée, date/heure/vol de départ)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -111,11 +112,27 @@ inscription — mais n'apparaît pas encore comme colonne dédiée dans
 le tableau des participants ni dans l'export CSV standard. C'est une
 extension possible pour une prochaine itération.
 
-## Filtres du tableau des participants
+## Filtres et tableau des participants
 
 Recherche libre (nom/email/organisme), plus filtres combinables par
-pays, hôtel, date d'arrivée et date de départ (ces deux dernières
-correspondant aux dates de séjour à l'hôtel choisies à l'inscription).
+pays, hôtel, date d'arrivée et date de départ (dates de séjour à
+l'hôtel choisies à l'inscription).
+
+Le tableau affiche désormais : organisme, **type d'organisme**, pays,
+email, hôtel, **type de chambre**, date/heure d'arrivée, numéro de vol
+arrivée, date/heure de départ, numéro de vol départ. Comme il compte
+beaucoup de colonnes, le tableau défile horizontalement (glissez ou
+utilisez la molette + Maj) et verticalement au-delà d'une certaine
+hauteur, avec l'en-tête toujours visible.
+
+Deux boutons d'export : **CSV** et **PDF** (mise en page paysage,
+respecte les filtres actifs).
+
+## Champs "heure"
+
+Le type de champ "Heure" est disponible dans "Champs du formulaire"
+pour tout champ voyage — utilisé par défaut pour l'heure d'arrivée et
+l'heure de départ.
 
 ## Prochaines étapes possibles
 
