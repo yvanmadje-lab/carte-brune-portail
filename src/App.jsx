@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff } from "lucide-react";
 import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings } from "./lib/supabaseClient";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 /* ---------------------------------------------------------
    TOKENS — alignés sur l'identité officielle Carte Brune CEDEAO
@@ -60,9 +62,13 @@ const DEFAULT_FORM_FIELDS = [
   { id: "phone", field_key: "phone", step: 2, label: { fr: "Téléphone", en: "Phone", pt: "Telefone" }, field_type: "tel", required: false, display_order: 2 },
   { id: "email", field_key: "email", step: 2, label: { fr: "Email", en: "Email", pt: "Email" }, field_type: "email", required: false, display_order: 3 },
   { id: "address", field_key: "address", step: 2, label: { fr: "Adresse", en: "Address", pt: "Endereço" }, field_type: "text", required: false, display_order: 4 },
-  { id: "flightNumber", field_key: "flightNumber", step: 4, label: { fr: "Numéro de vol", en: "Flight number", pt: "Número do voo" }, field_type: "text", required: false, display_order: 1 },
+  { id: "flightNumber", field_key: "flightNumber", step: 4, label: { fr: "Numéro de vol (arrivée)", en: "Flight number (arrival)", pt: "Número do voo (chegada)" }, field_type: "text", required: false, display_order: 1 },
   { id: "airline", field_key: "airline", step: 4, label: { fr: "Compagnie aérienne", en: "Airline", pt: "Companhia aérea" }, field_type: "text", required: false, display_order: 2 },
   { id: "arrivalDate", field_key: "arrivalDate", step: 4, label: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" }, field_type: "date", required: false, display_order: 3 },
+  { id: "arrivalTime", field_key: "arrivalTime", step: 4, label: { fr: "Heure d'arrivée", en: "Arrival time", pt: "Hora de chegada" }, field_type: "time", required: false, display_order: 4 },
+  { id: "departureDate", field_key: "departureDate", step: 4, label: { fr: "Date de départ", en: "Departure date", pt: "Data de partida" }, field_type: "date", required: false, display_order: 5 },
+  { id: "departureTime", field_key: "departureTime", step: 4, label: { fr: "Heure de départ", en: "Departure time", pt: "Hora de partida" }, field_type: "time", required: false, display_order: 6 },
+  { id: "departureFlightNumber", field_key: "departureFlightNumber", step: 4, label: { fr: "Numéro de vol (départ)", en: "Flight number (departure)", pt: "Número do voo (partida)" }, field_type: "text", required: false, display_order: 7 },
 ];
 
 const DEFAULT_MENU = [
@@ -212,6 +218,14 @@ const T = {
   field_type_tel: { fr: "Téléphone", en: "Phone", pt: "Telefone" },
   field_type_date: { fr: "Date", en: "Date", pt: "Data" },
   field_type_number: { fr: "Nombre", en: "Number", pt: "Número" },
+  field_type_time: { fr: "Heure", en: "Time", pt: "Hora" },
+  arrival_time: { fr: "Heure d'arrivée", en: "Arrival time", pt: "Hora de chegada" },
+  flight_arrival: { fr: "Vol arrivée", en: "Arrival flight", pt: "Voo de chegada" },
+  departure_date: { fr: "Date de départ", en: "Departure date", pt: "Data de partida" },
+  departure_time: { fr: "Heure de départ", en: "Departure time", pt: "Hora de partida" },
+  flight_departure: { fr: "Vol départ", en: "Departure flight", pt: "Voo de partida" },
+  org_type_col: { fr: "Type d'organisme", en: "Organization type", pt: "Tipo de organização" },
+  export_pdf: { fr: "Exporter PDF", en: "Export PDF", pt: "Exportar PDF" },
   filter_hotel: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
   filter_arrival: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
   filter_departure: { fr: "Date de départ", en: "Departure date", pt: "Data de saída" },
@@ -230,10 +244,10 @@ function regNumber(seq) {
 }
 
 function toCSV(rows) {
-  const headers = ["Numéro", "Nom", "Prénom", "Fonction", "Organisme", "Pays", "Email", "Téléphone", "Hôtel", "Arrivée", "Départ"];
+  const headers = ["Numéro", "Nom", "Prénom", "Fonction", "Organisme", "Type d'organisme", "Pays", "Email", "Téléphone", "Hôtel", "Type de chambre", "Date arrivée", "Heure arrivée", "Vol arrivée", "Date départ", "Heure départ", "Vol départ"];
   const lines = [headers.join(",")];
   rows.forEach(r => {
-    lines.push([r.regNumber, r.lastName, r.firstName, r.position, r.organization, r.country, r.email, r.phone, r.hotelName || "", r.checkIn || "", r.checkOut || ""].map(v => `"${(v || "").toString().replace(/"/g, '""')}"`).join(","));
+    lines.push([r.regNumber, r.lastName, r.firstName, r.position, r.organization, r.orgType, r.country, r.email, r.phone, r.hotelName || "", r.roomType || "", r.arrivalDate || "", r.arrivalTime || "", r.flightNumber || "", r.departureDate || "", r.departureTime || "", r.departureFlightNumber || ""].map(v => `"${(v || "").toString().replace(/"/g, '""')}"`).join(","));
   });
   return lines.join("\n");
 }
@@ -246,7 +260,17 @@ function downloadCSV(csv, filename) {
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
-const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: DEFAULT_ORG_TYPES[0].label.fr, orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: DEFAULT_HOTELS[0].id, roomId: DEFAULT_HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", transfer: "yes" };
+function downloadPDF(rows, filename, lang) {
+  const cols = [t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type",lang), t("country",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)];
+  const body = rows.map(r => [r.lastName, r.firstName, r.organization, r.orgType, r.country, r.hotelName || "", r.roomType || "", r.arrivalDate || "", r.arrivalTime || "", r.flightNumber || "", r.departureDate || "", r.departureTime || "", r.departureFlightNumber || ""]);
+  const doc = new jsPDF({ orientation: "landscape" });
+  doc.setFontSize(13);
+  doc.text(`${DEFAULT_EVENT.edition}e Assemblée Générale — Participants`, 14, 12);
+  autoTable(doc, { head: [cols], body, startY: 18, styles: { fontSize: 7 }, headStyles: { fillColor: [20, 83, 45] } });
+  doc.save(filename);
+}
+
+const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: DEFAULT_ORG_TYPES[0].label.fr, orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: DEFAULT_HOTELS[0].id, roomId: DEFAULT_HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", arrivalTime: "", departureDate: "", departureTime: "", departureFlightNumber: "", transfer: "yes" };
 
 export default function App() {
   const [lang, setLang] = useState("fr");
@@ -417,8 +441,15 @@ export default function App() {
       email: row.email,
       phone: row.phone,
       hotelName: row.hotel_name,
+      roomType: row.room_type,
       checkIn: row.check_in,
       checkOut: row.check_out,
+      arrivalDate: row.arrival_date,
+      arrivalTime: row.arrival_time,
+      flightNumber: row.flight_number,
+      departureDate: row.departure_date,
+      departureTime: row.departure_time,
+      departureFlightNumber: row.departure_flight_number,
     };
   }
 
@@ -749,7 +780,7 @@ function DynamicField({ field, lang, value, onChange }) {
   if (field.field_type === "textarea") {
     return <Field label={label}><textarea className="cb-input" rows={3} value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
   }
-  const type = ["email", "tel", "date", "number"].includes(field.field_type) ? field.field_type : "text";
+  const type = ["email", "tel", "date", "number", "time"].includes(field.field_type) ? field.field_type : "text";
   return <Field label={label}><input type={type} className="cb-input" value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
 }
 
@@ -1019,6 +1050,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <input className="cb-input pl-9" placeholder={t("search_ph", lang)} value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
         <button onClick={() => downloadCSV(toCSV(filtered), `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.csv`)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_csv", lang)}</button>
+        <button onClick={() => downloadPDF(filtered, `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.pdf`, lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
       </div>
       <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
         <select className="cb-input sm:w-48" value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
@@ -1042,28 +1074,36 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         )}
       </div>
 
-      <div className="bg-white border overflow-auto" style={{ borderColor: "#CFC4A3" }}>
-        <table className="w-full text-sm">
-          <thead style={{ background: "var(--sable-deep)" }}>
+      <div className="bg-white border" style={{ borderColor: "#CFC4A3", maxHeight: "560px", overflow: "auto" }}>
+        <table className="w-full text-sm" style={{ minWidth: "1400px" }}>
+          <thead style={{ background: "var(--sable-deep)", position: "sticky", top: 0, zIndex: 1 }}>
             <tr className="text-left">
-              {["#", t("last_name",lang), t("first_name",lang), t("organization",lang), t("country",lang), t("email",lang), t("nav_hotels",lang)].map(h => (
+              {["#", t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
                 <th key={h} className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
+              <tr><td colSpan={15} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
             )}
             {filtered.map(p => (
               <tr key={p.id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
-                <td className="px-3 py-2 font-mono text-xs">{p.regNumber}</td>
-                <td className="px-3 py-2">{p.lastName}</td>
-                <td className="px-3 py-2">{p.firstName}</td>
-                <td className="px-3 py-2">{p.organization}</td>
-                <td className="px-3 py-2">{p.country}</td>
-                <td className="px-3 py-2">{p.email}</td>
-                <td className="px-3 py-2">{p.hotelName || "—"}</td>
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.regNumber}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.lastName}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.firstName}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.organization}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.orgType || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.country}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.email}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.hotelName || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.roomType || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.arrivalDate || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.arrivalTime || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.flightNumber || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.departureDate || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.departureTime || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.departureFlightNumber || "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -1746,7 +1786,7 @@ function OrgTypesManager({ lang }) {
   );
 }
 
-const FIELD_TYPE_OPTIONS = ["text", "textarea", "email", "tel", "date", "number"];
+const FIELD_TYPE_OPTIONS = ["text", "textarea", "email", "tel", "date", "time", "number"];
 const FIELD_STEP_OPTIONS = [1, 2, 4];
 
 function FormFieldsManager({ lang }) {
