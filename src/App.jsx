@@ -232,6 +232,8 @@ const T = {
   departure_time: { fr: "Heure de départ", en: "Departure time", pt: "Hora de partida" },
   flight_departure: { fr: "Vol départ", en: "Departure flight", pt: "Voo de partida" },
   org_type_col: { fr: "Type d'organisme", en: "Organization type", pt: "Tipo de organização" },
+  name_col: { fr: "Nom & Prénom", en: "Name", pt: "Nome" },
+  hotel_room_col: { fr: "Hôtel & Chambre", en: "Hotel & Room", pt: "Hotel & Quarto" },
   export_pdf: { fr: "Exporter PDF", en: "Export PDF", pt: "Exportar PDF" },
   hotel_label: { fr: "Hôtel", en: "Hotel", pt: "Hotel" },
   search_label: { fr: "Recherche", en: "Search", pt: "Pesquisa" },
@@ -269,11 +271,22 @@ function regNumber(seq) {
 }
 
 function exportHeaders(lang) {
-  return [t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)];
+  return [t("name_col",lang), t("org_type_col",lang), t("country",lang), t("hotel_room_col",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)];
 }
 
 function exportRows(rows) {
-  return rows.map(r => [r.lastName, r.firstName, r.organization, r.orgType || "", r.country, r.email, r.hotelName || "", r.roomType || "", r.arrivalDate || "", r.arrivalTime || "", r.flightNumber || "", r.departureDate || "", r.departureTime || "", r.departureFlightNumber || ""]);
+  return rows.map(r => [
+    `${r.lastName || ""} ${r.firstName || ""}`.trim(),
+    r.orgType || "",
+    r.country,
+    [r.hotelName, r.roomType].filter(Boolean).join(" - "),
+    r.arrivalDate || "",
+    r.arrivalTime || "",
+    r.flightNumber || "",
+    r.departureDate || "",
+    r.departureTime || "",
+    r.departureFlightNumber || "",
+  ]);
 }
 
 // Construit un titre du type "LISTE DES PARTICIPANTS - DATE D'ARRIVÉE : 2026-10-19"
@@ -331,12 +344,13 @@ function downloadPDF(rows, filename, titleText, lang) {
   const cols = exportHeaders(lang);
   const body = exportRows(rows);
   const doc = new jsPDF({ orientation: "landscape" });
-  doc.setFontSize(16);
-  doc.text(titleText, 14, 14);
+  doc.setFontSize(11);
+  doc.text(titleText, 14, 12);
   autoTable(doc, {
-    head: [cols], body, startY: 20,
-    styles: { fontSize: 10, cellPadding: 3 },
-    headStyles: { fillColor: [20, 83, 45], fontSize: 11, fontStyle: "bold" },
+    head: [cols], body, startY: 17,
+    styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: [20, 83, 45], fontSize: 7.5, fontStyle: "bold" },
+    columnStyles: { 0: { cellWidth: 45 }, 3: { cellWidth: 45 } },
   });
   doc.save(filename);
 }
