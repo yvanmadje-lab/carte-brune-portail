@@ -24,7 +24,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
    d'images — inclut des données de départ reprenant le contenu
    actuel du site)
 3. `supabase/settings_schema.sql` (paramètres du site, dont le logo)
-4. `supabase/speakers_schema.sql` (section "Ils portent l'événement")
+4. `supabase/speakers_schema.sql` (section "Comité d'organisation")
 5. `supabase/menu_schema.sql` (menu de navigation)
 6. `supabase/org_types_schema.sql` (types d'organisme du formulaire d'inscription)
 7. `supabase/form_fields_schema.sql` (champs dynamiques du formulaire + capture complète des réponses)
@@ -75,7 +75,7 @@ site** :
   choix hôtel/chambre, transfert aéroport) restent fixes car ils
   pilotent une logique dépendante, mais sont gérables depuis leurs
   propres onglets respectifs.
-- **Ils portent l'événement** : ajoutez les membres du comité
+- **Comité d'organisation** : ajoutez les membres du comité
   d'organisation ou partenaires (nom, titre/rôle en FR/EN/PT, photo).
 - **Carrousel d'accueil** : ajoutez des images qui défileront en
   fond du bandeau "42e Assemblée Générale". Sans image, le fond reste
@@ -126,8 +126,14 @@ beaucoup de colonnes, le tableau défile horizontalement (glissez ou
 utilisez la molette + Maj) et verticalement au-delà d'une certaine
 hauteur, avec l'en-tête toujours visible.
 
-Deux boutons d'export : **CSV** et **PDF** (mise en page paysage,
-respecte les filtres actifs).
+Deux boutons d'export : **Excel (.xlsx)** et **PDF** (mise en page
+paysage), tous deux respectant les filtres actifs. L'en-tête du
+fichier reprend automatiquement les filtres choisis, par exemple :
+`LISTE DES PARTICIPANTS - DATE D'ARRIVÉE : 2026-10-19`.
+
+Les filtres de date d'arrivée/départ portent sur les dates de **voyage**
+saisies à l'étape 4 du formulaire (et non les dates de séjour à
+l'hôtel).
 
 ## Rôles administrateurs
 

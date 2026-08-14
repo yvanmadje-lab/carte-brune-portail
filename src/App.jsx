@@ -3,6 +3,7 @@ import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Searc
 import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile } from "./lib/supabaseClient";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 /* ---------------------------------------------------------
    TOKENS — alignés sur l'identité officielle Carte Brune CEDEAO
@@ -92,7 +93,7 @@ const T = {
   council: { fr: "Conseil des Bureaux — Système d'Assurance Carte Brune CEDEAO", en: "Council of Bureaux — ECOWAS Brown Card Insurance Scheme", pt: "Conselho de Bureaux — Sistema de Seguro Cartão Castanho da CEDEAO" },
   hero_cta: { fr: "S'inscrire à la réunion", en: "Register for the meeting", pt: "Inscrever-se na reunião" },
   tourism_title: { fr: "Découvrir Dakar", en: "Discover Dakar", pt: "Descobrir Dakar" },
-  speakers_title: { fr: "Ils portent l'événement", en: "Event partners & speakers", pt: "Parceiros e intervenientes" },
+  speakers_title: { fr: "Comité d'organisation", en: "Organizing committee", pt: "Comité organizador" },
   hotels_title: { fr: "Hébergement recommandé", en: "Recommended accommodation", pt: "Alojamento recomendado" },
   per_night: { fr: "/ nuit", en: "/ night", pt: "/ noite" },
   step1_title: { fr: "Informations du participant", en: "Participant information", pt: "Informações do participante" },
@@ -132,7 +133,7 @@ const T = {
   total_reg: { fr: "Inscriptions", en: "Registrations", pt: "Inscrições" },
   by_country: { fr: "Par pays", en: "By country", pt: "Por país" },
   by_org: { fr: "Par type d'organisme", en: "By organization type", pt: "Por tipo de organização" },
-  export_csv: { fr: "Exporter CSV", en: "Export CSV", pt: "Exportar CSV" },
+  export_excel: { fr: "Exporter Excel", en: "Export Excel", pt: "Exportar Excel" },
   search_ph: { fr: "Rechercher nom, email, organisme…", en: "Search name, email, organization…", pt: "Pesquisar nome, email, organização…" },
   all_countries: { fr: "Tous les pays", en: "All countries", pt: "Todos os países" },
   no_participants: { fr: "Aucune inscription pour le moment.", en: "No registrations yet.", pt: "Ainda sem inscrições." },
@@ -176,7 +177,7 @@ const T = {
   hero_carousel_help: { fr: "Ces images défilent en arrière-plan du bandeau d'accueil. Sans image ajoutée, le fond reste uni.", en: "These images rotate behind the homepage hero banner. With none added, the background stays plain.", pt: "Estas imagens alternam no fundo do banner inicial. Sem imagens, o fundo permanece liso." },
   logo_tab: { fr: "Logo", en: "Logo", pt: "Logótipo" },
   logo_help: { fr: "Ce logo remplace le sceau par défaut dans l'en-tête et le bandeau d'accueil du site.", en: "This logo replaces the default seal in the header and homepage banner.", pt: "Este logótipo substitui o selo padrão no cabeçalho e no banner inicial." },
-  speakers_tab: { fr: "Ils portent l'événement", en: "Event partners", pt: "Parceiros do evento" },
+  speakers_tab: { fr: "Comité d'organisation", en: "Organizing committee", pt: "Comité organizador" },
   role_fr: { fr: "Titre / rôle (Français)", en: "Title / role (French)", pt: "Título / função (Francês)" },
   role_en: { fr: "Titre / rôle (Anglais)", en: "Title / role (English)", pt: "Título / função (Inglês)" },
   role_pt: { fr: "Titre / rôle (Portugais)", en: "Title / role (Portuguese)", pt: "Título / função (Português)" },
@@ -226,6 +227,9 @@ const T = {
   flight_departure: { fr: "Vol départ", en: "Departure flight", pt: "Voo de partida" },
   org_type_col: { fr: "Type d'organisme", en: "Organization type", pt: "Tipo de organização" },
   export_pdf: { fr: "Exporter PDF", en: "Export PDF", pt: "Exportar PDF" },
+  hotel_label: { fr: "Hôtel", en: "Hotel", pt: "Hotel" },
+  search_label: { fr: "Recherche", en: "Search", pt: "Pesquisa" },
+  participants_list_title: { fr: "Liste des participants", en: "Participants list", pt: "Lista de participantes" },
   users_tab: { fr: "Utilisateurs", en: "Users", pt: "Utilizadores" },
   role_viewer: { fr: "Lecture seule", en: "Read-only", pt: "Apenas leitura" },
   role_super_admin: { fr: "Super administrateur", en: "Super admin", pt: "Super administrador" },
@@ -258,29 +262,46 @@ function regNumber(seq) {
   return `CB-${DEFAULT_EVENT.year}-${DEFAULT_EVENT.code}-${String(seq).padStart(6, "0")}`;
 }
 
-function toCSV(rows) {
-  const headers = ["Numéro", "Nom", "Prénom", "Fonction", "Organisme", "Type d'organisme", "Pays", "Email", "Téléphone", "Hôtel", "Type de chambre", "Date arrivée", "Heure arrivée", "Vol arrivée", "Date départ", "Heure départ", "Vol départ"];
-  const lines = [headers.join(",")];
-  rows.forEach(r => {
-    lines.push([r.regNumber, r.lastName, r.firstName, r.position, r.organization, r.orgType, r.country, r.email, r.phone, r.hotelName || "", r.roomType || "", r.arrivalDate || "", r.arrivalTime || "", r.flightNumber || "", r.departureDate || "", r.departureTime || "", r.departureFlightNumber || ""].map(v => `"${(v || "").toString().replace(/"/g, '""')}"`).join(","));
-  });
-  return lines.join("\n");
+function exportHeaders(lang) {
+  return [t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)];
 }
 
-function downloadCSV(csv, filename) {
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
+function exportRows(rows) {
+  return rows.map(r => [r.lastName, r.firstName, r.organization, r.orgType || "", r.country, r.email, r.hotelName || "", r.roomType || "", r.arrivalDate || "", r.arrivalTime || "", r.flightNumber || "", r.departureDate || "", r.departureTime || "", r.departureFlightNumber || ""]);
 }
 
-function downloadPDF(rows, filename, lang) {
-  const cols = [t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type",lang), t("country",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)];
-  const body = rows.map(r => [r.lastName, r.firstName, r.organization, r.orgType, r.country, r.hotelName || "", r.roomType || "", r.arrivalDate || "", r.arrivalTime || "", r.flightNumber || "", r.departureDate || "", r.departureTime || "", r.departureFlightNumber || ""]);
+// Construit un titre du type "LISTE DES PARTICIPANTS - DATE D'ARRIVÉE : 2026-10-19"
+// à partir des filtres actuellement actifs, pour l'en-tête des exports.
+function buildExportTitle(lang, filters) {
+  const parts = [];
+  if (filters.countryFilter) parts.push(`${t("country", lang)} : ${filters.countryFilter}`);
+  if (filters.hotelFilter) parts.push(`${t("hotel_label", lang)} : ${filters.hotelFilter}`);
+  if (filters.arrivalFilter) parts.push(`${t("arrival_date", lang)} : ${filters.arrivalFilter}`);
+  if (filters.departureFilter) parts.push(`${t("departure_date", lang)} : ${filters.departureFilter}`);
+  if (filters.search) parts.push(`${t("search_label", lang)} : ${filters.search}`);
+  const base = t("participants_list_title", lang);
+  const title = parts.length ? `${base} - ${parts.join(" - ")}` : base;
+  return title.toUpperCase();
+}
+
+function downloadExcel(rows, filename, titleText, lang) {
+  const headers = exportHeaders(lang);
+  const body = exportRows(rows);
+  const aoa = [[titleText], [], headers, ...body];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
+  ws["!cols"] = headers.map(() => ({ wch: 18 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Participants");
+  XLSX.writeFile(wb, filename);
+}
+
+function downloadPDF(rows, filename, titleText, lang) {
+  const cols = exportHeaders(lang);
+  const body = exportRows(rows);
   const doc = new jsPDF({ orientation: "landscape" });
   doc.setFontSize(13);
-  doc.text(`${DEFAULT_EVENT.edition}e Assemblée Générale — Participants`, 14, 12);
+  doc.text(titleText, 14, 12);
   autoTable(doc, { head: [cols], body, startY: 18, styles: { fontSize: 7 }, headStyles: { fillColor: [20, 83, 45] } });
   doc.save(filename);
 }
@@ -525,13 +546,14 @@ export default function App() {
   }, [participants]);
 
   const filtered = useMemo(() => {
+    const norm = (v) => (v ? String(v).slice(0, 10) : "");
     return participants.filter(p => {
       const s = search.toLowerCase();
       const matchesSearch = !s || `${p.lastName} ${p.firstName} ${p.email} ${p.organization}`.toLowerCase().includes(s);
       const matchesCountry = !countryFilter || p.country === countryFilter;
       const matchesHotel = !hotelFilter || p.hotelName === hotelFilter;
-      const matchesArrival = !arrivalFilter || p.checkIn === arrivalFilter;
-      const matchesDeparture = !departureFilter || p.checkOut === departureFilter;
+      const matchesArrival = !arrivalFilter || norm(p.arrivalDate) === arrivalFilter;
+      const matchesDeparture = !departureFilter || norm(p.departureDate) === departureFilter;
       return matchesSearch && matchesCountry && matchesHotel && matchesArrival && matchesDeparture;
     });
   }, [participants, search, countryFilter, hotelFilter, arrivalFilter, departureFilter]);
@@ -1074,8 +1096,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
           <input className="cb-input pl-9" placeholder={t("search_ph", lang)} value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
-        <button onClick={() => downloadCSV(toCSV(filtered), `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.csv`)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_csv", lang)}</button>
-        <button onClick={() => downloadPDF(filtered, `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.pdf`, lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
+        <button onClick={() => downloadExcel(filtered, `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
+        <button onClick={() => downloadPDF(filtered, `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
       </div>
       <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
         <select className="cb-input sm:w-48" value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
@@ -1169,7 +1191,7 @@ function ImageUploader({ lang, value, onChange, folder }) {
     <div>
       <label className="cb-label">{t("image", lang)}</label>
       {value && (
-        <div className="mb-2 w-full h-28" style={{ backgroundImage: `url(${value})`, backgroundSize: "cover", backgroundPosition: "center", border: "1px solid #CFC4A3" }} />
+        <div className="mb-2 w-full" style={{ height: "260px", backgroundImage: `url(${value})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center", backgroundColor: "#F1EEE4", border: "1px solid #CFC4A3" }} />
       )}
       <label className="cb-btn-outline text-sm cursor-pointer inline-flex">
         <ImageIcon size={14} /> {uploading ? t("uploading", lang) : t("upload_image", lang)}
@@ -1250,7 +1272,7 @@ function LogoManager({ lang, logoUrl, onLogoChange, canEdit }) {
   }
 
   return (
-    <div className="bg-white border p-5 max-w-sm space-y-4" style={{ borderColor: "#CFC4A3" }}>
+    <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
       <p className="text-xs text-black/50">{t("logo_help", lang)}</p>
       {canEdit ? (
         <>
@@ -1262,7 +1284,7 @@ function LogoManager({ lang, logoUrl, onLogoChange, canEdit }) {
           {saved && <div className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓ {t("save", lang)}</div>}
         </>
       ) : draft && (
-        <img src={draft} alt="Logo" className="w-24 h-24 rounded-full object-cover" />
+        <img src={draft} alt="Logo" className="w-40 h-40 rounded-full object-cover" />
       )}
     </div>
   );
@@ -1291,10 +1313,10 @@ function HeroSlidesManager({ lang , canEdit }) {
   return (
     <div>
       <p className="text-xs text-black/50 mb-4 max-w-lg">{t("hero_carousel_help", lang)}</p>
-      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
         {items.map(it => (
           <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
-            <div className="h-28" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+            <div className="h-52" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} />
             <div className="p-3 flex items-center justify-between">
               <StatusBadge status={it.status} />
               <div className="flex gap-2">
@@ -1352,10 +1374,10 @@ function TourismManager({ lang , canEdit }) {
 
   return (
     <div>
-      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
         {items.map(it => (
           <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
-            {it.image_url ? <div className="h-24" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-24" style={{ background: "var(--sable-deep)" }} />}
+            {it.image_url ? <div className="h-52" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-52" style={{ background: "var(--sable-deep)" }} />}
             <div className="p-3">
               <div className="text-sm font-semibold mb-1">{it.name_fr}</div>
               <div className="flex items-center justify-between">
@@ -1428,10 +1450,10 @@ function HotelsManager({ lang , canEdit }) {
 
   return (
     <div>
-      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
         {items.map(it => (
           <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
-            {it.image_url ? <div className="h-24" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-24" style={{ background: "var(--navy)" }} />}
+            {it.image_url ? <div className="h-52" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-52" style={{ background: "var(--navy)" }} />}
             <div className="p-3">
               <div className="text-sm font-semibold mb-1">{it.name}</div>
               <div className="text-xs text-black/50 mb-2">{Number(it.price || 0).toLocaleString()} {it.currency}</div>
@@ -1508,13 +1530,13 @@ function SpeakersManager({ lang , canEdit }) {
 
   return (
     <div>
-      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
         {items.map(it => (
           <div key={it.id} className="flex items-start gap-3 bg-white border p-4" style={{ borderColor: "#CFC4A3" }}>
             {it.image_url ? (
-              <img src={it.image_url} alt={it.name} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+              <img src={it.image_url} alt={it.name} className="w-24 h-24 rounded-full object-cover flex-shrink-0" />
             ) : (
-              <div className="w-12 h-12 rounded-full flex-shrink-0" style={{ background: "var(--sable-deep)" }} />
+              <div className="w-24 h-24 rounded-full flex-shrink-0" style={{ background: "var(--sable-deep)" }} />
             )}
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold truncate">{it.name}</div>
