@@ -30,6 +30,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 7. `supabase/form_fields_schema.sql` (champs dynamiques du formulaire + capture complète des réponses)
 8. `supabase/travel_fields_schema.sql` (heure d'arrivée, date/heure/vol de départ)
 9. `supabase/roles_schema.sql` (rôles administrateurs — super admin / gestionnaire / lecture seule)
+10. `supabase/hotel_gallery_schema.sql` (galerie photos et site web de chaque hôtel)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -163,6 +164,42 @@ compte Supabase — seulement ses droits d'accès à l'admin du site.
 Le type de champ "Heure" est disponible dans "Champs du formulaire"
 pour tout champ voyage — utilisé par défaut pour l'heure d'arrivée et
 l'heure de départ.
+
+## Photos plus grandes (admin et site public)
+
+Toutes les tailles d'affichage d'image ont été augmentées : logo
+(jusqu'à 224px dans l'admin, 80px dans l'en-tête public), vignettes
+de listes (280px de hauteur dans l'admin comme sur le site public),
+photos du comité d'organisation (128px de diamètre), aperçu plein
+cadre lors d'un envoi (320px).
+
+## Export Excel et PDF — police agrandie
+
+Les deux exports utilisent désormais une police plus grande et
+lisible (titre 16pt, en-têtes 11-13pt, contenu 10-12pt). L'export
+Excel produit un vrai fichier `.xlsx` avec mise en forme (via la
+librairie ExcelJS).
+
+## Suppression de doublons (participants)
+
+Dans l'onglet Participants, une icône de suppression apparaît en fin
+de ligne pour les rôles Super administrateur et Gestionnaire — utile
+pour retirer une inscription en double. Cette action est définitive
+(la ligne est supprimée de la base) ; le rôle Lecture seule ne voit
+pas cette icône.
+
+## Galerie photos et site web par hôtel
+
+Dans "Contenu du site → Hôtels", chaque hôtel dispose maintenant de :
+- une **galerie de photos** (au-delà de la photo principale) — ajoutez
+  autant de photos que nécessaire, chacune avec un bouton pour la
+  retirer ;
+- un champ **site web** (URL) — affiché comme bouton "Visiter le
+  site" sur la fiche hôtel publique.
+
+Sur le site public, cliquer sur la photo d'un hôtel (ou sur "Voir les
+photos") ouvre une visionneuse plein écran avec navigation
+précédent/suivant entre toutes les photos de cet hôtel.
 
 ## Prochaines étapes possibles
 

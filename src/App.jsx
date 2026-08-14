@@ -3,7 +3,7 @@ import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Searc
 import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile } from "./lib/supabaseClient";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 /* ---------------------------------------------------------
    TOKENS — alignés sur l'identité officielle Carte Brune CEDEAO
@@ -173,6 +173,12 @@ const T = {
   desc_en: { fr: "Description (Anglais)", en: "Description (English)", pt: "Descrição (Inglês)" },
   desc_pt: { fr: "Description (Portugais)", en: "Description (Portuguese)", pt: "Descrição (Português)" },
   confirm_delete: { fr: "Supprimer cet élément ?", en: "Delete this item?", pt: "Eliminar este item?" },
+  confirm_delete_participant: { fr: "Supprimer définitivement cette inscription (utile en cas de doublon) ?", en: "Permanently delete this registration (useful for duplicates)?", pt: "Eliminar definitivamente esta inscrição (útil em caso de duplicado)?" },
+  visit_website: { fr: "Visiter le site", en: "Visit website", pt: "Visitar site" },
+  gallery_label: { fr: "Galerie photos de l'hôtel", en: "Hotel photo gallery", pt: "Galeria de fotos do hotel" },
+  website_label: { fr: "Site Internet de l'hôtel", en: "Hotel website", pt: "Site do hotel" },
+  view_photos: { fr: "Voir les photos", en: "View photos", pt: "Ver fotos" },
+  add_photo: { fr: "Ajouter une photo", en: "Add photo", pt: "Adicionar foto" },
   no_items: { fr: "Aucun élément pour le moment.", en: "No items yet.", pt: "Ainda sem itens." },
   hero_carousel_help: { fr: "Ces images défilent en arrière-plan du bandeau d'accueil. Sans image ajoutée, le fond reste uni.", en: "These images rotate behind the homepage hero banner. With none added, the background stays plain.", pt: "Estas imagens alternam no fundo do banner inicial. Sem imagens, o fundo permanece liso." },
   logo_tab: { fr: "Logo", en: "Logo", pt: "Logótipo" },
@@ -284,25 +290,54 @@ function buildExportTitle(lang, filters) {
   return title.toUpperCase();
 }
 
-function downloadExcel(rows, filename, titleText, lang) {
+async function downloadExcel(rows, filename, titleText, lang) {
   const headers = exportHeaders(lang);
   const body = exportRows(rows);
-  const aoa = [[titleText], [], headers, ...body];
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
-  ws["!cols"] = headers.map(() => ({ wch: 18 }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Participants");
-  XLSX.writeFile(wb, filename);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Participants");
+
+  ws.mergeCells(1, 1, 1, headers.length);
+  const titleCell = ws.getCell(1, 1);
+  titleCell.value = titleText;
+  titleCell.font = { size: 16, bold: true, color: { argb: "FF14532D" } };
+  titleCell.alignment = { vertical: "middle" };
+  ws.getRow(1).height = 28;
+
+  const headerRow = ws.addRow(headers);
+  headerRow.eachCell(c => {
+    c.font = { size: 13, bold: true, color: { argb: "FFFFFFFF" } };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF14532D" } };
+    c.alignment = { vertical: "middle" };
+  });
+  headerRow.height = 22;
+
+  body.forEach(r => {
+    const row = ws.addRow(r);
+    row.font = { size: 12 };
+    row.height = 20;
+  });
+
+  ws.columns.forEach(col => { col.width = 20; });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
 function downloadPDF(rows, filename, titleText, lang) {
   const cols = exportHeaders(lang);
   const body = exportRows(rows);
   const doc = new jsPDF({ orientation: "landscape" });
-  doc.setFontSize(13);
-  doc.text(titleText, 14, 12);
-  autoTable(doc, { head: [cols], body, startY: 18, styles: { fontSize: 7 }, headStyles: { fillColor: [20, 83, 45] } });
+  doc.setFontSize(16);
+  doc.text(titleText, 14, 14);
+  autoTable(doc, {
+    head: [cols], body, startY: 20,
+    styles: { fontSize: 10, cellPadding: 3 },
+    headStyles: { fillColor: [20, 83, 45], fontSize: 11, fontStyle: "bold" },
+  });
   doc.save(filename);
 }
 
@@ -412,6 +447,8 @@ export default function App() {
       desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
       amenities: (r.amenities || "").split(",").map(a => a.trim()).filter(Boolean),
       image: r.image_url,
+      gallery: Array.isArray(r.gallery) ? r.gallery : [],
+      website: r.website || "",
       rooms: [{ id: r.id + "-r1", type: r.room_type || "Standard", price: Number(r.price) || 0, cur: r.currency || "FCFA" }],
     })));
     if (s.length) setHeroSlides(s.map(r => r.image_url));
@@ -505,6 +542,14 @@ export default function App() {
     setParticipantsLoading(false);
   }
 
+  async function deleteParticipant(id) {
+    if (!window.confirm(t("confirm_delete_participant", lang))) return;
+    try {
+      await deleteRow("participants", id);
+      setParticipants(list => list.filter(p => p.id !== id));
+    } catch (e) { /* best effort */ }
+  }
+
   useEffect(() => {
     if (adminUser) fetchParticipants();
   }, [adminUser]);
@@ -594,9 +639,9 @@ export default function App() {
         <div className="max-w-6xl mx-auto flex items-center justify-between px-5 py-3">
           <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-3 text-left">
             {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="w-14 h-14 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
+              <img src={logoUrl} alt="Logo" className="w-20 h-20 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
             ) : (
-              <div className="seal w-14 h-14 flex-shrink-0">
+              <div className="seal w-20 h-20 flex-shrink-0">
                 <div className="seal-ring" />
                 <div style={{ position: "absolute", inset: 4, background: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <ShieldCheck size={22} color="var(--vert-fonce)" />
@@ -654,7 +699,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={setEventData} orgTypes={orgTypes} formFields={formFields} myRole={myRole} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={setEventData} orgTypes={orgTypes} formFields={formFields} myRole={myRole} />
       )}
 
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
@@ -689,6 +734,7 @@ function HeroCarousel({ images }) {
 
 function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speakers, event }) {
   const hasTheme = event.theme && (event.theme.fr || event.theme.en || event.theme.pt);
+  const [galleryHotel, setGalleryHotel] = useState(null);
   return (
     <>
       {/* HERO — fond noir + trame de points, dans l'esprit du bandeau vidéo */}
@@ -708,9 +754,9 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
           <div className="inline-flex flex-wrap items-stretch gap-0 mb-8" style={{ background: "var(--vert-fonce)" }}>
             <div className="flex items-center gap-3 px-5 py-3">
               {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+                <img src={logoUrl} alt="Logo" className="w-16 h-16 rounded-full object-cover flex-shrink-0" />
               ) : (
-                <div className="seal w-12 h-12 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:3, background:"#fff", borderRadius:"50%" }} /></div>
+                <div className="seal w-16 h-16 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:4, background:"#fff", borderRadius:"50%" }} /></div>
               )}
               <div className="text-sm leading-tight">
                 <div className="font-semibold">{event.brand[lang]}</div>
@@ -746,9 +792,9 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
           {speakers.map((s, i) => (
             <div key={s.id || i} className="flex items-start gap-4 bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
               {s.image ? (
-                <img src={s.image} alt={s.name} className="w-24 h-24 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
+                <img src={s.image} alt={s.name} className="w-32 h-32 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
               ) : (
-                <div className="seal w-24 h-24 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:5, background:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}><Quote size={28} color="var(--vert-fonce)" /></div></div>
+                <div className="seal w-32 h-32 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:6, background:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}><Quote size={36} color="var(--vert-fonce)" /></div></div>
               )}
               <div>
                 <div className="font-semibold text-sm">{s.name}</div>
@@ -767,9 +813,9 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
             {tourism.map((site, i) => (
               <div key={site.id || i} className="bg-white">
                 {site.image ? (
-                  <div style={{ height: "208px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+                  <div style={{ height: "280px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center" }} />
                 ) : (
-                  <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "208px" }} />
+                  <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "280px" }} />
                 )}
                 <div className="p-4">
                   <div className="font-semibold text-sm mb-1">{site.name[lang]}</div>
@@ -785,14 +831,16 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
       <section id="hotels-section" className="max-w-6xl mx-auto px-5 py-14">
         <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("hotels_title", lang)}</h2>
         <div className="grid md:grid-cols-3 gap-6">
-          {hotels.map(h => (
+          {hotels.map(h => {
+            const gallery = [h.image, ...(h.gallery || [])].filter(Boolean);
+            return (
             <div key={h.id} className="border" style={{ borderColor: "#CFC4A3" }}>
               {h.image ? (
-                <div className="flex items-end p-3" style={{ height: "208px", backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center" }}>
+                <button onClick={() => gallery.length && setGalleryHotel(h)} className="w-full flex items-end p-3 text-left" style={{ height: "280px", backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center", cursor: gallery.length ? "pointer" : "default" }}>
                   <span className="text-white font-display font-semibold text-lg" style={{ textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>{h.name}</span>
-                </div>
+                </button>
               ) : (
-                <div style={{ background: "var(--navy)", height: "208px" }} className="flex items-end p-3">
+                <div style={{ background: "var(--navy)", height: "280px" }} className="flex items-end p-3">
                   <span className="text-white font-display font-semibold text-lg">{h.name}</span>
                 </div>
               )}
@@ -802,15 +850,51 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {h.amenities.map(a => <span key={a} className="text-[11px] px-2 py-0.5 bg-[var(--sable-deep)]">{a}</span>)}
                 </div>
-                <div className="text-sm font-mono font-semibold" style={{ color: "var(--argile)" }}>
+                <div className="text-sm font-mono font-semibold mb-3" style={{ color: "var(--argile)" }}>
                   {h.rooms[0].price.toLocaleString()} {h.rooms[0].cur} {t("per_night", lang)}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {gallery.length > 0 && (
+                    <button onClick={() => setGalleryHotel(h)} className="cb-btn-outline text-xs py-1.5 px-3"><ImageIcon size={13} /> {t("view_photos", lang)}</button>
+                  )}
+                  {h.website && (
+                    <a href={h.website} target="_blank" rel="noopener noreferrer" className="cb-btn-outline text-xs py-1.5 px-3" style={{ textDecoration: "none" }}><Globe2 size={13} /> {t("visit_website", lang)}</a>
+                  )}
                 </div>
               </div>
             </div>
-          ))}
+          );})}
         </div>
       </section>
+
+      {galleryHotel && (
+        <HotelGalleryModal hotel={galleryHotel} images={[galleryHotel.image, ...(galleryHotel.gallery || [])].filter(Boolean)} onClose={() => setGalleryHotel(null)} />
+      )}
     </>
+  );
+}
+
+function HotelGalleryModal({ hotel, images, onClose }) {
+  const [index, setIndex] = useState(0);
+  const next = () => setIndex(i => (i + 1) % images.length);
+  const prev = () => setIndex(i => (i - 1 + images.length) % images.length);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(11,13,12,.92)" }} onClick={onClose}>
+      <button onClick={onClose} className="absolute top-5 right-5 text-white"><X size={28} /></button>
+      <div className="text-white absolute top-5 left-5 font-display font-semibold text-lg">{hotel.name}</div>
+      <div className="relative max-w-5xl w-full px-16" onClick={e => e.stopPropagation()}>
+        <img src={images[index]} alt={hotel.name} className="w-full object-contain" style={{ maxHeight: "80vh" }} />
+        {images.length > 1 && (
+          <>
+            <button onClick={prev} className="absolute left-0 top-1/2 -translate-y-1/2 text-white p-2"><ChevronLeft size={36} /></button>
+            <button onClick={next} className="absolute right-0 top-1/2 -translate-y-1/2 text-white p-2"><ChevronRight size={36} /></button>
+          </>
+        )}
+      </div>
+      {images.length > 1 && (
+        <div className="absolute bottom-6 text-white/70 text-sm font-mono">{index + 1} / {images.length}</div>
+      )}
+    </div>
   );
 }
 
@@ -1032,7 +1116,7 @@ function AdminLogin({ lang }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole }) {
   const [tab, setTab] = useState("participants");
   const canEdit = myRole === "super_admin" || myRole === "manager";
   const isSuperAdmin = myRole === "super_admin";
@@ -1128,11 +1212,12 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
               {["#", t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
                 <th key={h} className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
+              {canEdit && <th className="px-3 py-2"></th>}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={15} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
+              <tr><td colSpan={16} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
             )}
             {filtered.map(p => (
               <tr key={p.id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
@@ -1151,6 +1236,11 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureDate || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureTime || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureFlightNumber || "—"}</td>
+                {canEdit && (
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <button onClick={() => onDeleteParticipant(p.id)} title={t("delete", lang)}><Trash2 size={14} color="#8A2A2A" /></button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -1191,7 +1281,7 @@ function ImageUploader({ lang, value, onChange, folder }) {
     <div>
       <label className="cb-label">{t("image", lang)}</label>
       {value && (
-        <div className="mb-2 w-full" style={{ height: "260px", backgroundImage: `url(${value})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center", backgroundColor: "#F1EEE4", border: "1px solid #CFC4A3" }} />
+        <div className="mb-2 w-full" style={{ height: "320px", backgroundImage: `url(${value})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center", backgroundColor: "#F1EEE4", border: "1px solid #CFC4A3" }} />
       )}
       <label className="cb-btn-outline text-sm cursor-pointer inline-flex">
         <ImageIcon size={14} /> {uploading ? t("uploading", lang) : t("upload_image", lang)}
@@ -1284,7 +1374,7 @@ function LogoManager({ lang, logoUrl, onLogoChange, canEdit }) {
           {saved && <div className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓ {t("save", lang)}</div>}
         </>
       ) : draft && (
-        <img src={draft} alt="Logo" className="w-40 h-40 rounded-full object-cover" />
+        <img src={draft} alt="Logo" className="w-56 h-56 rounded-full object-cover" />
       )}
     </div>
   );
@@ -1316,7 +1406,7 @@ function HeroSlidesManager({ lang , canEdit }) {
       <div className="grid sm:grid-cols-2 gap-4 mb-6">
         {items.map(it => (
           <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
-            <div className="h-52" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+            <div className="h-72" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} />
             <div className="p-3 flex items-center justify-between">
               <StatusBadge status={it.status} />
               <div className="flex gap-2">
@@ -1377,7 +1467,7 @@ function TourismManager({ lang , canEdit }) {
       <div className="grid sm:grid-cols-2 gap-4 mb-6">
         {items.map(it => (
           <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
-            {it.image_url ? <div className="h-52" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-52" style={{ background: "var(--sable-deep)" }} />}
+            {it.image_url ? <div className="h-72" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-72" style={{ background: "var(--sable-deep)" }} />}
             <div className="p-3">
               <div className="text-sm font-semibold mb-1">{it.name_fr}</div>
               <div className="flex items-center justify-between">
@@ -1453,7 +1543,7 @@ function HotelsManager({ lang , canEdit }) {
       <div className="grid sm:grid-cols-2 gap-4 mb-6">
         {items.map(it => (
           <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
-            {it.image_url ? <div className="h-52" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-52" style={{ background: "var(--navy)" }} />}
+            {it.image_url ? <div className="h-72" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-72" style={{ background: "var(--navy)" }} />}
             <div className="p-3">
               <div className="text-sm font-semibold mb-1">{it.name}</div>
               <div className="text-xs text-black/50 mb-2">{Number(it.price || 0).toLocaleString()} {it.currency}</div>
@@ -1476,6 +1566,21 @@ function HotelsManager({ lang , canEdit }) {
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label={t("organization", lang) === "Organization" ? "Hotel name" : "Nom de l'hôtel"}><input className="cb-input" value={editing.name || ""} onChange={e=>setEditing(x=>({ ...x, name: e.target.value }))} /></Field>
             <Field label="Distance"><input className="cb-input" value={editing.distance || ""} onChange={e=>setEditing(x=>({ ...x, distance: e.target.value }))} /></Field>
+          </div>
+          <Field label={t("website_label", lang)}><input type="url" className="cb-input" value={editing.website || ""} onChange={e=>setEditing(x=>({ ...x, website: e.target.value }))} placeholder="https://..." /></Field>
+          <div>
+            <label className="cb-label">{t("gallery_label", lang)}</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {(editing.gallery || []).map((url, idx) => (
+                <div key={idx} className="relative" style={{ width: "110px", height: "110px" }}>
+                  <img src={url} alt="" className="w-full h-full object-cover" style={{ border: "1px solid #CFC4A3" }} />
+                  <button onClick={() => setEditing(x => ({ ...x, gallery: x.gallery.filter((_, i) => i !== idx) }))} className="absolute -top-2 -right-2 bg-white rounded-full" style={{ border: "1px solid #CFC4A3", width: "22px", height: "22px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <X size={13} color="#8A2A2A" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <ImageUploader lang={lang} value="" onChange={url => setEditing(x => ({ ...x, gallery: [...(x.gallery || []), url] }))} folder="hotels" />
           </div>
           <div className="grid sm:grid-cols-3 gap-3">
             <Field label={t("desc_fr", lang)}><textarea className="cb-input" rows={3} value={editing.desc_fr || ""} onChange={e=>setEditing(x=>({ ...x, desc_fr: e.target.value }))} /></Field>
@@ -1502,7 +1607,7 @@ function HotelsManager({ lang , canEdit }) {
           </div>
         </div>
       ) : (
-        canEdit && <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities: "", price: 0, currency: "FCFA", room_type: "Standard", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities: "", price: 0, currency: "FCFA", room_type: "Standard", image_url: "", website: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
@@ -1534,9 +1639,9 @@ function SpeakersManager({ lang , canEdit }) {
         {items.map(it => (
           <div key={it.id} className="flex items-start gap-3 bg-white border p-4" style={{ borderColor: "#CFC4A3" }}>
             {it.image_url ? (
-              <img src={it.image_url} alt={it.name} className="w-24 h-24 rounded-full object-cover flex-shrink-0" />
+              <img src={it.image_url} alt={it.name} className="w-32 h-32 rounded-full object-cover flex-shrink-0" />
             ) : (
-              <div className="w-24 h-24 rounded-full flex-shrink-0" style={{ background: "var(--sable-deep)" }} />
+              <div className="w-32 h-32 rounded-full flex-shrink-0" style={{ background: "var(--sable-deep)" }} />
             )}
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold truncate">{it.name}</div>
