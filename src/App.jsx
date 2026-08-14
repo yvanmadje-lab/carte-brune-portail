@@ -594,17 +594,17 @@ export default function App() {
         <div className="max-w-6xl mx-auto flex items-center justify-between px-5 py-3">
           <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-3 text-left">
             {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="w-9 h-9 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
+              <img src={logoUrl} alt="Logo" className="w-14 h-14 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
             ) : (
-              <div className="seal w-9 h-9 flex-shrink-0">
+              <div className="seal w-14 h-14 flex-shrink-0">
                 <div className="seal-ring" />
-                <div style={{ position: "absolute", inset: 3, background: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <ShieldCheck size={14} color="var(--vert-fonce)" />
+                <div style={{ position: "absolute", inset: 4, background: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ShieldCheck size={22} color="var(--vert-fonce)" />
                 </div>
               </div>
             )}
             <div>
-              <div className="font-display font-semibold leading-tight" style={{ fontSize: "1.05rem" }}>{eventData.brand[lang]}</div>
+              <div className="font-display font-semibold leading-tight" style={{ fontSize: "1.3rem" }}>{eventData.brand[lang]}</div>
               <div className="text-[11px] opacity-75 leading-tight hidden sm:block">{t("council", lang)}</div>
             </div>
           </button>
@@ -708,9 +708,9 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
           <div className="inline-flex flex-wrap items-stretch gap-0 mb-8" style={{ background: "var(--vert-fonce)" }}>
             <div className="flex items-center gap-3 px-5 py-3">
               {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                <img src={logoUrl} alt="Logo" className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
               ) : (
-                <div className="seal w-8 h-8 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:2, background:"#fff", borderRadius:"50%" }} /></div>
+                <div className="seal w-12 h-12 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:3, background:"#fff", borderRadius:"50%" }} /></div>
               )}
               <div className="text-sm leading-tight">
                 <div className="font-semibold">{event.brand[lang]}</div>
@@ -746,9 +746,9 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
           {speakers.map((s, i) => (
             <div key={s.id || i} className="flex items-start gap-4 bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
               {s.image ? (
-                <img src={s.image} alt={s.name} className="w-11 h-11 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
+                <img src={s.image} alt={s.name} className="w-24 h-24 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
               ) : (
-                <div className="seal w-11 h-11 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:3, background:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}><Quote size={16} color="var(--vert-fonce)" /></div></div>
+                <div className="seal w-24 h-24 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:5, background:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}><Quote size={28} color="var(--vert-fonce)" /></div></div>
               )}
               <div>
                 <div className="font-semibold text-sm">{s.name}</div>
@@ -767,9 +767,9 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
             {tourism.map((site, i) => (
               <div key={site.id || i} className="bg-white">
                 {site.image ? (
-                  <div style={{ height: "110px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+                  <div style={{ height: "208px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center" }} />
                 ) : (
-                  <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "110px" }} />
+                  <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "208px" }} />
                 )}
                 <div className="p-4">
                   <div className="font-semibold text-sm mb-1">{site.name[lang]}</div>
@@ -788,11 +788,11 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
           {hotels.map(h => (
             <div key={h.id} className="border" style={{ borderColor: "#CFC4A3" }}>
               {h.image ? (
-                <div className="h-24 flex items-end p-3" style={{ backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center" }}>
+                <div className="flex items-end p-3" style={{ height: "208px", backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center" }}>
                   <span className="text-white font-display font-semibold text-lg" style={{ textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>{h.name}</span>
                 </div>
               ) : (
-                <div style={{ background: "var(--navy)" }} className="h-24 flex items-end p-3">
+                <div style={{ background: "var(--navy)", height: "208px" }} className="flex items-end p-3">
                   <span className="text-white font-display font-semibold text-lg">{h.name}</span>
                 </div>
               )}
