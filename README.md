@@ -31,6 +31,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 8. `supabase/travel_fields_schema.sql` (heure d'arrivée, date/heure/vol de départ)
 9. `supabase/roles_schema.sql` (rôles administrateurs — super admin / gestionnaire / lecture seule)
 10. `supabase/hotel_gallery_schema.sql` (galerie photos et site web de chaque hôtel)
+11. `supabase/edit_link_email_schema.sql` (lien de modification sécurisé + modèles d'email de confirmation)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -201,8 +202,62 @@ Sur le site public, cliquer sur la photo d'un hôtel (ou sur "Voir les
 photos") ouvre une visionneuse plein écran avec navigation
 précédent/suivant entre toutes les photos de cet hôtel.
 
-## Prochaines étapes possibles
+## Site responsive mobile
 
+L'en-tête (logo, titre, menu) et le bandeau d'accueil s'adaptent
+maintenant à la largeur de l'écran — les tailles de logo et de texte
+sont réduites sur mobile pour que le bouton menu (☰) reste toujours
+visible et accessible, avec le menu déroulant complet en dessous.
+
+## Email de confirmation avec lien de modification
+
+Quand un participant valide son inscription, un email lui est
+automatiquement envoyé (dans sa langue) avec un lien personnel et
+secret lui permettant de consulter ou modifier ses informations à
+tout moment — **ce lien n'est jamais affiché dans le navigateur**, il
+n'arrive que par email, exactement comme demandé.
+
+### Mise en place (obligatoire pour que les emails partent réellement)
+
+1. Exécutez `supabase/edit_link_email_schema.sql` dans Supabase (SQL
+   Editor). Il crée le lien sécurisé de modification et des modèles
+   d'email par défaut dans les 3 langues.
+2. Créez un compte gratuit sur **resend.com** (service d'envoi
+   d'emails transactionnels). Récupérez une clé API.
+3. Pour un envoi en production sous votre propre nom de domaine,
+   vérifiez ce domaine dans Resend (Domains → Add domain, puis
+   ajoutez les enregistrements DNS indiqués). En attendant, vous
+   pouvez tester avec l'adresse d'expéditeur par défaut
+   `onboarding@resend.dev` (limitée, pratique pour les tests).
+4. Sur Vercel, **Project → Settings → Environment Variables**,
+   ajoutez :
+   ```
+   RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   EMAIL_FROM=inscriptions@votredomaine.org
+   ```
+   (gardez aussi `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` déjà
+   configurées — la fonction d'envoi d'email les réutilise pour aller
+   chercher le modèle à appliquer.)
+5. Redéployez (**Deployments → ⋯ → Redeploy**).
+
+### Personnaliser le message
+
+Administration → Contenu du site → onglet **"Email de confirmation"** :
+un objet et un corps de message par langue (FR/EN/PT), avec les
+variables `{{firstName}}`, `{{lastName}}`, `{{regNumber}}`,
+`{{editLink}}`, `{{eventTitle}}` à placer où vous voulez dans le
+texte.
+
+### Comment le participant l'utilise
+
+Le participant clique sur le lien reçu par email → il arrive sur une
+page dédiée pré-remplie avec ses informations → il modifie ce qu'il
+veut → il enregistre. Aucune connexion ni mot de passe requis : le
+lien lui-même est la clé d'accès, ce qui répond à l'exigence que ce
+lien "doit nécessairement provenir de leur boîte mail, pas être saisi
+dans le navigateur" — il n'est affiché nulle part dans l'interface.
+
+## Prochaines étapes possibles
 - Gestion des rôles admin (super admin / logistique / lecture seule)
 - Emails automatiques de confirmation
 - Gestion des événements multi-années depuis le back-office

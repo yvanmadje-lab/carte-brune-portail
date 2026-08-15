@@ -127,6 +127,16 @@ const T = {
   confirmed_title: { fr: "Inscription enregistrée avec succès", en: "Registration successfully recorded", pt: "Inscrição registada com sucesso" },
   reg_number: { fr: "Numéro d'inscription", en: "Registration number", pt: "Número de inscrição" },
   back_home: { fr: "Retour à l'accueil", en: "Back to home", pt: "Voltar ao início" },
+  email_sent_notice: { fr: "Un email de confirmation vient de vous être envoyé, avec un lien pour consulter ou modifier vos informations à tout moment. Utilisez ce lien depuis votre boîte mail.", en: "A confirmation email has just been sent to you, with a link to view or update your information at any time. Use that link from your inbox.", pt: "Acabou de lhe ser enviado um email de confirmação, com um link para consultar ou atualizar os seus dados a qualquer momento. Utilize esse link a partir da sua caixa de correio." },
+  update_title: { fr: "Mettre à jour mon inscription", en: "Update my registration", pt: "Atualizar a minha inscrição" },
+  update_intro: { fr: "Modifiez vos informations ci-dessous puis enregistrez.", en: "Edit your information below, then save.", pt: "Edite as suas informações abaixo e depois guarde." },
+  update_save: { fr: "Enregistrer les modifications", en: "Save changes", pt: "Guardar alterações" },
+  update_saved: { fr: "Vos informations ont été mises à jour avec succès.", en: "Your information has been successfully updated.", pt: "As suas informações foram atualizadas com sucesso." },
+  update_link_invalid: { fr: "Ce lien de modification est invalide ou a expiré.", en: "This update link is invalid or has expired.", pt: "Este link de atualização é inválido ou expirou." },
+  email_tab: { fr: "Email de confirmation", en: "Confirmation email", pt: "Email de confirmação" },
+  email_subject_label: { fr: "Objet de l'email", en: "Email subject", pt: "Assunto do email" },
+  email_body_label: { fr: "Corps de l'email", en: "Email body", pt: "Corpo do email" },
+  email_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}}" },
   admin: { fr: "Administration", en: "Admin", pt: "Administração" },
   dashboard: { fr: "Tableau de bord", en: "Dashboard", pt: "Painel" },
   participants: { fr: "Participants", en: "Participants", pt: "Participantes" },
@@ -360,6 +370,7 @@ const emptyForm = { lastName: "", firstName: "", position: "", organization: "",
 export default function App() {
   const [lang, setLang] = useState("fr");
   const [view, setView] = useState("public");
+  const [editToken, setEditToken] = useState(null);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(emptyForm);
   const [participants, setParticipants] = useState([]);
@@ -370,6 +381,14 @@ export default function App() {
   const [hotelFilter, setHotelFilter] = useState("");
   const [arrivalFilter, setArrivalFilter] = useState("");
   const [departureFilter, setDepartureFilter] = useState("");
+
+  // Détecte un lien de modification (?edit=<jeton>), envoyé uniquement
+  // par email — jamais saisi ni collé manuellement dans le navigateur.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("edit");
+    if (token) { setEditToken(token); setView("update"); }
+  }, []);
   const [mobileNav, setMobileNav] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -583,12 +602,28 @@ export default function App() {
     };
     const { data, error } = await supabase.rpc("register_participant", { payload });
     setSubmitting(false);
-    if (error) {
+    if (error || !data) {
       setSubmitError(t("submit_error", lang));
       return;
     }
-    setConfirmed({ ...form, regNumber: data });
+    const regNumber = data.regNumber;
+    const editToken = data.editToken;
+    setConfirmed({ ...form, regNumber });
     setStep(6);
+
+    // Envoi de l'email de confirmation — au mieux, n'empêche jamais
+    // la confirmation de s'afficher si l'envoi échoue.
+    if (form.email && editToken) {
+      const editLink = `${window.location.origin}${window.location.pathname}?edit=${editToken}`;
+      fetch("/api/send-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email, lang, firstName: form.firstName, lastName: form.lastName,
+          regNumber, editLink, eventTitle: eventData.title[lang],
+        }),
+      }).catch(() => { /* best effort */ });
+    }
   }
 
   function startOver() {
@@ -620,7 +655,7 @@ export default function App() {
   const hotelOptions = useMemo(() => Array.from(new Set(participants.map(p => p.hotelName).filter(Boolean))), [participants]);
 
   return (
-    <div style={{ background: "var(--sable)", color: "var(--encre)", minHeight: "100%", fontFamily: "'IBM Plex Sans', sans-serif" }}>
+    <div style={{ background: "var(--sable)", color: "var(--encre)", minHeight: "100%", fontFamily: "'IBM Plex Sans', sans-serif", overflowX: "hidden" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
         :root{
@@ -650,32 +685,33 @@ export default function App() {
 
       {/* HEADER */}
       <header style={{ background: "var(--navy)" }} className="text-white sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto flex items-center justify-between px-5 py-3">
-          <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-3 text-left">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5 sm:py-3">
+          <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-2 sm:gap-3 text-left min-w-0 flex-1">
             {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="w-20 h-20 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
+              <img src={logoUrl} alt="Logo" className="w-10 h-10 sm:w-20 sm:h-20 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
             ) : (
-              <div className="seal w-20 h-20 flex-shrink-0">
+              <div className="seal w-10 h-10 sm:w-20 sm:h-20 flex-shrink-0">
                 <div className="seal-ring" />
-                <div style={{ position: "absolute", inset: 4, background: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <ShieldCheck size={22} color="var(--vert-fonce)" />
+                <div style={{ position: "absolute", inset: 3, background: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ShieldCheck size={14} className="sm:hidden" color="var(--vert-fonce)" />
+                  <ShieldCheck size={22} className="hidden sm:block" color="var(--vert-fonce)" />
                 </div>
               </div>
             )}
-            <div>
-              <div className="font-display font-semibold leading-tight" style={{ fontSize: "1.3rem" }}>{eventData.brand[lang]}</div>
-              <div className="text-[11px] opacity-75 leading-tight hidden sm:block">{t("council", lang)}</div>
+            <div className="min-w-0">
+              <div className="font-display font-semibold leading-tight truncate text-sm sm:text-xl">{eventData.brand[lang]}</div>
+              <div className="text-[11px] opacity-75 leading-tight hidden sm:block truncate">{t("council", lang)}</div>
             </div>
           </button>
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium flex-shrink-0">
             {menu.map(item => (
-              <button key={item.id} onClick={() => goToMenuTarget(item.target)} className="hover:opacity-80">{item.label[lang]}</button>
+              <button key={item.id} onClick={() => goToMenuTarget(item.target)} className="hover:opacity-80 whitespace-nowrap">{item.label[lang]}</button>
             ))}
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
             <div className="relative">
-              <button onClick={() => setLangMenuOpen(v => !v)} className="flex items-center gap-1 text-sm border border-white/30 px-2.5 py-1.5">
-                <Globe2 size={14} /> {lang.toUpperCase()}
+              <button onClick={() => setLangMenuOpen(v => !v)} className="flex items-center gap-1 text-xs sm:text-sm border border-white/30 px-2 sm:px-2.5 py-1 sm:py-1.5">
+                <Globe2 size={13} /> {lang.toUpperCase()}
               </button>
               {langMenuOpen && (
                 <div className="absolute right-0 mt-1 bg-white text-[var(--navy)] shadow-lg text-sm w-32 z-50">
@@ -686,7 +722,7 @@ export default function App() {
               )}
             </div>
             <button onClick={() => setView("register")} className="cb-btn hidden sm:inline-flex text-sm py-2 px-4">{t("register", lang)}</button>
-            <button className="md:hidden" onClick={() => setMobileNav(v => !v)}><Menu size={20} /></button>
+            <button className="md:hidden flex-shrink-0" onClick={() => setMobileNav(v => !v)} aria-label="Menu"><Menu size={22} /></button>
           </div>
         </div>
         {mobileNav && (
@@ -710,6 +746,10 @@ export default function App() {
 
       {view === "register" && step === 6 && confirmed && (
         <Confirmation lang={lang} record={confirmed} onDone={startOver} />
+      )}
+
+      {view === "update" && (
+        <UpdateRegistration lang={lang} token={editToken} hotels={hotels} orgTypes={orgTypes} formFields={formFields} setView={setView} />
       )}
 
       {view === "admin" && (
@@ -752,49 +792,49 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
   return (
     <>
       {/* HERO — fond noir + trame de points, dans l'esprit du bandeau vidéo */}
-      <section id="event-section" style={{ background: "var(--noir)" }} className="relative text-white px-5 py-20 overflow-hidden">
+      <section id="event-section" style={{ background: "var(--noir)" }} className="relative text-white px-4 sm:px-5 py-12 sm:py-20 overflow-hidden">
         <HeroCarousel images={heroSlides} />
         <div className="dots absolute inset-0 pointer-events-none" style={{ maskImage: "radial-gradient(ellipse at bottom left, black, transparent 70%)" }} />
         <div className="max-w-6xl mx-auto relative">
-          <div className="flex items-start gap-3 mb-6">
-            <span className="font-display font-bold leading-none" style={{ fontSize: "5rem", color: "var(--vert)" }}>{event.edition}</span>
-            <span className="font-display" style={{ fontSize: "1.6rem", color: "var(--brun-clair)", marginTop: "0.6rem" }}>{event.ordinal[lang]}</span>
+          <div className="flex items-start gap-2 sm:gap-3 mb-4 sm:mb-6">
+            <span className="font-display font-bold leading-none" style={{ fontSize: "clamp(2.6rem, 14vw, 5rem)", color: "var(--vert)" }}>{event.edition}</span>
+            <span className="font-display" style={{ fontSize: "clamp(1rem, 4vw, 1.6rem)", color: "var(--brun-clair)", marginTop: "0.6rem" }}>{event.ordinal[lang]}</span>
           </div>
-          <h1 className="font-display font-semibold leading-tight -mt-10 mb-6" style={{ fontSize: "2.4rem" }}>
+          <h1 className="font-display font-semibold leading-tight -mt-6 sm:-mt-10 mb-4 sm:mb-6" style={{ fontSize: "clamp(1.6rem, 6vw, 2.4rem)" }}>
             {event.title[lang]}
           </h1>
-          <p className="text-white/80 max-w-xl leading-relaxed mb-8">{event.desc[lang]}</p>
+          <p className="text-white/80 max-w-xl leading-relaxed mb-6 sm:mb-8 text-sm sm:text-base">{event.desc[lang]}</p>
 
-          <div className="inline-flex flex-wrap items-stretch gap-0 mb-8" style={{ background: "var(--vert-fonce)" }}>
-            <div className="flex items-center gap-3 px-5 py-3">
+          <div className="flex flex-wrap items-stretch gap-0 mb-6 sm:mb-8" style={{ background: "var(--vert-fonce)" }}>
+            <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-2.5 sm:py-3">
               {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="w-16 h-16 rounded-full object-cover flex-shrink-0" />
+                <img src={logoUrl} alt="Logo" className="w-10 h-10 sm:w-16 sm:h-16 rounded-full object-cover flex-shrink-0" />
               ) : (
-                <div className="seal w-16 h-16 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:4, background:"#fff", borderRadius:"50%" }} /></div>
+                <div className="seal w-10 h-10 sm:w-16 sm:h-16 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:3, background:"#fff", borderRadius:"50%" }} /></div>
               )}
-              <div className="text-sm leading-tight">
+              <div className="text-xs sm:text-sm leading-tight">
                 <div className="font-semibold">{event.brand[lang]}</div>
               </div>
             </div>
-            <div className="ribbon flex items-center px-5 py-3" style={{ background: "var(--brun)" }}>
-              <span className="font-display font-bold text-lg tracking-wide">{event.dateShort[lang]}</span>
+            <div className="ribbon flex items-center px-4 sm:px-5 py-2.5 sm:py-3" style={{ background: "var(--brun)" }}>
+              <span className="font-display font-bold text-base sm:text-lg tracking-wide">{event.dateShort[lang]}</span>
             </div>
-            <div className="flex items-center px-5 py-3 text-sm">{event.monthYear[lang]}</div>
-            <div className="flex items-center gap-1.5 px-5 py-3 text-sm border-l border-white/10">
+            <div className="flex items-center px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm">{event.monthYear[lang]}</div>
+            <div className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm border-l border-white/10">
               <MapPin size={14} color="var(--vert)" /> <span className="font-semibold">{event.venue[lang]}</span>&nbsp;{event.city}
             </div>
           </div>
           <div>
-            <button onClick={() => setView("register")} className="cb-btn">{t("hero_cta", lang)} <ChevronRight size={16} /></button>
+            <button onClick={() => setView("register")} className="cb-btn w-full sm:w-auto justify-center">{t("hero_cta", lang)} <ChevronRight size={16} /></button>
           </div>
         </div>
       </section>
 
       {hasTheme && (
-        <section className="px-5 py-12" style={{ background: "var(--vert-fonce)" }}>
+        <section className="px-4 sm:px-5 py-8 sm:py-12" style={{ background: "var(--vert-fonce)" }}>
           <div className="max-w-4xl mx-auto text-center text-white">
             <div className="cb-label mb-2" style={{ color: "var(--vert)" }}>{t("theme_label", lang)}</div>
-            <p className="font-display leading-relaxed" style={{ fontSize: "1.3rem" }}>{event.theme[lang]}</p>
+            <p className="font-display leading-relaxed" style={{ fontSize: "clamp(1rem, 4vw, 1.3rem)" }}>{event.theme[lang]}</p>
           </div>
         </section>
       )}
@@ -1092,6 +1132,7 @@ function Confirmation({ lang, record, onDone }) {
         <div className="cb-label mb-1">{t("reg_number", lang)}</div>
         <div className="font-mono font-semibold text-lg" style={{ color: "var(--argile)" }}>{record.regNumber}</div>
       </div>
+      <p className="text-sm text-black/60 mb-8 max-w-sm mx-auto leading-relaxed">{t("email_sent_notice", lang)}</p>
       <div>
         <button onClick={onDone} className="cb-btn">{t("back_home", lang)}</button>
       </div>
@@ -1324,6 +1365,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
     ["menu", t("menu_tab", lang)],
     ["orgtypes", t("org_types_tab", lang)],
     ["formfields", t("form_fields_tab", lang)],
+    ["email", t("email_tab", lang)],
     ["tourism", t("tourism_tab", lang)],
     ["hotels", t("hotels_tab", lang)],
     ["speakers", t("speakers_tab", lang)],
@@ -1342,6 +1384,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
       {sub === "menu" && <MenuManager lang={lang} canEdit={canEdit} />}
       {sub === "orgtypes" && <OrgTypesManager lang={lang} canEdit={canEdit} />}
       {sub === "formfields" && <FormFieldsManager lang={lang} canEdit={canEdit} />}
+      {sub === "email" && <EmailTemplateManager lang={lang} canEdit={canEdit} />}
       {sub === "tourism" && <TourismManager lang={lang} canEdit={canEdit} />}
       {sub === "hotels" && <HotelsManager lang={lang} canEdit={canEdit} />}
       {sub === "speakers" && <SpeakersManager lang={lang} canEdit={canEdit} />}
@@ -2157,6 +2200,207 @@ function UsersManager({ lang, currentUserId }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView }) {
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      if (!token) { setNotFound(true); setLoading(false); return; }
+      const { data, error } = await supabase.rpc("get_participant_by_token", { p_token: token });
+      if (error || !data) { setNotFound(true); setLoading(false); return; }
+      setForm({
+        lastName: data.last_name || "", firstName: data.first_name || "", position: data.position || "", organization: data.organization || "",
+        orgType: data.org_type || (orgTypes[0]?.label.fr || ""), orgOther: data.org_other || "",
+        country: data.country || COUNTRIES[11], city: data.city || "", phone: data.phone || "", email: data.email || "", address: data.address || "",
+        wantsHotel: data.wants_hotel || "yes", hotelId: data.hotel_id || hotels[0]?.id || "", roomId: data.room_id || hotels[0]?.rooms[0]?.id || "",
+        checkIn: data.check_in || "", checkOut: data.check_out || "",
+        flightNumber: data.flight_number || "", airline: data.airline || "", arrivalDate: data.arrival_date || "", arrivalTime: data.arrival_time || "",
+        departureDate: data.departure_date || "", departureTime: data.departure_time || "", departureFlightNumber: data.departure_flight_number || "",
+        transfer: data.transfer || "yes",
+      });
+      setLoading(false);
+    })();
+  }, [token]);
+
+  function update(field, value) { setForm(f => ({ ...f, [field]: value })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    setError("");
+    const { error } = await supabase.rpc("update_participant_by_token", { p_token: token, payload: form });
+    setSaving(false);
+    if (error) { setError(t("submit_error", lang)); return; }
+    setSaved(true);
+  }
+
+  if (loading) return <div className="max-w-xl mx-auto px-5 py-20 text-center text-black/50">…</div>;
+  if (notFound) return (
+    <div className="max-w-xl mx-auto px-5 py-20 text-center">
+      <p className="text-black/60 mb-6">{t("update_link_invalid", lang)}</p>
+      <button onClick={() => setView("public")} className="cb-btn">{t("back_home", lang)}</button>
+    </div>
+  );
+
+  const selectedHotel = hotels.find(h => h.id === form.hotelId) || hotels[0];
+  const selectedRoom = selectedHotel?.rooms.find(r => r.id === form.roomId) || selectedHotel?.rooms[0];
+  const fieldsForStep = (n) => formFields.filter(f => f.step === n).sort((a,b) => a.display_order - b.display_order);
+
+  return (
+    <div className="max-w-3xl mx-auto px-5 py-12">
+      <h2 className="font-display font-semibold text-2xl mb-2" style={{ color: "var(--navy)" }}>{t("update_title", lang)}</h2>
+      <p className="text-sm text-black/50 mb-8">{t("update_intro", lang)}</p>
+
+      <div className="space-y-8">
+        <div>
+          <div className="cb-label mb-3">{t("step1_title", lang)}</div>
+          <div className="grid sm:grid-cols-2 gap-5">
+            {fieldsForStep(1).map(f => <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />)}
+            <div className="sm:col-span-2">
+              <label className="cb-label">{t("org_type", lang)}</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {orgTypes.map(ot => (
+                  <div key={ot.id} onClick={() => update("orgType", ot.label.fr)} className={`radio-card ${form.orgType===ot.label.fr ? "active":""}`}>
+                    {form.orgType===ot.label.fr && <Check size={14} color="var(--lagune)" />} {ot.label[lang]}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther && (
+              <div className="sm:col-span-2"><Field label={t("org_other", lang)}><input className="cb-input" value={form.orgOther} onChange={e=>update("orgOther", e.target.value)} /></Field></div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="cb-label mb-3">{t("step2_title", lang)}</div>
+          <div className="grid sm:grid-cols-2 gap-5">
+            <Field label={t("country", lang)}>
+              <select className="cb-input" value={form.country} onChange={e=>update("country", e.target.value)}>
+                {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+            {fieldsForStep(2).map(f => <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />)}
+          </div>
+        </div>
+
+        <div>
+          <div className="cb-label mb-3">{t("step3_title", lang)}</div>
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              {["yes","no"].map(v => (
+                <div key={v} onClick={() => update("wantsHotel", v)} className={`radio-card ${form.wantsHotel===v?"active":""}`}>
+                  {form.wantsHotel===v && <Check size={14} color="var(--lagune)"/>} {v==="yes" ? t("yes",lang) : t("no",lang)}
+                </div>
+              ))}
+            </div>
+            {form.wantsHotel === "yes" && selectedHotel && (
+              <>
+                <Field label={t("nav_hotels", lang)}>
+                  <select className="cb-input" value={form.hotelId} onChange={e=>{ const h = hotels.find(x=>x.id===e.target.value); update("hotelId", e.target.value); update("roomId", h.rooms[0].id); }}>
+                    {hotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                  </select>
+                </Field>
+                <Field label={t("room_type", lang)}>
+                  <select className="cb-input" value={form.roomId} onChange={e=>update("roomId", e.target.value)}>
+                    {selectedHotel.rooms.map(r => <option key={r.id} value={r.id}>{r.type} — {r.price.toLocaleString()} {r.cur}</option>)}
+                  </select>
+                </Field>
+                <div className="grid sm:grid-cols-2 gap-5">
+                  <Field label={t("check_in", lang)}><input type="date" className="cb-input" value={form.checkIn} onChange={e=>update("checkIn", e.target.value)} /></Field>
+                  <Field label={t("check_out", lang)}><input type="date" className="cb-input" value={form.checkOut} onChange={e=>update("checkOut", e.target.value)} /></Field>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="cb-label mb-3">{t("step4_title", lang)}</div>
+          <div className="grid sm:grid-cols-2 gap-5">
+            {fieldsForStep(4).map(f => <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />)}
+            <div>
+              <label className="cb-label">{t("transfer", lang)}</label>
+              <div className="flex gap-3">
+                {["yes","no"].map(v => (
+                  <div key={v} onClick={() => update("transfer", v)} className={`radio-card ${form.transfer===v?"active":""}`}>
+                    {form.transfer===v && <Check size={14} color="var(--lagune)"/>} {v==="yes" ? t("yes",lang) : t("no",lang)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {error && <div className="mt-6 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0" }}>{error}</div>}
+      {saved && <div className="mt-6 text-sm px-4 py-3" style={{ background: "#EAF6EE", color: "var(--vert-fonce)" }}>{t("update_saved", lang)}</div>}
+
+      <div className="mt-8">
+        <button onClick={handleSave} className="cb-btn" disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>{saving ? t("submitting", lang) : t("update_save", lang)}</button>
+      </div>
+    </div>
+  );
+}
+
+function EmailTemplateManager({ lang, canEdit }) {
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [activeLang, setActiveLang] = useState("fr");
+
+  useEffect(() => {
+    (async () => {
+      const s = await getAllSettings();
+      setDraft({
+        email_subject_fr: s.email_subject_fr || "", email_subject_en: s.email_subject_en || "", email_subject_pt: s.email_subject_pt || "",
+        email_body_fr: s.email_body_fr || "", email_body_en: s.email_body_en || "", email_body_pt: s.email_body_pt || "",
+      });
+    })();
+  }, []);
+
+  function set(key, value) { setDraft(d => ({ ...d, [key]: value })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await Promise.all(Object.entries(draft).map(([key, value]) => setSetting(key, value)));
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  if (!draft) return null;
+
+  return (
+    <div className="bg-white border p-5 max-w-2xl space-y-4" style={{ borderColor: "#CFC4A3" }}>
+      {!canEdit && <div className="text-xs px-3 py-2 mb-2 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
+      <div className="flex gap-2 mb-2">
+        {["fr","en","pt"].map(l => (
+          <button key={l} onClick={() => setActiveLang(l)} className="px-3 py-1 text-xs" style={{ background: activeLang === l ? "var(--vert-fonce)" : "#fff", color: activeLang === l ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{l.toUpperCase()}</button>
+        ))}
+      </div>
+      <p className="text-xs text-black/50">{t("email_vars_help", lang)}</p>
+      <Field label={t("email_subject_label", lang)}>
+        <input className="cb-input" disabled={!canEdit} value={draft[`email_subject_${activeLang}`]} onChange={e=>set(`email_subject_${activeLang}`, e.target.value)} />
+      </Field>
+      <Field label={t("email_body_label", lang)}>
+        <textarea className="cb-input" rows={10} disabled={!canEdit} value={draft[`email_body_${activeLang}`]} onChange={e=>set(`email_body_${activeLang}`, e.target.value)} />
+      </Field>
+      {canEdit && (
+        <div className="flex gap-2 items-center">
+          <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+          {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
+        </div>
+      )}
     </div>
   );
 }
