@@ -257,6 +257,21 @@ lien lui-même est la clé d'accès, ce qui répond à l'exigence que ce
 lien "doit nécessairement provenir de leur boîte mail, pas être saisi
 dans le navigateur" — il n'est affiché nulle part dans l'interface.
 
+## Badges PDF avec QR code
+
+Dans l'onglet Participants :
+- une icône badge (QR) en fin de ligne télécharge le badge individuel
+  de ce participant ;
+- le bouton **"Télécharger les badges"** génère un seul PDF contenant
+  un badge par page pour tous les participants actuellement filtrés
+  (utile pour imprimer par lot, par exemple par pays ou par hôtel).
+
+Chaque badge (format 90×130mm, imprimable) affiche : le logo de
+l'événement, le nom de l'événement et ses dates, le nom complet du
+participant, sa fonction, son organisme, son pays, et un QR code
+encodant son numéro d'inscription — prêt pour un futur module de
+check-in par scan.
+
 ## Prochaines étapes possibles
 - Gestion des rôles admin (super admin / logistique / lecture seule)
 - Emails automatiques de confirmation

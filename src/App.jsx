@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff } from "lucide-react";
+import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff, QrCode } from "lucide-react";
 import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile } from "./lib/supabaseClient";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
+import QRCode from "qrcode";
 
 /* ---------------------------------------------------------
    TOKENS — alignés sur l'identité officielle Carte Brune CEDEAO
@@ -137,6 +138,9 @@ const T = {
   email_subject_label: { fr: "Objet de l'email", en: "Email subject", pt: "Assunto do email" },
   email_body_label: { fr: "Corps de l'email", en: "Email body", pt: "Corpo do email" },
   email_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}}" },
+  download_badge: { fr: "Télécharger le badge", en: "Download badge", pt: "Descarregar crachá" },
+  download_all_badges: { fr: "Télécharger les badges", en: "Download badges", pt: "Descarregar crachás" },
+  generating_badges: { fr: "Génération en cours…", en: "Generating…", pt: "A gerar…" },
   admin: { fr: "Administration", en: "Admin", pt: "Administração" },
   dashboard: { fr: "Tableau de bord", en: "Dashboard", pt: "Painel" },
   participants: { fr: "Participants", en: "Participants", pt: "Participantes" },
@@ -362,6 +366,72 @@ function downloadPDF(rows, filename, titleText, lang) {
     headStyles: { fillColor: [20, 83, 45], fontSize: 7.5, fontStyle: "bold" },
     columnStyles: { 0: { cellWidth: 45 }, 3: { cellWidth: 45 } },
   });
+  doc.save(filename);
+}
+
+// --- Badges participants avec QR code ---
+
+async function loadImageAsDataURL(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+const BADGE_W = 90, BADGE_H = 130;
+
+async function drawBadgePage(doc, p, eventData, logoDataUrl, lang) {
+  doc.setFillColor(20, 83, 45);
+  doc.rect(0, 0, BADGE_W, 26, "F");
+  if (logoDataUrl) {
+    try { doc.addImage(logoDataUrl, "PNG", 5, 4, 18, 18); } catch (e) { /* skip */ }
+  }
+  doc.setTextColor(255, 255, 255);
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(8.5);
+  doc.text(eventData.title[lang] || "", 26, 11, { maxWidth: 59 });
+  doc.setFont(undefined, "normal");
+  doc.setFontSize(6.5);
+  doc.text(`${eventData.dateShort[lang] || ""} ${eventData.monthYear[lang] || ""}`, 26, 17, { maxWidth: 59 });
+  doc.text(eventData.venue[lang] || "", 26, 21, { maxWidth: 59 });
+
+  doc.setTextColor(26, 23, 18);
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(15);
+  const fullName = `${p.firstName || ""} ${p.lastName || ""}`.trim();
+  doc.text(fullName, BADGE_W / 2, 42, { align: "center", maxWidth: 80 });
+  doc.setFont(undefined, "normal");
+  doc.setFontSize(10);
+  doc.text(p.position || "", BADGE_W / 2, 50, { align: "center", maxWidth: 80 });
+  doc.setFontSize(9.5);
+  doc.setTextColor(90, 90, 90);
+  doc.text(p.organization || "", BADGE_W / 2, 57, { align: "center", maxWidth: 80 });
+  doc.text(p.country || "", BADGE_W / 2, 63, { align: "center" });
+
+  const qrDataUrl = await QRCode.toDataURL(p.regNumber || p.id || "", { margin: 1, width: 240 });
+  doc.addImage(qrDataUrl, "PNG", (BADGE_W - 42) / 2, 72, 42, 42);
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(26, 23, 18);
+  doc.text(p.regNumber || "", BADGE_W / 2, 120, { align: "center" });
+}
+
+async function downloadBadges(participants, eventData, logoUrl, lang, filename) {
+  const logoDataUrl = await loadImageAsDataURL(logoUrl);
+  const doc = new jsPDF({ unit: "mm", format: [BADGE_W, BADGE_H] });
+  for (let i = 0; i < participants.length; i++) {
+    if (i > 0) doc.addPage([BADGE_W, BADGE_H]);
+    await drawBadgePage(doc, participants[i], eventData, logoDataUrl, lang);
+  }
   doc.save(filename);
 }
 
@@ -1173,8 +1243,17 @@ function AdminLogin({ lang }) {
 
 function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole }) {
   const [tab, setTab] = useState("participants");
+  const [generatingBadges, setGeneratingBadges] = useState(false);
   const canEdit = myRole === "super_admin" || myRole === "manager";
   const isSuperAdmin = myRole === "super_admin";
+
+  async function handleDownloadBadges() {
+    setGeneratingBadges(true);
+    try {
+      await downloadBadges(filtered, eventData, logoUrl, lang, `badges-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.pdf`);
+    } catch (e) { /* best effort */ }
+    setGeneratingBadges(false);
+  }
   if (!authChecked) return null;
   if (!adminUser) return <AdminLogin lang={lang} />;
   if (myRole === null) return null;
@@ -1237,6 +1316,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         </div>
         <button onClick={() => downloadExcel(filtered, `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
         <button onClick={() => downloadPDF(filtered, `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
+        <button onClick={handleDownloadBadges} disabled={generatingBadges || filtered.length === 0} className="cb-btn-outline whitespace-nowrap" style={{ opacity: generatingBadges ? 0.7 : 1 }}><Download size={15} /> {generatingBadges ? t("generating_badges", lang) : t("download_all_badges", lang)}</button>
       </div>
       <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
         <select className="cb-input sm:w-48" value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
@@ -1267,12 +1347,13 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
               {["#", t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
                 <th key={h} className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
+              <th className="px-3 py-2"></th>
               {canEdit && <th className="px-3 py-2"></th>}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={16} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
+              <tr><td colSpan={17} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
             )}
             {filtered.map(p => (
               <tr key={p.id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
@@ -1291,6 +1372,9 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureDate || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureTime || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureFlightNumber || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <button onClick={() => downloadBadges([p], eventData, logoUrl, lang, `badge-${p.regNumber}.pdf`)} title={t("download_badge", lang)}><QrCode size={14} color="var(--vert-fonce)" /></button>
+                </td>
                 {canEdit && (
                   <td className="px-3 py-2 whitespace-nowrap">
                     <button onClick={() => onDeleteParticipant(p.id)} title={t("delete", lang)}><Trash2 size={14} color="#8A2A2A" /></button>

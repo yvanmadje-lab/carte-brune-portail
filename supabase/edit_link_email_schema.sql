@@ -13,6 +13,11 @@ create unique index if not exists participants_edit_token_idx on participants(ed
 -- L'inscription renvoie désormais le numéro ET le jeton de
 -- modification (au lieu du seul numéro), pour construire le lien
 -- envoyé par email juste après l'inscription.
+-- Supprime l'ancienne version (qui renvoyait "text") pour pouvoir la
+-- recréer avec un type de retour différent ("jsonb") — PostgreSQL
+-- l'exige, CREATE OR REPLACE seul ne suffit pas dans ce cas.
+drop function if exists register_participant(jsonb);
+
 create or replace function register_participant(payload jsonb)
 returns jsonb
 language plpgsql
