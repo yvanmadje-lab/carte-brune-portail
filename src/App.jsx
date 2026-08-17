@@ -205,6 +205,9 @@ const T = {
   full_name: { fr: "Nom complet", en: "Full name", pt: "Nome completo" },
   theme_label: { fr: "Thème de la réunion", en: "Meeting theme", pt: "Tema da reunião" },
   hero_content_tab: { fr: "Contenu du bandeau", en: "Hero content", pt: "Conteúdo do banner" },
+  footer_tab: { fr: "Pied de page", en: "Footer", pt: "Rodapé" },
+  footer_text_label: { fr: "Texte du pied de page", en: "Footer text", pt: "Texto do rodapé" },
+  footer_help: { fr: "Affiché en bas de toutes les pages du site (adresse, contact, mention légale...). Laissez vide pour ne rien afficher au-delà du copyright.", en: "Shown at the bottom of every page (address, contact, legal notice...). Leave empty to show nothing beyond the copyright line.", pt: "Mostrado no fundo de todas as páginas (morada, contacto, aviso legal...). Deixe vazio para não mostrar nada além da linha de copyright." },
   content_scope_help: { fr: "Ce contenu (carrousel, tourisme, hôtels, comité) est propre à l'événement actuellement actif — changez d'événement actif dans l'onglet \"Événements\" pour gérer le contenu d'un autre.", en: "This content (carousel, tourism, hotels, committee) belongs to the currently active event — switch the active event in the \"Events\" tab to manage another one's content.", pt: "Este conteúdo (carrossel, turismo, hotéis, comité) pertence ao evento atualmente ativo — mude o evento ativo no separador \"Eventos\" para gerir o conteúdo de outro." },
   editing_content_for: { fr: "Modifier le contenu de l'événement", en: "Editing content for event", pt: "A editar o conteúdo do evento" },
   events_tab: { fr: "Événements", en: "Events", pt: "Eventos" },
@@ -554,6 +557,7 @@ export default function App() {
   const [tourism, setTourism] = useState(DEFAULT_TOURISM);
   const [heroSlides, setHeroSlides] = useState([]);
   const [logoUrl, setLogoUrl] = useState("");
+  const [footerText, setFooterText] = useState({ fr: "", en: "", pt: "" });
   const [speakers, setSpeakers] = useState(DEFAULT_SPEAKERS);
   const [eventData, setEventData] = useState(DEFAULT_EVENT);
   const [menu, setMenu] = useState(DEFAULT_MENU);
@@ -616,6 +620,11 @@ export default function App() {
     })));
     if (s.length) setHeroSlides(s.map(r => r.image_url));
     if (settings.event_logo) setLogoUrl(settings.event_logo);
+    setFooterText({
+      fr: settings.footer_text_fr || "",
+      en: settings.footer_text_en || "",
+      pt: settings.footer_text_pt || "",
+    });
     setEventData({
       ...activeEvent,
       brand: {
@@ -896,7 +905,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} />
       )}
 
       {view === "archives" && (
@@ -905,7 +914,10 @@ export default function App() {
 
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between gap-3">
-          <div>© {eventData.year || DEFAULT_EVENT.year} {eventData.brand[lang]}</div>
+          <div>
+            {footerText[lang] && <div className="mb-1 whitespace-pre-line">{footerText[lang]}</div>}
+            <div>© {eventData.year || DEFAULT_EVENT.year} {eventData.brand[lang]}</div>
+          </div>
           <div className="flex items-center gap-4">
             <button onClick={() => setView("archives")} className="underline hover:text-white">{t("archives_title", lang)}</button>
             <button onClick={() => setView(view === "admin" ? "public" : "admin")} className="underline hover:text-white">
@@ -1363,7 +1375,7 @@ function AdminLogin({ lang }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const canEdit = myRole === "super_admin" || myRole === "manager";
@@ -1511,7 +1523,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       )}
 
       {tab === "events" && isSuperAdmin && <EventsManager lang={lang} activeEventId={eventData.id} onActiveEventChanged={onEventChange} eventData={eventData} />}
-      {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} eventData={eventData} onEventChange={onEventChange} canEdit={canEdit} />}
+      {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} eventData={eventData} onEventChange={onEventChange} canEdit={canEdit} footerText={footerText} onFooterChange={onFooterChange} />}
       {tab === "users" && isSuperAdmin && <UsersManager lang={lang} currentUserId={adminUser.id} />}
     </div>
   );
@@ -1596,7 +1608,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange, canEdit }) {
+function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange, canEdit, footerText, onFooterChange }) {
   const [sub, setSub] = useState("logo");
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(eventData.id);
@@ -1608,6 +1620,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
   const contentSubs = ["carousel", "tourism", "hotels", "speakers"];
   const subs = [
     ["logo", t("logo_tab", lang)],
+    ["footer", t("footer_tab", lang)],
     ["carousel", t("hero_carousel_tab", lang)],
     ["menu", t("menu_tab", lang)],
     ["orgtypes", t("org_types_tab", lang)],
@@ -1638,6 +1651,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
         </div>
       )}
       {sub === "logo" && <LogoManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} canEdit={canEdit} />}
+      {sub === "footer" && <FooterManager lang={lang} footerText={footerText} onFooterChange={onFooterChange} canEdit={canEdit} />}
       {sub === "carousel" && <HeroSlidesManager lang={lang} canEdit={canEdit} eventId={eventId} />}
       {sub === "menu" && <MenuManager lang={lang} canEdit={canEdit} />}
       {sub === "orgtypes" && <OrgTypesManager lang={lang} canEdit={canEdit} />}
@@ -2494,7 +2508,12 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
   async function handleSave() {
     setSaving(true);
     setError("");
-    const { error } = await supabase.rpc("update_participant_by_token", { p_token: token, payload: form });
+    const payload = {
+      ...form,
+      hotelName: form.wantsHotel === "yes" ? (selectedHotel?.name || "") : "",
+      roomType: form.wantsHotel === "yes" ? (selectedRoom?.type || "") : "",
+    };
+    const { error } = await supabase.rpc("update_participant_by_token", { p_token: token, payload });
     setSaving(false);
     if (error) { setError(t("submit_error", lang)); return; }
     setSaved(true);
@@ -2894,6 +2913,50 @@ function ArchivesPage({ lang, setView }) {
       <div className="mt-10">
         <button onClick={() => setView("public")} className="cb-btn-outline text-sm">{t("back_home", lang)}</button>
       </div>
+    </div>
+  );
+}
+
+function FooterManager({ lang, footerText, onFooterChange, canEdit }) {
+  const [draft, setDraft] = useState({ fr: footerText.fr, en: footerText.en, pt: footerText.pt });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [activeLang, setActiveLang] = useState("fr");
+
+  function set(l, value) { setDraft(d => ({ ...d, [l]: value })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await Promise.all([
+        setSetting("footer_text_fr", draft.fr),
+        setSetting("footer_text_en", draft.en),
+        setSetting("footer_text_pt", draft.pt),
+      ]);
+      await onFooterChange();
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  return (
+    <div className="bg-white border p-5 max-w-2xl space-y-4" style={{ borderColor: "#CFC4A3" }}>
+      {!canEdit && <div className="text-xs px-3 py-2 mb-2 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
+      <p className="text-xs text-black/50">{t("footer_help", lang)}</p>
+      <div className="flex gap-2 mb-2">
+        {["fr","en","pt"].map(l => (
+          <button key={l} onClick={() => setActiveLang(l)} className="px-3 py-1 text-xs" style={{ background: activeLang === l ? "var(--vert-fonce)" : "#fff", color: activeLang === l ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{l.toUpperCase()}</button>
+        ))}
+      </div>
+      <Field label={t("footer_text_label", lang)}>
+        <textarea className="cb-input" rows={4} disabled={!canEdit} value={draft[activeLang]} onChange={e=>set(activeLang, e.target.value)} />
+      </Field>
+      {canEdit && (
+        <div className="flex gap-2 items-center">
+          <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+          {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
+        </div>
+      )}
     </div>
   );
 }

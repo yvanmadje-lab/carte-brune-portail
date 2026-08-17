@@ -355,6 +355,23 @@ organisme, son pays, et un QR code qui redirige vers le document PDF
 configuré pour cet événement (voir "Architecture multi-événements"
 ci-dessus) — ou, à défaut, encode simplement son numéro d'inscription.
 
+## Pied de page éditable (FR/EN/PT)
+
+Nouvel onglet **"Pied de page"** dans Contenu du site : un texte libre
+(adresse, contact, mention légale...) affiché en bas de toutes les
+pages du site, au-dessus de la ligne de copyright, traduisible dans
+les trois langues. Laissé vide, seule la ligne de copyright reste
+affichée comme avant.
+
+## Correctif — modification d'inscription via le lien email
+
+Un bug empêchait la mise à jour du nom de l'hôtel et du type de
+chambre lorsqu'un participant changeait ces informations via son lien
+de modification reçu par email : la sélection du nouvel hôtel/chambre
+était bien prise en compte, mais leur nom/type n'étaient jamais
+recalculés avant l'enregistrement, donc l'ancien hôtel restait affiché
+dans le tableau des participants malgré le changement. C'est corrigé.
+
 ## Prochaines étapes possibles
 - Emails automatiques de confirmation ✅ fait
 - Gestion des événements multi-années depuis le back-office ✅ fait
