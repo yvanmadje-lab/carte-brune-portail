@@ -32,6 +32,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 9. `supabase/roles_schema.sql` (rôles administrateurs — super admin / gestionnaire / lecture seule)
 10. `supabase/hotel_gallery_schema.sql` (galerie photos et site web de chaque hôtel)
 11. `supabase/edit_link_email_schema.sql` (lien de modification sécurisé + modèles d'email de confirmation)
+12. `supabase/multi_event_schema.sql` (architecture multi-événements complète : table `events`, contenu par événement, duplication, archives, badges personnalisables)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -202,6 +203,62 @@ Sur le site public, cliquer sur la photo d'un hôtel (ou sur "Voir les
 photos") ouvre une visionneuse plein écran avec navigation
 précédent/suivant entre toutes les photos de cet hôtel.
 
+## Architecture multi-événements (AG, Réunions de Zone, etc.)
+
+Le site gère désormais plusieurs événements distincts (Assemblée
+Générale, 1ère/2ème Réunion de Zone...), chacun avec ses propres
+inscriptions, numérotation, badges, dates/thème/lieu. Les hôtels, le
+tourisme, le carrousel d'accueil et le comité d'organisation sont
+rattachés à l'événement **actuellement actif** (celui affiché
+publiquement et sur lequel les inscriptions arrivent) — c'est le
+niveau "essentiel" convenu, plus rapide et plus fiable qu'une
+isolation totale de chaque brique du CMS.
+
+### Nouvel onglet "Événements" (super admin uniquement)
+
+- **Créer un événement** : type (AG / Réunion de Zone 1 / 2 / Autre),
+  année, code (préfixe des numéros d'inscription, ex. `ZM1`),
+  édition, lettre en exposant, titre/thème/sous-titre/dates/lieu en
+  FR/EN/PT, statut (brouillon / ouvert / fermé / archivé).
+- **"Définir comme actif"** : bascule le site public et les nouvelles
+  inscriptions sur cet événement. Un seul événement actif à la fois.
+- **"Dupliquer pour l'année suivante"** : copie tout le contenu
+  (thème, hôtels, tourisme, carrousel, comité) vers un nouvel
+  événement en brouillon — **jamais les participants**, conformément
+  au cahier des charges. Pratique pour préparer l'AG de l'année
+  suivante sans repartir de zéro.
+- Un événement passé en statut **"Archivé"** apparaît automatiquement
+  sur la page publique **"Archives"** (lien en bas de page), visible
+  par tous, avec titre/dates/ville — jamais les données des
+  participants.
+
+### Contenu du CMS (Hôtels, Tourisme, Carrousel, Comité)
+
+Ces sections gèrent le contenu de l'événement **actuellement actif**.
+Pour préparer le contenu d'un événement qui n'est pas encore actif,
+activez-le temporairement, faites vos modifications, puis réactivez
+l'événement précédent si besoin — ou dupliquez l'événement actif (qui
+copie déjà tout ce contenu) puis ajustez.
+
+### Badges personnalisables par événement
+
+Dans le formulaire d'un événement (onglet Événements), en plus des
+champs habituels :
+- **En-tête du badge** (FR/EN/PT) — remplace le titre de l'événement
+  en haut du badge si vous voulez un texte différent.
+- **Photo de fond du corps du badge** — image affichée derrière le
+  nom/organisme du participant, avec un léger voile clair pour
+  garder le texte lisible.
+- **Document PDF par langue** — le QR code du badge redirige
+  désormais vers ce document (programme, guide...) dans la langue
+  utilisée par l'admin au moment de la génération, au lieu de se
+  contenter d'encoder le numéro d'inscription.
+
+Le logo affiché sur les badges a aussi été retravaillé : les pixels
+quasi blancs de l'image sont automatiquement rendus transparents,
+pour éviter l'effet de pastille blanche disgracieuse sur le bandeau
+coloré du badge.
+
 ## Site responsive mobile
 
 L'en-tête (logo, titre, menu) et le bandeau d'accueil s'adaptent
@@ -267,13 +324,13 @@ Dans l'onglet Participants :
   (utile pour imprimer par lot, par exemple par pays ou par hôtel).
 
 Chaque badge (format 90×130mm, imprimable) affiche : le logo de
-l'événement, le nom de l'événement et ses dates, le nom complet du
-participant, sa fonction, son organisme, son pays, et un QR code
-encodant son numéro d'inscription — prêt pour un futur module de
-check-in par scan.
+l'événement (fond blanc automatiquement retiré), l'en-tête
+personnalisable, le nom complet du participant, sa fonction, son
+organisme, son pays, et un QR code qui redirige vers le document PDF
+configuré pour cet événement (voir "Architecture multi-événements"
+ci-dessus) — ou, à défaut, encode simplement son numéro d'inscription.
 
 ## Prochaines étapes possibles
-- Gestion des rôles admin (super admin / logistique / lecture seule)
-- Emails automatiques de confirmation
-- Gestion des événements multi-années depuis le back-office
+- Emails automatiques de confirmation ✅ fait
+- Gestion des événements multi-années depuis le back-office ✅ fait
 - QR code et badge PDF

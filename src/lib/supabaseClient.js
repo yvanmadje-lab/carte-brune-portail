@@ -86,3 +86,46 @@ export async function removeAdminProfile(userId) {
   const { error } = await supabase.from("admin_profiles").delete().eq("user_id", userId);
   if (error) throw error;
 }
+
+export async function fetchPublishedForEvent(table, eventId) {
+  if (!eventId) return [];
+  const { data, error } = await supabase.from(table).select("*").eq("status", "published").eq("event_id", eventId).order("display_order", { ascending: true });
+  if (error) return [];
+  return data || [];
+}
+
+export async function fetchAllForEvent(table, eventId) {
+  if (!eventId) return [];
+  const { data, error } = await supabase.from(table).select("*").eq("event_id", eventId).order("display_order", { ascending: true });
+  if (error) return [];
+  return data || [];
+}
+
+export async function getActiveEvent() {
+  const { data, error } = await supabase.rpc("get_active_event");
+  if (error) return null;
+  return data;
+}
+
+export async function listAllEvents() {
+  const { data, error } = await supabase.from("events").select("*").order("year", { ascending: false }).order("created_at", { ascending: false });
+  if (error) return [];
+  return data || [];
+}
+
+export async function setActiveEvent(eventId) {
+  const { error } = await supabase.rpc("set_active_event", { p_event_id: eventId });
+  if (error) throw error;
+}
+
+export async function duplicateEvent(eventId, newYear, newCode) {
+  const { data, error } = await supabase.rpc("duplicate_event", { p_event_id: eventId, p_new_year: newYear, p_new_code: newCode });
+  if (error) throw error;
+  return data;
+}
+
+export async function listArchivedEvents() {
+  const { data, error } = await supabase.rpc("list_archived_events");
+  if (error) return [];
+  return data || [];
+}

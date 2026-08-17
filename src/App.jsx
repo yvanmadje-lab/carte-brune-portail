@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff, QrCode } from "lucide-react";
-import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile } from "./lib/supabaseClient";
+import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile, fetchPublishedForEvent, fetchAllForEvent, getActiveEvent, listAllEvents, setActiveEvent, duplicateEvent, listArchivedEvents } from "./lib/supabaseClient";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
@@ -204,6 +204,32 @@ const T = {
   full_name: { fr: "Nom complet", en: "Full name", pt: "Nome completo" },
   theme_label: { fr: "Thème de la réunion", en: "Meeting theme", pt: "Tema da reunião" },
   hero_content_tab: { fr: "Contenu du bandeau", en: "Hero content", pt: "Conteúdo do banner" },
+  content_scope_help: { fr: "Ce contenu (carrousel, tourisme, hôtels, comité) est propre à l'événement actuellement actif — changez d'événement actif dans l'onglet \"Événements\" pour gérer le contenu d'un autre.", en: "This content (carousel, tourism, hotels, committee) belongs to the currently active event — switch the active event in the \"Events\" tab to manage another one's content.", pt: "Este conteúdo (carrossel, turismo, hotéis, comité) pertence ao evento atualmente ativo — mude o evento ativo no separador \"Eventos\" para gerir o conteúdo de outro." },
+  events_tab: { fr: "Événements", en: "Events", pt: "Eventos" },
+  event_type_label: { fr: "Type de réunion", en: "Meeting type", pt: "Tipo de reunião" },
+  event_type_ag: { fr: "Assemblée Générale", en: "General Assembly", pt: "Assembleia Geral" },
+  event_type_zone1: { fr: "Première Réunion de Zone", en: "First Zonal Meeting", pt: "Primeira Reunião Zonal" },
+  event_type_zone2: { fr: "Deuxième Réunion de Zone", en: "Second Zonal Meeting", pt: "Segunda Reunião Zonal" },
+  event_type_other: { fr: "Autre", en: "Other", pt: "Outro" },
+  event_year_label: { fr: "Année", en: "Year", pt: "Ano" },
+  event_code_label: { fr: "Code (préfixe des numéros d'inscription)", en: "Code (registration number prefix)", pt: "Código (prefixo dos números de inscrição)" },
+  event_status_label: { fr: "Statut", en: "Status", pt: "Estado" },
+  status_draft: { fr: "Brouillon", en: "Draft", pt: "Rascunho" },
+  status_open: { fr: "Ouvert aux inscriptions", en: "Open for registration", pt: "Aberto a inscrições" },
+  status_closed: { fr: "Inscriptions fermées", en: "Registration closed", pt: "Inscrições fechadas" },
+  status_archived: { fr: "Archivé", en: "Archived", pt: "Arquivado" },
+  set_active_event: { fr: "Définir comme actif", en: "Set as active", pt: "Definir como ativo" },
+  currently_active: { fr: "Actif actuellement", en: "Currently active", pt: "Atualmente ativo" },
+  duplicate_event_btn: { fr: "Dupliquer pour l'année suivante", en: "Duplicate for next year", pt: "Duplicar para o próximo ano" },
+  duplicate_event_prompt_year: { fr: "Année du nouvel événement :", en: "Year of the new event:", pt: "Ano do novo evento:" },
+  duplicate_event_prompt_code: { fr: "Code du nouvel événement (ex: AG43) :", en: "Code of the new event (e.g. AG43):", pt: "Código do novo evento (ex: AG43):" },
+  duplicate_event_success: { fr: "Événement dupliqué avec succès (en brouillon) — retrouvez-le dans la liste pour l'éditer.", en: "Event duplicated successfully (as draft) — find it in the list to edit it.", pt: "Evento duplicado com sucesso (como rascunho) — encontre-o na lista para editar." },
+  badge_header_tab: { fr: "En-tête du badge (FR/EN/PT)", en: "Badge header (FR/EN/PT)", pt: "Cabeçalho do crachá (FR/EN/PT)" },
+  badge_background_label: { fr: "Photo de fond du corps du badge", en: "Badge body background photo", pt: "Foto de fundo do corpo do crachá" },
+  badge_pdf_label: { fr: "Document PDF (le QR code du badge y renverra)", en: "PDF document (the badge QR code will link to it)", pt: "Documento PDF (o QR code do crachá remeterá para ele)" },
+  upload_pdf: { fr: "Choisir un PDF", en: "Choose PDF", pt: "Escolher PDF" },
+  archives_title: { fr: "Archives des réunions", en: "Meeting archives", pt: "Arquivo de reuniões" },
+  no_archived_events: { fr: "Aucun événement archivé pour le moment.", en: "No archived events yet.", pt: "Ainda sem eventos arquivados." },
   menu_tab: { fr: "Menu", en: "Menu", pt: "Menu" },
   edition_number: { fr: "Numéro d'édition (ex: 42)", en: "Edition number (e.g. 42)", pt: "Número da edição (ex: 42)" },
   title_fr: { fr: "Titre (Français)", en: "Title (French)", pt: "Título (Francês)" },
@@ -387,18 +413,64 @@ async function loadImageAsDataURL(url) {
   }
 }
 
+// Rend transparents les pixels quasi blancs d'une image (utilisé pour
+// le logo sur les badges, souvent fourni sur fond blanc).
+function stripWhiteBackground(dataUrl) {
+  return new Promise((resolve) => {
+    if (!dataUrl) { resolve(null); return; }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width; canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = imgData.data;
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i] > 235 && d[i + 1] > 235 && d[i + 2] > 235) d[i + 3] = 0;
+        }
+        ctx.putImageData(imgData, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      } catch (e) { resolve(dataUrl); }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+function pickBadgePdfLink(event, lang) {
+  const pdf = event.badgePdf || {};
+  return pdf[lang] || pdf.fr || pdf.en || pdf.pt || "";
+}
+
 const BADGE_W = 90, BADGE_H = 130;
 
-async function drawBadgePage(doc, p, eventData, logoDataUrl, lang) {
+async function drawBadgePage(doc, p, eventData, logoDataUrl, bgDataUrl, lang) {
+  // Fond du corps du badge (photo choisie par l'admin), avec un
+  // panneau translucide pour garder le texte lisible.
+  if (bgDataUrl) {
+    try {
+      doc.addImage(bgDataUrl, "JPEG", 0, 26, BADGE_W, BADGE_H - 26);
+      doc.saveGraphicsState();
+      doc.setGState(new doc.GState({ opacity: 0.82 }));
+      doc.setFillColor(245, 242, 234);
+      doc.rect(0, 26, BADGE_W, BADGE_H - 26, "F");
+      doc.restoreGraphicsState();
+    } catch (e) { /* skip */ }
+  }
+
   doc.setFillColor(20, 83, 45);
   doc.rect(0, 0, BADGE_W, 26, "F");
   if (logoDataUrl) {
     try { doc.addImage(logoDataUrl, "PNG", 5, 4, 18, 18); } catch (e) { /* skip */ }
   }
+  const headerLine = (eventData.badgeHeader && eventData.badgeHeader[lang]) || eventData.title[lang] || "";
   doc.setTextColor(255, 255, 255);
   doc.setFont(undefined, "bold");
   doc.setFontSize(8.5);
-  doc.text(eventData.title[lang] || "", 26, 11, { maxWidth: 59 });
+  doc.text(headerLine, 26, 11, { maxWidth: 59 });
   doc.setFont(undefined, "normal");
   doc.setFontSize(6.5);
   doc.text(`${eventData.dateShort[lang] || ""} ${eventData.monthYear[lang] || ""}`, 26, 17, { maxWidth: 59 });
@@ -417,7 +489,11 @@ async function drawBadgePage(doc, p, eventData, logoDataUrl, lang) {
   doc.text(p.organization || "", BADGE_W / 2, 57, { align: "center", maxWidth: 80 });
   doc.text(p.country || "", BADGE_W / 2, 63, { align: "center" });
 
-  const qrDataUrl = await QRCode.toDataURL(p.regNumber || p.id || "", { margin: 1, width: 240 });
+  // Le QR code renvoie vers le document PDF (programme, etc.) choisi
+  // par l'admin pour la langue courante — pas simplement le numéro.
+  const pdfLink = pickBadgePdfLink(eventData, lang);
+  const qrValue = pdfLink || p.regNumber || p.id || "";
+  const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 240 });
   doc.addImage(qrDataUrl, "PNG", (BADGE_W - 42) / 2, 72, 42, 42);
   doc.setFont(undefined, "bold");
   doc.setFontSize(8.5);
@@ -426,11 +502,15 @@ async function drawBadgePage(doc, p, eventData, logoDataUrl, lang) {
 }
 
 async function downloadBadges(participants, eventData, logoUrl, lang, filename) {
-  const logoDataUrl = await loadImageAsDataURL(logoUrl);
+  const [logoDataUrlRaw, bgDataUrl] = await Promise.all([
+    loadImageAsDataURL(logoUrl),
+    loadImageAsDataURL(eventData.badgeBackground),
+  ]);
+  const logoDataUrl = await stripWhiteBackground(logoDataUrlRaw);
   const doc = new jsPDF({ unit: "mm", format: [BADGE_W, BADGE_H] });
   for (let i = 0; i < participants.length; i++) {
     if (i > 0) doc.addPage([BADGE_W, BADGE_H]);
-    await drawBadgePage(doc, participants[i], eventData, logoDataUrl, lang);
+    await drawBadgePage(doc, participants[i], eventData, logoDataUrl, bgDataUrl, lang);
   }
   doc.save(filename);
 }
@@ -476,63 +556,38 @@ export default function App() {
   const [orgTypes, setOrgTypes] = useState(DEFAULT_ORG_TYPES);
   const [formFields, setFormFields] = useState(DEFAULT_FORM_FIELDS);
 
-  function buildEventFromSettings(s) {
+  function mapEventRow(r) {
     return {
-      ...DEFAULT_EVENT,
-      edition: s.event_edition || DEFAULT_EVENT.edition,
-      ordinal: {
-        fr: s.event_ordinal_fr || DEFAULT_EVENT.ordinal.fr,
-        en: s.event_ordinal_en || DEFAULT_EVENT.ordinal.en,
-        pt: s.event_ordinal_pt || DEFAULT_EVENT.ordinal.pt,
-      },
-      brand: {
-        fr: s.event_brand_fr || DEFAULT_EVENT.brand.fr,
-        en: s.event_brand_en || DEFAULT_EVENT.brand.en,
-        pt: s.event_brand_pt || DEFAULT_EVENT.brand.pt,
-      },
-      title: {
-        fr: s.event_title_fr || DEFAULT_EVENT.title.fr,
-        en: s.event_title_en || DEFAULT_EVENT.title.en,
-        pt: s.event_title_pt || DEFAULT_EVENT.title.pt,
-      },
-      desc: {
-        fr: s.event_subtitle_fr || DEFAULT_EVENT.desc.fr,
-        en: s.event_subtitle_en || DEFAULT_EVENT.desc.en,
-        pt: s.event_subtitle_pt || DEFAULT_EVENT.desc.pt,
-      },
-      theme: {
-        fr: s.event_theme_fr || DEFAULT_EVENT.theme.fr,
-        en: s.event_theme_en || DEFAULT_EVENT.theme.en,
-        pt: s.event_theme_pt || DEFAULT_EVENT.theme.pt,
-      },
-      dateShort: {
-        fr: s.event_date_short_fr || DEFAULT_EVENT.dateShort.fr,
-        en: s.event_date_short_en || DEFAULT_EVENT.dateShort.en,
-        pt: s.event_date_short_pt || DEFAULT_EVENT.dateShort.pt,
-      },
-      monthYear: {
-        fr: s.event_month_year_fr || DEFAULT_EVENT.monthYear.fr,
-        en: s.event_month_year_en || DEFAULT_EVENT.monthYear.en,
-        pt: s.event_month_year_pt || DEFAULT_EVENT.monthYear.pt,
-      },
-      venue: {
-        fr: s.event_venue_fr || DEFAULT_EVENT.venue.fr,
-        en: s.event_venue_en || DEFAULT_EVENT.venue.en,
-        pt: s.event_venue_pt || DEFAULT_EVENT.venue.pt,
-      },
-      city: s.event_city || DEFAULT_EVENT.city,
-      country: s.event_country || DEFAULT_EVENT.country,
+      id: r.id,
+      code: r.code, year: r.year, type: r.type, status: r.status,
+      edition: r.edition || "",
+      ordinal: r.ordinal || DEFAULT_EVENT.ordinal,
+      title: r.title || DEFAULT_EVENT.title,
+      theme: r.theme || DEFAULT_EVENT.theme,
+      desc: r.subtitle || DEFAULT_EVENT.desc,
+      dateShort: r.date_short || DEFAULT_EVENT.dateShort,
+      monthYear: r.month_year || DEFAULT_EVENT.monthYear,
+      venue: r.venue || DEFAULT_EVENT.venue,
+      city: r.city || DEFAULT_EVENT.city,
+      country: r.country || DEFAULT_EVENT.country,
+      badgeHeader: r.badge_header || { fr: "", en: "", pt: "" },
+      badgeBackground: r.badge_background || "",
+      badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
     };
   }
 
   // Contenu public (tourisme, hôtels, carrousel, logo, intervenants, bandeau, menu) — visible sans connexion.
   async function loadPublicContent() {
+    const activeEventRow = await getActiveEvent();
+    const activeEvent = activeEventRow ? mapEventRow(activeEventRow) : { ...DEFAULT_EVENT, id: null };
+    const eventId = activeEvent.id;
+
     const [t, h, s, settings, sp, mn, ot, ff] = await Promise.all([
-      fetchPublished("tourist_sites"),
-      fetchPublished("cms_hotels"),
-      fetchPublished("hero_slides"),
+      fetchPublishedForEvent("tourist_sites", eventId),
+      fetchPublishedForEvent("cms_hotels", eventId),
+      fetchPublishedForEvent("hero_slides", eventId),
       getAllSettings(),
-      fetchPublished("cms_speakers"),
+      fetchPublishedForEvent("cms_speakers", eventId),
       fetchPublished("cms_menu_items"),
       fetchPublished("cms_org_types"),
       fetchPublished("cms_form_fields"),
@@ -556,7 +611,14 @@ export default function App() {
     })));
     if (s.length) setHeroSlides(s.map(r => r.image_url));
     if (settings.event_logo) setLogoUrl(settings.event_logo);
-    setEventData(buildEventFromSettings(settings));
+    setEventData({
+      ...activeEvent,
+      brand: {
+        fr: settings.event_brand_fr || DEFAULT_EVENT.brand.fr,
+        en: settings.event_brand_en || DEFAULT_EVENT.brand.en,
+        pt: settings.event_brand_pt || DEFAULT_EVENT.brand.pt,
+      },
+    });
     if (sp.length) setSpeakers(sp.map(r => ({
       id: r.id,
       name: r.name,
@@ -815,7 +877,7 @@ export default function App() {
       )}
 
       {view === "register" && step === 6 && confirmed && (
-        <Confirmation lang={lang} record={confirmed} onDone={startOver} />
+        <Confirmation lang={lang} record={confirmed} onDone={startOver} eventData={eventData} />
       )}
 
       {view === "update" && (
@@ -823,15 +885,22 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={setEventData} orgTypes={orgTypes} formFields={formFields} myRole={myRole} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} />
+      )}
+
+      {view === "archives" && (
+        <ArchivesPage lang={lang} setView={setView} />
       )}
 
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between gap-3">
-          <div>© {DEFAULT_EVENT.year} {eventData.brand[lang]}</div>
-          <button onClick={() => setView(view === "admin" ? "public" : "admin")} className="underline hover:text-white">
-            {view === "admin" ? t("view_site", lang) : t("admin", lang)}
-          </button>
+          <div>© {eventData.year || DEFAULT_EVENT.year} {eventData.brand[lang]}</div>
+          <div className="flex items-center gap-4">
+            <button onClick={() => setView("archives")} className="underline hover:text-white">{t("archives_title", lang)}</button>
+            <button onClick={() => setView(view === "admin" ? "public" : "admin")} className="underline hover:text-white">
+              {view === "admin" ? t("view_site", lang) : t("admin", lang)}
+            </button>
+          </div>
         </div>
       </footer>
     </div>
@@ -1189,12 +1258,12 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
   );
 }
 
-function Confirmation({ lang, record, onDone }) {
+function Confirmation({ lang, record, onDone, eventData }) {
   return (
     <div className="max-w-xl mx-auto px-5 py-16 text-center">
       <div className="stamp mx-auto mb-8" style={{ color: "var(--argile)" }}>
         <ShieldCheck size={28} />
-        <span className="font-mono text-[10px] mt-1">{DEFAULT_EVENT.year}</span>
+        <span className="font-mono text-[10px] mt-1">{eventData.year || DEFAULT_EVENT.year}</span>
       </div>
       <h2 className="font-display font-semibold text-2xl mb-2" style={{ color: "var(--navy)" }}>{t("confirmed_title", lang)}</h2>
       <p className="text-sm text-black/60 mb-6">{record.firstName} {record.lastName}</p>
@@ -1250,7 +1319,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
   async function handleDownloadBadges() {
     setGeneratingBadges(true);
     try {
-      await downloadBadges(filtered, eventData, logoUrl, lang, `badges-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.pdf`);
+      await downloadBadges(filtered, eventData, logoUrl, lang, `badges-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`);
     } catch (e) { /* best effort */ }
     setGeneratingBadges(false);
   }
@@ -1272,7 +1341,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       </div>
 
       <div className="flex gap-1 mb-8 border-b flex-wrap" style={{ borderColor: "#CFC4A3" }}>
-        {[["participants", t("participants_tab", lang)], ...(canEdit ? [["content", t("content_tab", lang)]] : []), ...(isSuperAdmin ? [["users", t("users_tab", lang)]] : [])].map(([key, label]) => (
+        {[["participants", t("participants_tab", lang)], ...(isSuperAdmin ? [["events", t("events_tab", lang)]] : []), ...(canEdit ? [["content", t("content_tab", lang)]] : []), ...(isSuperAdmin ? [["users", t("users_tab", lang)]] : [])].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} className="px-4 py-2.5 text-sm font-semibold" style={{ color: tab === key ? "var(--vert-fonce)" : "#8a8168", borderBottom: tab === key ? "2px solid var(--vert-fonce)" : "2px solid transparent" }}>{label}</button>
         ))}
       </div>
@@ -1314,8 +1383,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
           <input className="cb-input pl-9" placeholder={t("search_ph", lang)} value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
-        <button onClick={() => downloadExcel(filtered, `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
-        <button onClick={() => downloadPDF(filtered, `participants-${DEFAULT_EVENT.code}-${DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
+        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
+        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
         <button onClick={handleDownloadBadges} disabled={generatingBadges || filtered.length === 0} className="cb-btn-outline whitespace-nowrap" style={{ opacity: generatingBadges ? 0.7 : 1 }}><Download size={15} /> {generatingBadges ? t("generating_badges", lang) : t("download_all_badges", lang)}</button>
       </div>
       <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
@@ -1388,6 +1457,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       </>
       )}
 
+      {tab === "events" && isSuperAdmin && <EventsManager lang={lang} activeEventId={eventData.id} onActiveEventChanged={onEventChange} eventData={eventData} />}
       {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} eventData={eventData} onEventChange={onEventChange} canEdit={canEdit} />}
       {tab === "users" && isSuperAdmin && <UsersManager lang={lang} currentUserId={adminUser.id} />}
     </div>
@@ -1431,6 +1501,39 @@ function ImageUploader({ lang, value, onChange, folder }) {
   );
 }
 
+function FileUploader({ lang, value, onChange, folder, label }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const url = await uploadMedia(file, folder);
+      onChange(url);
+    } catch (err) {
+      setError(String(err.message || err));
+    }
+    setUploading(false);
+  }
+
+  return (
+    <div>
+      <label className="cb-label">{label}</label>
+      {value && (
+        <a href={value} target="_blank" rel="noopener noreferrer" className="text-xs block mb-2 truncate" style={{ color: "var(--vert-fonce)", textDecoration: "underline" }}>{value}</a>
+      )}
+      <label className="cb-btn-outline text-sm cursor-pointer inline-flex">
+        <ImageIcon size={14} /> {uploading ? t("uploading", lang) : t("upload_pdf", lang)}
+        <input type="file" accept="application/pdf" className="hidden" onChange={handleFile} disabled={uploading} />
+      </label>
+      {error && <div className="text-xs mt-1" style={{ color: "#8A2A2A" }}>{error}</div>}
+    </div>
+  );
+}
+
 function StatusBadge({ status }) {
   const published = status === "published";
   return (
@@ -1442,9 +1545,9 @@ function StatusBadge({ status }) {
 
 function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange, canEdit }) {
   const [sub, setSub] = useState("logo");
+  const eventId = eventData.id;
   const subs = [
     ["logo", t("logo_tab", lang)],
-    ["herocontent", t("hero_content_tab", lang)],
     ["carousel", t("hero_carousel_tab", lang)],
     ["menu", t("menu_tab", lang)],
     ["orgtypes", t("org_types_tab", lang)],
@@ -1457,21 +1560,21 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
   return (
     <div>
       {!canEdit && <div className="text-xs px-3 py-2 mb-4 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
+      <p className="text-xs text-black/50 mb-4 max-w-lg">{t("content_scope_help", lang)}</p>
       <div className="flex gap-4 mb-6 text-sm flex-wrap">
         {subs.map(([key, label]) => (
           <button key={key} onClick={() => setSub(key)} className="px-3 py-1.5" style={{ background: sub === key ? "var(--vert-fonce)" : "#fff", color: sub === key ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{label}</button>
         ))}
       </div>
       {sub === "logo" && <LogoManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} canEdit={canEdit} />}
-      {sub === "herocontent" && <EventHeroManager lang={lang} eventData={eventData} onEventChange={onEventChange} canEdit={canEdit} />}
-      {sub === "carousel" && <HeroSlidesManager lang={lang} canEdit={canEdit} />}
+      {sub === "carousel" && <HeroSlidesManager lang={lang} canEdit={canEdit} eventId={eventId} />}
       {sub === "menu" && <MenuManager lang={lang} canEdit={canEdit} />}
       {sub === "orgtypes" && <OrgTypesManager lang={lang} canEdit={canEdit} />}
       {sub === "formfields" && <FormFieldsManager lang={lang} canEdit={canEdit} />}
       {sub === "email" && <EmailTemplateManager lang={lang} canEdit={canEdit} />}
-      {sub === "tourism" && <TourismManager lang={lang} canEdit={canEdit} />}
-      {sub === "hotels" && <HotelsManager lang={lang} canEdit={canEdit} />}
-      {sub === "speakers" && <SpeakersManager lang={lang} canEdit={canEdit} />}
+      {sub === "tourism" && <TourismManager lang={lang} canEdit={canEdit} eventId={eventId} />}
+      {sub === "hotels" && <HotelsManager lang={lang} canEdit={canEdit} eventId={eventId} />}
+      {sub === "speakers" && <SpeakersManager lang={lang} canEdit={canEdit} eventId={eventId} />}
     </div>
   );
 }
@@ -1521,17 +1624,17 @@ function LogoManager({ lang, logoUrl, onLogoChange, canEdit }) {
   );
 }
 
-function HeroSlidesManager({ lang , canEdit }) {
+function HeroSlidesManager({ lang , canEdit, eventId }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  async function load() { setLoading(true); setItems(await fetchAll("hero_slides")); setLoading(false); }
-  useEffect(() => { load(); }, []);
+  async function load() { setLoading(true); setItems(await fetchAllForEvent("hero_slides", eventId)); setLoading(false); }
+  useEffect(() => { load(); }, [eventId]);
 
   async function save() {
     if (!editing.image_url) return;
-    await upsertRow("hero_slides", editing);
+    await upsertRow("hero_slides", { ...editing, event_id: eventId });
     setEditing(null);
     load();
   }
@@ -1583,17 +1686,17 @@ function HeroSlidesManager({ lang , canEdit }) {
   );
 }
 
-function TourismManager({ lang , canEdit }) {
+function TourismManager({ lang , canEdit, eventId }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  async function load() { setLoading(true); setItems(await fetchAll("tourist_sites")); setLoading(false); }
-  useEffect(() => { load(); }, []);
+  async function load() { setLoading(true); setItems(await fetchAllForEvent("tourist_sites", eventId)); setLoading(false); }
+  useEffect(() => { load(); }, [eventId]);
 
   async function save() {
     if (!editing.name_fr) return;
-    await upsertRow("tourist_sites", editing);
+    await upsertRow("tourist_sites", { ...editing, event_id: eventId });
     setEditing(null);
     load();
   }
@@ -1659,17 +1762,17 @@ function TourismManager({ lang , canEdit }) {
   );
 }
 
-function HotelsManager({ lang , canEdit }) {
+function HotelsManager({ lang , canEdit, eventId }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  async function load() { setLoading(true); setItems(await fetchAll("cms_hotels")); setLoading(false); }
-  useEffect(() => { load(); }, []);
+  async function load() { setLoading(true); setItems(await fetchAllForEvent("cms_hotels", eventId)); setLoading(false); }
+  useEffect(() => { load(); }, [eventId]);
 
   async function save() {
     if (!editing.name) return;
-    await upsertRow("cms_hotels", editing);
+    await upsertRow("cms_hotels", { ...editing, event_id: eventId });
     setEditing(null);
     load();
   }
@@ -1754,17 +1857,17 @@ function HotelsManager({ lang , canEdit }) {
   );
 }
 
-function SpeakersManager({ lang , canEdit }) {
+function SpeakersManager({ lang , canEdit, eventId }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  async function load() { setLoading(true); setItems(await fetchAll("cms_speakers")); setLoading(false); }
-  useEffect(() => { load(); }, []);
+  async function load() { setLoading(true); setItems(await fetchAllForEvent("cms_speakers", eventId)); setLoading(false); }
+  useEffect(() => { load(); }, [eventId]);
 
   async function save() {
     if (!editing.name) return;
-    await upsertRow("cms_speakers", editing);
+    await upsertRow("cms_speakers", { ...editing, event_id: eventId });
     setEditing(null);
     load();
   }
@@ -2485,6 +2588,230 @@ function EmailTemplateManager({ lang, canEdit }) {
           {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
         </div>
       )}
+    </div>
+  );
+}
+
+const EVENT_TYPE_OPTIONS = ["ag", "zone1", "zone2", "other"];
+const EVENT_STATUS_OPTIONS = ["draft", "open", "closed", "archived"];
+const EMPTY_LANG3 = { fr: "", en: "", pt: "" };
+
+function emptyEventDraft() {
+  return {
+    type: "other", year: new Date().getFullYear(), code: "", edition: "",
+    ordinal: { fr: "e", en: "", pt: "ª" },
+    title: { ...EMPTY_LANG3 }, theme: { ...EMPTY_LANG3 }, subtitle: { ...EMPTY_LANG3 },
+    date_short: { ...EMPTY_LANG3 }, month_year: { ...EMPTY_LANG3 }, venue: { ...EMPTY_LANG3 },
+    city: "", country: "", status: "draft",
+    badge_header: { ...EMPTY_LANG3 }, badge_background: "", badge_pdf: { ...EMPTY_LANG3 },
+  };
+}
+
+function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+
+  async function load() { setLoading(true); setItems(await listAllEvents()); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  function set3(key, l, value) { setEditing(x => ({ ...x, [key]: { ...x[key], [l]: value } })); }
+
+  async function save() {
+    if (!editing.code) return;
+    await upsertRow("events", editing);
+    setEditing(null);
+    await load();
+    if (editing.id === activeEventId) onActiveEventChanged();
+  }
+
+  async function remove(id) {
+    if (id === activeEventId) return;
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("events", id);
+    load();
+  }
+
+  async function activate(id) {
+    setBusyId(id);
+    try { await setActiveEvent(id); await load(); onActiveEventChanged(); }
+    catch (e) { setError(String(e.message || e)); }
+    setBusyId(null);
+  }
+
+  async function duplicate(ev) {
+    const newYear = window.prompt(t("duplicate_event_prompt_year", lang), String(ev.year + 1));
+    if (!newYear) return;
+    const newCode = window.prompt(t("duplicate_event_prompt_code", lang), ev.code.replace(/\d+$/, "") + (Number(ev.year) + 1 - 1984));
+    if (!newCode) return;
+    setBusyId(ev.id);
+    try {
+      await duplicateEvent(ev.id, Number(newYear), newCode);
+      await load();
+      window.alert(t("duplicate_event_success", lang));
+    } catch (e) { setError(String(e.message || e)); }
+    setBusyId(null);
+  }
+
+  const typeLabel = (ty) => t("event_type_" + ty, lang);
+  const statusLabel = (s) => t("status_" + s, lang);
+
+  return (
+    <div>
+      {error && <div className="text-sm px-3 py-2 mb-4" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>{error}</div>}
+
+      <div className="space-y-2 mb-6">
+        {items.map(ev => (
+          <div key={ev.id} className="flex items-center justify-between bg-white border px-4 py-3 flex-wrap gap-2" style={{ borderColor: "#CFC4A3" }}>
+            <div>
+              <div className="text-sm font-semibold flex items-center gap-2">
+                {ev.title?.fr || ev.code} <span className="text-xs text-black/40 font-mono">{ev.code} · {ev.year}</span>
+                {ev.id === activeEventId && <span className="text-[10px] px-1.5 py-0.5" style={{ background: "#EAF6EE", color: "var(--vert-fonce)" }}>{t("currently_active", lang)}</span>}
+              </div>
+              <div className="text-xs text-black/50">{typeLabel(ev.type)} · {statusLabel(ev.status)}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              {ev.id !== activeEventId && (
+                <button onClick={() => activate(ev.id)} disabled={busyId === ev.id} className="cb-btn-outline text-xs py-1 px-2">{t("set_active_event", lang)}</button>
+              )}
+              <button onClick={() => duplicate(ev)} disabled={busyId === ev.id} className="cb-btn-outline text-xs py-1 px-2">{t("duplicate_event_btn", lang)}</button>
+              <button onClick={() => setEditing({ ...ev })}><Pencil size={14} color="var(--vert-fonce)" /></button>
+              {ev.id !== activeEventId && <button onClick={() => remove(ev.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
+            </div>
+          </div>
+        ))}
+        {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40">{t("no_items", lang)}</p>}
+      </div>
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-2xl space-y-5" style={{ borderColor: "#CFC4A3" }}>
+          <div className="grid sm:grid-cols-4 gap-3">
+            <div>
+              <label className="cb-label">{t("event_type_label", lang)}</label>
+              <select className="cb-input" value={editing.type} onChange={e=>setEditing(x=>({ ...x, type: e.target.value }))}>
+                {EVENT_TYPE_OPTIONS.map(ty => <option key={ty} value={ty}>{typeLabel(ty)}</option>)}
+              </select>
+            </div>
+            <Field label={t("event_year_label", lang)}><input type="number" className="cb-input" value={editing.year} onChange={e=>setEditing(x=>({ ...x, year: Number(e.target.value) }))} /></Field>
+            <Field label={t("event_code_label", lang)}><input className="cb-input font-mono" value={editing.code} onChange={e=>setEditing(x=>({ ...x, code: e.target.value.toUpperCase() }))} /></Field>
+            <Field label={t("edition_number", lang)}><input className="cb-input" value={editing.edition || ""} onChange={e=>setEditing(x=>({ ...x, edition: e.target.value }))} /></Field>
+          </div>
+          <div>
+            <label className="cb-label">{t("event_status_label", lang)}</label>
+            <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+              {EVENT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="cb-label">{t("ordinal_label", lang)}</label>
+            <div className="grid grid-cols-3 gap-2">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.ordinal[l]} onChange={e=>set3("ordinal", l, e.target.value)} />)}
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("title_fr", lang)}><input className="cb-input" value={editing.title.fr} onChange={e=>set3("title","fr",e.target.value)} /></Field>
+            <Field label={t("title_en", lang)}><input className="cb-input" value={editing.title.en} onChange={e=>set3("title","en",e.target.value)} /></Field>
+            <Field label={t("title_pt", lang)}><input className="cb-input" value={editing.title.pt} onChange={e=>set3("title","pt",e.target.value)} /></Field>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("subtitle_fr", lang)}><textarea className="cb-input" rows={3} value={editing.subtitle.fr} onChange={e=>set3("subtitle","fr",e.target.value)} /></Field>
+            <Field label={t("subtitle_en", lang)}><textarea className="cb-input" rows={3} value={editing.subtitle.en} onChange={e=>set3("subtitle","en",e.target.value)} /></Field>
+            <Field label={t("subtitle_pt", lang)}><textarea className="cb-input" rows={3} value={editing.subtitle.pt} onChange={e=>set3("subtitle","pt",e.target.value)} /></Field>
+          </div>
+          <div>
+            <p className="text-xs text-black/50 mb-3">{t("hero_theme_help", lang)}</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field label={t("theme_fr", lang)}><textarea className="cb-input" rows={3} value={editing.theme.fr} onChange={e=>set3("theme","fr",e.target.value)} /></Field>
+              <Field label={t("theme_en", lang)}><textarea className="cb-input" rows={3} value={editing.theme.en} onChange={e=>set3("theme","en",e.target.value)} /></Field>
+              <Field label={t("theme_pt", lang)}><textarea className="cb-input" rows={3} value={editing.theme.pt} onChange={e=>set3("theme","pt",e.target.value)} /></Field>
+            </div>
+          </div>
+
+          <div>
+            <label className="cb-label mb-1 block">{t("date_short_label", lang)}</label>
+            <div className="grid sm:grid-cols-3 gap-3 mb-3">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.date_short[l]} onChange={e=>set3("date_short", l, e.target.value)} />)}
+            </div>
+            <label className="cb-label mb-1 block">{t("month_year_label", lang)}</label>
+            <div className="grid sm:grid-cols-3 gap-3 mb-3">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.month_year[l]} onChange={e=>set3("month_year", l, e.target.value)} />)}
+            </div>
+            <label className="cb-label mb-1 block">{t("venue_label", lang)}</label>
+            <div className="grid sm:grid-cols-3 gap-3">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.venue[l]} onChange={e=>set3("venue", l, e.target.value)} />)}
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("city_label", lang)}><input className="cb-input" value={editing.city || ""} onChange={e=>setEditing(x=>({ ...x, city: e.target.value }))} /></Field>
+            <Field label={t("country_label", lang)}><input className="cb-input" value={editing.country || ""} onChange={e=>setEditing(x=>({ ...x, country: e.target.value }))} /></Field>
+          </div>
+
+          <div className="border-t pt-5" style={{ borderColor: "#E7DCC2" }}>
+            <div className="cb-label mb-3">{t("badge_header_tab", lang)}</div>
+            <div className="grid sm:grid-cols-3 gap-3 mb-4">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.badge_header[l]} onChange={e=>set3("badge_header", l, e.target.value)} />)}
+            </div>
+            <div className="mb-4">
+              <ImageUploader lang={lang} value={editing.badge_background} onChange={url => setEditing(x => ({ ...x, badge_background: url }))} folder="badges" />
+              <div className="cb-label mt-1">{t("badge_background_label", lang)}</div>
+            </div>
+            <div>
+              <div className="cb-label mb-2">{t("badge_pdf_label", lang)}</div>
+              <div className="grid sm:grid-cols-3 gap-3">
+                <FileUploader lang={lang} value={editing.badge_pdf.fr} onChange={url => set3("badge_pdf","fr",url)} folder="badge-pdf" label="FR" />
+                <FileUploader lang={lang} value={editing.badge_pdf.en} onChange={url => set3("badge_pdf","en",url)} folder="badge-pdf" label="EN" />
+                <FileUploader lang={lang} value={editing.badge_pdf.pt} onChange={url => set3("badge_pdf","pt",url)} folder="badge-pdf" label="PT" />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setEditing(emptyEventDraft())} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function ArchivesPage({ lang, setView }) {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => { setEvents(await listArchivedEvents()); setLoading(false); })();
+  }, []);
+
+  const typeLabel = (ty) => t("event_type_" + ty, lang);
+
+  return (
+    <div className="max-w-4xl mx-auto px-5 py-14">
+      <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("archives_title", lang)}</h2>
+      {!loading && events.length === 0 && <p className="text-black/50 text-sm">{t("no_archived_events", lang)}</p>}
+      <div className="space-y-4">
+        {events.map(ev => (
+          <div key={ev.id} className="bg-white border p-5 flex flex-wrap items-center justify-between gap-3" style={{ borderColor: "#CFC4A3" }}>
+            <div>
+              <div className="cb-label mb-1">{typeLabel(ev.type)} · {ev.year}</div>
+              <div className="font-display font-semibold text-lg" style={{ color: "var(--navy)" }}>{ev.title?.[lang] || ev.title?.fr}</div>
+              <div className="text-sm text-black/60 mt-1 flex items-center gap-3 flex-wrap">
+                <span className="flex items-center gap-1"><Calendar size={13} /> {ev.date_short?.[lang]} {ev.month_year?.[lang]}</span>
+                <span className="flex items-center gap-1"><MapPin size={13} /> {ev.city}, {ev.country}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-10">
+        <button onClick={() => setView("public")} className="cb-btn-outline text-sm">{t("back_home", lang)}</button>
+      </div>
     </div>
   );
 }
