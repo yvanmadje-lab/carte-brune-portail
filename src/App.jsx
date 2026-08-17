@@ -798,7 +798,7 @@ export default function App() {
   const hotelOptions = useMemo(() => Array.from(new Set(participants.map(p => p.hotelName).filter(Boolean))), [participants]);
 
   return (
-    <div style={{ background: "var(--sable)", color: "var(--encre)", minHeight: "100%", fontFamily: "'IBM Plex Sans', sans-serif", overflowX: "hidden" }}>
+    <div style={{ background: "var(--sable)", color: "var(--encre)", minHeight: "100%", fontFamily: "'IBM Plex Sans', sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
         :root{
