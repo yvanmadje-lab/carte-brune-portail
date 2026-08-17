@@ -33,6 +33,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 10. `supabase/hotel_gallery_schema.sql` (galerie photos et site web de chaque hôtel)
 11. `supabase/edit_link_email_schema.sql` (lien de modification sécurisé + modèles d'email de confirmation)
 12. `supabase/multi_event_schema.sql` (architecture multi-événements complète : table `events`, contenu par événement, duplication, archives, badges personnalisables)
+13. `supabase/program_pdf_schema.sql` (document Programme en PDF, par événement et par langue)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -202,6 +203,30 @@ Dans "Contenu du site → Hôtels", chaque hôtel dispose maintenant de :
 Sur le site public, cliquer sur la photo d'un hôtel (ou sur "Voir les
 photos") ouvre une visionneuse plein écran avec navigation
 précédent/suivant entre toutes les photos de cet hôtel.
+
+### Sélecteur d'événement pour le contenu
+
+Les onglets Carrousel, Tourisme, Hôtels et Comité d'organisation
+affichent désormais un **sélecteur d'événement** en haut de page,
+indépendant de l'événement actif publiquement. Vous pouvez ainsi
+préparer le contenu d'une future Réunion de Zone pendant que l'AG
+reste affichée sur le site, sans avoir à activer/désactiver quoi que
+ce soit entre-temps.
+
+### Récapitulatif complet avant validation
+
+L'étape 5 du formulaire d'inscription affiche maintenant **tous** les
+champs saisis (y compris les champs personnalisés ajoutés depuis
+"Champs du formulaire"), organisés par section, avant que le
+participant ne valide définitivement.
+
+### Programme (PDF multilingue)
+
+Dans l'onglet Événements, chaque événement peut désormais avoir un
+**document Programme** (PDF) chargé en FR/EN/PT. Pour l'afficher dans
+le menu du site, ajoutez un lien dans l'onglet "Menu" avec comme
+cible le mot `programme` — le site ouvrira automatiquement le bon
+fichier selon la langue active du visiteur.
 
 ## Architecture multi-événements (AG, Réunions de Zone, etc.)
 

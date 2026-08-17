@@ -102,6 +102,7 @@ const T = {
   step3_title: { fr: "Hébergement", en: "Accommodation", pt: "Alojamento" },
   step4_title: { fr: "Voyage", en: "Travel", pt: "Viagem" },
   step5_title: { fr: "Récapitulatif", en: "Summary", pt: "Resumo" },
+  review_help: { fr: "Vérifiez attentivement vos informations avant de valider — vous pourrez encore les modifier ensuite via le lien reçu par email.", en: "Please review your information carefully before submitting — you can still update it afterwards via the link you'll receive by email.", pt: "Reveja atentamente as suas informações antes de confirmar — poderá ainda atualizá-las depois através do link recebido por email." },
   last_name: { fr: "Nom", en: "Last name", pt: "Apelido" },
   first_name: { fr: "Prénom", en: "First name", pt: "Nome próprio" },
   position: { fr: "Fonction", en: "Position", pt: "Função" },
@@ -205,6 +206,7 @@ const T = {
   theme_label: { fr: "Thème de la réunion", en: "Meeting theme", pt: "Tema da reunião" },
   hero_content_tab: { fr: "Contenu du bandeau", en: "Hero content", pt: "Conteúdo do banner" },
   content_scope_help: { fr: "Ce contenu (carrousel, tourisme, hôtels, comité) est propre à l'événement actuellement actif — changez d'événement actif dans l'onglet \"Événements\" pour gérer le contenu d'un autre.", en: "This content (carousel, tourism, hotels, committee) belongs to the currently active event — switch the active event in the \"Events\" tab to manage another one's content.", pt: "Este conteúdo (carrossel, turismo, hotéis, comité) pertence ao evento atualmente ativo — mude o evento ativo no separador \"Eventos\" para gerir o conteúdo de outro." },
+  editing_content_for: { fr: "Modifier le contenu de l'événement", en: "Editing content for event", pt: "A editar o conteúdo do evento" },
   events_tab: { fr: "Événements", en: "Events", pt: "Eventos" },
   event_type_label: { fr: "Type de réunion", en: "Meeting type", pt: "Tipo de reunião" },
   event_type_ag: { fr: "Assemblée Générale", en: "General Assembly", pt: "Assembleia Geral" },
@@ -230,6 +232,8 @@ const T = {
   upload_pdf: { fr: "Choisir un PDF", en: "Choose PDF", pt: "Escolher PDF" },
   archives_title: { fr: "Archives des réunions", en: "Meeting archives", pt: "Arquivo de reuniões" },
   no_archived_events: { fr: "Aucun événement archivé pour le moment.", en: "No archived events yet.", pt: "Ainda sem eventos arquivados." },
+  program_pdf_label: { fr: "Programme (document PDF, un par langue)", en: "Programme (PDF document, one per language)", pt: "Programa (documento PDF, um por idioma)" },
+  program_pdf_help: { fr: "Pour l'afficher dans le menu, créez un lien dans l'onglet \"Menu\" avec comme cible : programme", en: "To show it in the menu, create a link in the \"Menu\" tab with target: programme", pt: "Para o mostrar no menu, crie um link no separador \"Menu\" com o destino: programme" },
   menu_tab: { fr: "Menu", en: "Menu", pt: "Menu" },
   edition_number: { fr: "Numéro d'édition (ex: 42)", en: "Edition number (e.g. 42)", pt: "Número da edição (ex: 42)" },
   title_fr: { fr: "Titre (Français)", en: "Title (French)", pt: "Título (Francês)" },
@@ -573,6 +577,7 @@ export default function App() {
       badgeHeader: r.badge_header || { fr: "", en: "", pt: "" },
       badgeBackground: r.badge_background || "",
       badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
+      programPdf: r.program_pdf || { fr: "", en: "", pt: "" },
     };
   }
 
@@ -650,6 +655,12 @@ export default function App() {
 
   function goToMenuTarget(target) {
     if (!target || target === "top") { setView("public"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (target === "programme") {
+      const pdf = eventData.programPdf || {};
+      const link = pdf[lang] || pdf.fr || pdf.en || pdf.pt || "";
+      if (link) window.open(link, "_blank");
+      return;
+    }
     if (target.startsWith("http")) { window.open(target, "_blank"); return; }
     setView("public");
     setTimeout(() => document.getElementById(target)?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -1095,6 +1106,15 @@ function Field({ label, children }) {
   return <div><label className="cb-label">{label}</label>{children}</div>;
 }
 
+function ReviewRow({ label, value }) {
+  return (
+    <div className="flex justify-between gap-4 py-1.5 border-b border-dashed" style={{ borderColor: "#E7DCC2" }}>
+      <span className="text-black/50">{label}</span>
+      <span className="font-medium text-right">{value || "—"}</span>
+    </div>
+  );
+}
+
 function DynamicField({ field, lang, value, onChange }) {
   const label = field.label[lang] + (field.required ? " *" : "");
   if (field.field_type === "textarea") {
@@ -1217,22 +1237,55 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
       )}
 
       {step === 5 && (
-        <div className="bg-white border p-6 space-y-4 text-sm" style={{ borderColor: "#CFC4A3" }}>
+        <div className="bg-white border p-6 space-y-6 text-sm" style={{ borderColor: "#CFC4A3" }}>
+          <p className="text-xs text-black/50 -mt-2 mb-2">{t("review_help", lang)}</p>
+
           <div>
-            <div className="cb-label">{t("step1_title", lang)}</div>
-            <div>{form.firstName} {form.lastName} — {form.position} — {form.organization}</div>
+            <div className="cb-label mb-2">{t("step1_title", lang)}</div>
+            <div className="space-y-1">
+              {fieldsForStep(1).map(f => (
+                <ReviewRow key={f.id} label={f.label[lang]} value={form[f.field_key]} />
+              ))}
+              <ReviewRow label={t("org_type", lang)} value={form.orgType} />
+              {orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther && (
+                <ReviewRow label={t("org_other", lang)} value={form.orgOther} />
+              )}
+            </div>
           </div>
+
           <div>
-            <div className="cb-label">{t("step2_title", lang)}</div>
-            <div>{form.country}, {form.city} · {form.email} · {form.phone}</div>
+            <div className="cb-label mb-2">{t("step2_title", lang)}</div>
+            <div className="space-y-1">
+              <ReviewRow label={t("country", lang)} value={form.country} />
+              {fieldsForStep(2).map(f => (
+                <ReviewRow key={f.id} label={f.label[lang]} value={form[f.field_key]} />
+              ))}
+            </div>
           </div>
+
           <div>
-            <div className="cb-label">{t("step3_title", lang)}</div>
-            <div>{form.wantsHotel === "yes" ? `${selectedHotel.name} — ${selectedRoom.type} (${form.checkIn || "—"} → ${form.checkOut || "—"})` : t("hotel_none", lang)}</div>
+            <div className="cb-label mb-2">{t("step3_title", lang)}</div>
+            <div className="space-y-1">
+              <ReviewRow label={t("want_hotel", lang)} value={form.wantsHotel === "yes" ? t("yes", lang) : t("no", lang)} />
+              {form.wantsHotel === "yes" && selectedHotel && (
+                <>
+                  <ReviewRow label={t("nav_hotels", lang)} value={selectedHotel.name} />
+                  <ReviewRow label={t("room_type", lang)} value={selectedRoom?.type} />
+                  <ReviewRow label={t("check_in", lang)} value={form.checkIn} />
+                  <ReviewRow label={t("check_out", lang)} value={form.checkOut} />
+                </>
+              )}
+            </div>
           </div>
+
           <div>
-            <div className="cb-label">{t("step4_title", lang)}</div>
-            <div>{form.airline || "—"} {form.flightNumber} — {form.arrivalDate || "—"}</div>
+            <div className="cb-label mb-2">{t("step4_title", lang)}</div>
+            <div className="space-y-1">
+              {fieldsForStep(4).map(f => (
+                <ReviewRow key={f.id} label={f.label[lang]} value={form[f.field_key]} />
+              ))}
+              <ReviewRow label={t("transfer", lang)} value={form.transfer === "yes" ? t("yes", lang) : t("no", lang)} />
+            </div>
           </div>
         </div>
       )}
@@ -1545,7 +1598,14 @@ function StatusBadge({ status }) {
 
 function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange, canEdit }) {
   const [sub, setSub] = useState("logo");
-  const eventId = eventData.id;
+  const [events, setEvents] = useState([]);
+  const [selectedEventId, setSelectedEventId] = useState(eventData.id);
+
+  useEffect(() => { listAllEvents().then(setEvents); }, []);
+  useEffect(() => { setSelectedEventId(eventData.id); }, [eventData.id]);
+
+  const eventId = selectedEventId;
+  const contentSubs = ["carousel", "tourism", "hotels", "speakers"];
   const subs = [
     ["logo", t("logo_tab", lang)],
     ["carousel", t("hero_carousel_tab", lang)],
@@ -1560,12 +1620,23 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
   return (
     <div>
       {!canEdit && <div className="text-xs px-3 py-2 mb-4 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
-      <p className="text-xs text-black/50 mb-4 max-w-lg">{t("content_scope_help", lang)}</p>
       <div className="flex gap-4 mb-6 text-sm flex-wrap">
         {subs.map(([key, label]) => (
           <button key={key} onClick={() => setSub(key)} className="px-3 py-1.5" style={{ background: sub === key ? "var(--vert-fonce)" : "#fff", color: sub === key ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{label}</button>
         ))}
       </div>
+      {contentSubs.includes(sub) && (
+        <div className="mb-5 max-w-sm">
+          <label className="cb-label">{t("editing_content_for", lang)}</label>
+          <select className="cb-input" value={selectedEventId || ""} onChange={e => setSelectedEventId(e.target.value)}>
+            {events.map(ev => (
+              <option key={ev.id} value={ev.id}>
+                {(ev.title?.fr || ev.code)} — {ev.year} {ev.id === eventData.id ? `(${t("currently_active", lang)})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       {sub === "logo" && <LogoManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} canEdit={canEdit} />}
       {sub === "carousel" && <HeroSlidesManager lang={lang} canEdit={canEdit} eventId={eventId} />}
       {sub === "menu" && <MenuManager lang={lang} canEdit={canEdit} />}
@@ -2604,6 +2675,7 @@ function emptyEventDraft() {
     date_short: { ...EMPTY_LANG3 }, month_year: { ...EMPTY_LANG3 }, venue: { ...EMPTY_LANG3 },
     city: "", country: "", status: "draft",
     badge_header: { ...EMPTY_LANG3 }, badge_background: "", badge_pdf: { ...EMPTY_LANG3 },
+    program_pdf: { ...EMPTY_LANG3 },
   };
 }
 
@@ -2766,6 +2838,16 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
                 <FileUploader lang={lang} value={editing.badge_pdf.en} onChange={url => set3("badge_pdf","en",url)} folder="badge-pdf" label="EN" />
                 <FileUploader lang={lang} value={editing.badge_pdf.pt} onChange={url => set3("badge_pdf","pt",url)} folder="badge-pdf" label="PT" />
               </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-5" style={{ borderColor: "#E7DCC2" }}>
+            <div className="cb-label mb-2">{t("program_pdf_label", lang)}</div>
+            <p className="text-xs text-black/50 mb-3">{t("program_pdf_help", lang)}</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <FileUploader lang={lang} value={editing.program_pdf.fr} onChange={url => set3("program_pdf","fr",url)} folder="program-pdf" label="FR" />
+              <FileUploader lang={lang} value={editing.program_pdf.en} onChange={url => set3("program_pdf","en",url)} folder="program-pdf" label="EN" />
+              <FileUploader lang={lang} value={editing.program_pdf.pt} onChange={url => set3("program_pdf","pt",url)} folder="program-pdf" label="PT" />
             </div>
           </div>
 
