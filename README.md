@@ -34,6 +34,8 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 11. `supabase/edit_link_email_schema.sql` (lien de modification sécurisé + modèles d'email de confirmation)
 12. `supabase/multi_event_schema.sql` (architecture multi-événements complète : table `events`, contenu par événement, duplication, archives, badges personnalisables)
 13. `supabase/program_pdf_schema.sql` (document Programme en PDF, par événement et par langue)
+14. `supabase/edit_link_expiry_badges_schema.sql` (délai d'expiration configurable du lien de modification + badges en 3 images en-tête/corps/pied de page)
+14. `supabase/edit_link_expiry_badges_schema.sql` (délai d'expiration configurable du lien de modification + badges en 3 images)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -339,7 +341,7 @@ lien lui-même est la clé d'accès, ce qui répond à l'exigence que ce
 lien "doit nécessairement provenir de leur boîte mail, pas être saisi
 dans le navigateur" — il n'est affiché nulle part dans l'interface.
 
-## Badges PDF avec QR code
+## Badges PDF avec QR code — modèle en 3 images (en-tête / corps / pied de page)
 
 Dans l'onglet Participants :
 - une icône badge (QR) en fin de ligne télécharge le badge individuel
@@ -348,12 +350,21 @@ Dans l'onglet Participants :
   un badge par page pour tous les participants actuellement filtrés
   (utile pour imprimer par lot, par exemple par pays ou par hôtel).
 
-Chaque badge (format 90×130mm, imprimable) affiche : le logo de
-l'événement (fond blanc automatiquement retiré), l'en-tête
-personnalisable, le nom complet du participant, sa fonction, son
-organisme, son pays, et un QR code qui redirige vers le document PDF
-configuré pour cet événement (voir "Architecture multi-événements"
-ci-dessus) — ou, à défaut, encode simplement son numéro d'inscription.
+Le badge (format 90×130mm, imprimable) se compose désormais de **trois
+images que vous chargez vous-même** depuis l'onglet Événements :
+- une image d'**en-tête** (logo, bandeau institutionnel...) ;
+- une image de **corps** — le **Nom & Prénom** et le **Pays** du
+  participant s'affichent automatiquement par-dessus, dans un
+  encadré clair pour rester lisibles quelle que soit l'image ;
+- une image de **pied de page** — le **QR code** s'y affiche
+  automatiquement en petit format, aligné à droite.
+
+Ce sont les **seules variables** affichées sur le badge (Nom, Prénom,
+Pays) — plus de fonction, organisme ou dates codées en dur : tout le
+reste de l'habillage vient entièrement des images que vous fournissez,
+pour un contrôle visuel total. Le QR code redirige vers le document
+PDF configuré pour cet événement (programme, etc.), ou à défaut
+encode le numéro d'inscription.
 
 ## Pied de page éditable (FR/EN/PT)
 
@@ -363,6 +374,36 @@ pages du site, au-dessus de la ligne de copyright, traduisible dans
 les trois langues. Laissé vide, seule la ligne de copyright reste
 affichée comme avant.
 
+## Option "Transfert aéroport" retirée
+
+Le champ "Besoin de transfert aéroport" a été retiré du formulaire
+d'inscription (étape Voyage) et de la page de modification — il
+n'est plus demandé aux participants.
+
+## Vérification anti-robot (captcha) avant validation
+
+À l'étape 5 du formulaire (récapitulatif), un petit calcul simple
+(ex. "4 + 7 = ?") doit être résolu correctement avant que le bouton
+**"Valider mon inscription"** ne devienne cliquable. Aucune clé ou
+service externe requis — c'est une vérification générée et validée
+directement dans le navigateur, suffisante pour dissuader les robots
+simples. Si vous souhaitez une protection plus robuste (Google
+reCAPTCHA, hCaptcha...) contre des robots plus sophistiqués, ce sera
+une prochaine étape possible.
+
+## Lien de modification : délai d'expiration configurable
+
+Dans Contenu du site → **"Email de confirmation"**, un nouveau champ
+**"Durée de validité du lien de modification"** (en jours après
+l'inscription, 30 par défaut) — passé ce délai, le lien envoyé par
+email ne fonctionne plus, et le participant voit un message l'invitant
+à contacter le Secrétariat. Ce lien reste strictement personnel : il
+n'est jamais affiché sur le site, uniquement envoyé par email, et seul
+son destinataire est censé l'utiliser pour modifier ses propres
+données — c'est une convention d'usage, pas une restriction technique
+supplémentaire au-delà du secret du lien lui-même et de son
+expiration.
+
 ## Correctif — modification d'inscription via le lien email
 
 Un bug empêchait la mise à jour du nom de l'hôtel et du type de
@@ -371,6 +412,48 @@ de modification reçu par email : la sélection du nouvel hôtel/chambre
 était bien prise en compte, mais leur nom/type n'étaient jamais
 recalculés avant l'enregistrement, donc l'ancien hôtel restait affiché
 dans le tableau des participants malgré le changement. C'est corrigé.
+
+## Formulaire d'inscription — retrait du transfert, captcha, récapitulatif
+
+- La question "Besoin de transfert aéroport" a été retirée du
+  formulaire (étape Voyage) et de la page de modification.
+- Un **captcha** (petit calcul aléatoire) apparaît désormais sur le
+  récapitulatif final — le bouton "Valider mon inscription" reste
+  désactivé tant qu'il n'est pas correctement résolu.
+
+## Lien de modification — délai d'expiration et rappel de sécurité
+
+Dans Administration → Contenu du site → "Email de confirmation" :
+- **Durée de validité du lien** (en jours après l'inscription),
+  réglable par l'admin. Passé ce délai, le lien affiche un message
+  d'expiration au participant et ne permet plus aucune modification —
+  contrôlé côté serveur (Supabase), pas seulement dans l'interface.
+- Un rappel est affiché : ce lien est strictement personnel et ne
+  doit être utilisé que par le participant qui l'a reçu par email ;
+  il n'est jamais affiché ailleurs sur le site.
+
+**Important** : changer la durée de validité s'applique immédiatement
+à *tous* les liens déjà envoyés (elle n'est pas figée au moment de
+l'inscription) — pratique si vous devez temporairement rouvrir ou
+fermer les modifications pour tout le monde.
+
+## Badges — personnalisation complète (en-tête / corps / pied de page)
+
+Le badge n'est plus composé de champs texte : dans l'onglet
+Événements, vous chargez désormais **trois images** distinctes
+(en-tête, corps, pied de page) qui forment l'intégralité du visuel du
+badge. Les seules informations affichées par-dessus, automatiquement,
+sont :
+- le **Nom & Prénom** et le **Pays** du participant, centrés sur
+  l'image du corps (avec un léger voile clair pour rester lisibles
+  quelle que soit l'image choisie) ;
+- le **QR code**, en bas à droite de l'image du pied de page, en
+  petit format — il renvoie vers le document PDF configuré pour la
+  langue courante (ou, à défaut, encode le numéro d'inscription).
+
+Concevez vos trois images aux proportions suivantes (badge total
+90×130mm) pour un rendu fidèle : en-tête ≈ 90×24mm, corps ≈ 90×84mm,
+pied de page ≈ 90×22mm.
 
 ## Prochaines étapes possibles
 - Emails automatiques de confirmation ✅ fait

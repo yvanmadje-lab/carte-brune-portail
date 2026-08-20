@@ -103,6 +103,7 @@ const T = {
   step4_title: { fr: "Voyage", en: "Travel", pt: "Viagem" },
   step5_title: { fr: "Récapitulatif", en: "Summary", pt: "Resumo" },
   review_help: { fr: "Vérifiez attentivement vos informations avant de valider — vous pourrez encore les modifier ensuite via le lien reçu par email.", en: "Please review your information carefully before submitting — you can still update it afterwards via the link you'll receive by email.", pt: "Reveja atentamente as suas informações antes de confirmar — poderá ainda atualizá-las depois através do link recebido por email." },
+  captcha_label: { fr: "Vérification anti-robot : complétez le calcul", en: "Anti-bot check: complete the calculation", pt: "Verificação anti-robô: complete o cálculo" },
   last_name: { fr: "Nom", en: "Last name", pt: "Apelido" },
   first_name: { fr: "Prénom", en: "First name", pt: "Nome próprio" },
   position: { fr: "Fonction", en: "Position", pt: "Função" },
@@ -135,6 +136,9 @@ const T = {
   update_save: { fr: "Enregistrer les modifications", en: "Save changes", pt: "Guardar alterações" },
   update_saved: { fr: "Vos informations ont été mises à jour avec succès.", en: "Your information has been successfully updated.", pt: "As suas informações foram atualizadas com sucesso." },
   update_link_invalid: { fr: "Ce lien de modification est invalide ou a expiré.", en: "This update link is invalid or has expired.", pt: "Este link de atualização é inválido ou expirou." },
+  update_link_expired: { fr: "Ce lien de modification a expiré. Contactez le Secrétariat pour toute modification.", en: "This update link has expired. Please contact the Secretariat for any changes.", pt: "Este link de atualização expirou. Contacte o Secretariado para qualquer alteração." },
+  edit_link_expiry_label: { fr: "Durée de validité du lien de modification (en jours après l'inscription)", en: "Update link validity period (days after registration)", pt: "Duração de validade do link de atualização (dias após a inscrição)" },
+  edit_link_security_note: { fr: "Ce lien est personnel : seul le participant qui le reçoit par email doit l'utiliser pour modifier ses propres données. Il n'est jamais affiché sur le site.", en: "This link is personal: only the participant who receives it by email should use it to update their own data. It is never shown on the site.", pt: "Este link é pessoal: apenas o participante que o recebe por email deve utilizá-lo para atualizar os seus dados. Nunca é apresentado no site." },
   email_tab: { fr: "Email de confirmation", en: "Confirmation email", pt: "Email de confirmação" },
   email_subject_label: { fr: "Objet de l'email", en: "Email subject", pt: "Assunto do email" },
   email_body_label: { fr: "Corps de l'email", en: "Email body", pt: "Corpo do email" },
@@ -229,8 +233,10 @@ const T = {
   duplicate_event_prompt_year: { fr: "Année du nouvel événement :", en: "Year of the new event:", pt: "Ano do novo evento:" },
   duplicate_event_prompt_code: { fr: "Code du nouvel événement (ex: AG43) :", en: "Code of the new event (e.g. AG43):", pt: "Código do novo evento (ex: AG43):" },
   duplicate_event_success: { fr: "Événement dupliqué avec succès (en brouillon) — retrouvez-le dans la liste pour l'éditer.", en: "Event duplicated successfully (as draft) — find it in the list to edit it.", pt: "Evento duplicado com sucesso (como rascunho) — encontre-o na lista para editar." },
-  badge_header_tab: { fr: "En-tête du badge (FR/EN/PT)", en: "Badge header (FR/EN/PT)", pt: "Cabeçalho do crachá (FR/EN/PT)" },
-  badge_background_label: { fr: "Photo de fond du corps du badge", en: "Badge body background photo", pt: "Foto de fundo do corpo do crachá" },
+  badge_header_tab: { fr: "Images du badge (en-tête / corps / pied de page)", en: "Badge images (header / body / footer)", pt: "Imagens do crachá (cabeçalho / corpo / rodapé)" },
+  badge_header_image_label: { fr: "Image d'en-tête", en: "Header image", pt: "Imagem do cabeçalho" },
+  badge_body_image_label: { fr: "Image du corps (le Nom, Prénom et Pays s'affichent par-dessus)", en: "Body image (Name and Country are shown on top)", pt: "Imagem do corpo (Nome e País são exibidos por cima)" },
+  badge_footer_image_label: { fr: "Image du pied de page (le QR code s'affiche en bas à droite)", en: "Footer image (the QR code appears bottom-right)", pt: "Imagem do rodapé (o QR code aparece em baixo à direita)" },
   badge_pdf_label: { fr: "Document PDF (le QR code du badge y renverra)", en: "PDF document (the badge QR code will link to it)", pt: "Documento PDF (o QR code do crachá remeterá para ele)" },
   upload_pdf: { fr: "Choisir un PDF", en: "Choose PDF", pt: "Escolher PDF" },
   archives_title: { fr: "Archives des réunions", en: "Meeting archives", pt: "Arquivo de reuniões" },
@@ -420,31 +426,8 @@ async function loadImageAsDataURL(url) {
   }
 }
 
-// Rend transparents les pixels quasi blancs d'une image (utilisé pour
-// le logo sur les badges, souvent fourni sur fond blanc).
-function stripWhiteBackground(dataUrl) {
-  return new Promise((resolve) => {
-    if (!dataUrl) { resolve(null); return; }
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width; canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0);
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const d = imgData.data;
-        for (let i = 0; i < d.length; i += 4) {
-          if (d[i] > 235 && d[i + 1] > 235 && d[i + 2] > 235) d[i + 3] = 0;
-        }
-        ctx.putImageData(imgData, 0, 0);
-        resolve(canvas.toDataURL("image/png"));
-      } catch (e) { resolve(dataUrl); }
-    };
-    img.onerror = () => resolve(dataUrl);
-    img.src = dataUrl;
-  });
+function imgFormat(dataUrl) {
+  return dataUrl && dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
 }
 
 function pickBadgePdfLink(event, lang) {
@@ -453,76 +436,75 @@ function pickBadgePdfLink(event, lang) {
 }
 
 const BADGE_W = 90, BADGE_H = 130;
+const BADGE_HEADER_H = 24, BADGE_FOOTER_H = 22;
+const BADGE_BODY_H = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H;
 
-async function drawBadgePage(doc, p, eventData, logoDataUrl, bgDataUrl, lang) {
-  // Fond du corps du badge (photo choisie par l'admin), avec un
-  // panneau translucide pour garder le texte lisible.
-  if (bgDataUrl) {
-    try {
-      doc.addImage(bgDataUrl, "JPEG", 0, 26, BADGE_W, BADGE_H - 26);
-      doc.saveGraphicsState();
-      doc.setGState(new doc.GState({ opacity: 0.82 }));
-      doc.setFillColor(245, 242, 234);
-      doc.rect(0, 26, BADGE_W, BADGE_H - 26, "F");
-      doc.restoreGraphicsState();
-    } catch (e) { /* skip */ }
+// Badge composé de 3 images fournies par l'admin (en-tête, corps,
+// pied de page). Les seules variables affichées par-dessus sont le
+// Nom & Prénom et le Pays du participant, plus le QR code (en bas à
+// droite du pied de page, petit format).
+async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, lang) {
+  if (headerImg) {
+    try { doc.addImage(headerImg, imgFormat(headerImg), 0, 0, BADGE_W, BADGE_HEADER_H); } catch (e) { /* skip */ }
+  } else {
+    doc.setFillColor(20, 83, 45);
+    doc.rect(0, 0, BADGE_W, BADGE_HEADER_H, "F");
   }
 
-  doc.setFillColor(20, 83, 45);
-  doc.rect(0, 0, BADGE_W, 26, "F");
-  if (logoDataUrl) {
-    try { doc.addImage(logoDataUrl, "PNG", 5, 4, 18, 18); } catch (e) { /* skip */ }
+  if (bodyImg) {
+    try { doc.addImage(bodyImg, imgFormat(bodyImg), 0, BADGE_HEADER_H, BADGE_W, BADGE_BODY_H); } catch (e) { /* skip */ }
   }
-  const headerLine = (eventData.badgeHeader && eventData.badgeHeader[lang]) || eventData.title[lang] || "";
-  doc.setTextColor(255, 255, 255);
-  doc.setFont(undefined, "bold");
-  doc.setFontSize(8.5);
-  doc.text(headerLine, 26, 11, { maxWidth: 59 });
-  doc.setFont(undefined, "normal");
-  doc.setFontSize(6.5);
-  doc.text(`${eventData.dateShort[lang] || ""} ${eventData.monthYear[lang] || ""}`, 26, 17, { maxWidth: 59 });
-  doc.text(eventData.venue[lang] || "", 26, 21, { maxWidth: 59 });
+
+  if (footerImg) {
+    try { doc.addImage(footerImg, imgFormat(footerImg), 0, BADGE_HEADER_H + BADGE_BODY_H, BADGE_W, BADGE_FOOTER_H); } catch (e) { /* skip */ }
+  } else {
+    doc.setFillColor(245, 242, 234);
+    doc.rect(0, BADGE_HEADER_H + BADGE_BODY_H, BADGE_W, BADGE_FOOTER_H, "F");
+  }
+
+  // Panneau translucide + Nom/Prénom + Pays, centrés sur le corps.
+  const panelY = BADGE_HEADER_H + BADGE_BODY_H / 2 - 15;
+  doc.saveGraphicsState();
+  doc.setGState(new doc.GState({ opacity: 0.82 }));
+  doc.setFillColor(255, 255, 255);
+  doc.rect(5, panelY, BADGE_W - 10, 30, "F");
+  doc.restoreGraphicsState();
 
   doc.setTextColor(26, 23, 18);
   doc.setFont(undefined, "bold");
   doc.setFontSize(15);
   const fullName = `${p.firstName || ""} ${p.lastName || ""}`.trim();
-  doc.text(fullName, BADGE_W / 2, 42, { align: "center", maxWidth: 80 });
+  doc.text(fullName, BADGE_W / 2, panelY + 13, { align: "center", maxWidth: BADGE_W - 16 });
   doc.setFont(undefined, "normal");
-  doc.setFontSize(10);
-  doc.text(p.position || "", BADGE_W / 2, 50, { align: "center", maxWidth: 80 });
-  doc.setFontSize(9.5);
-  doc.setTextColor(90, 90, 90);
-  doc.text(p.organization || "", BADGE_W / 2, 57, { align: "center", maxWidth: 80 });
-  doc.text(p.country || "", BADGE_W / 2, 63, { align: "center" });
+  doc.setFontSize(10.5);
+  doc.setTextColor(70, 70, 70);
+  doc.text(p.country || "", BADGE_W / 2, panelY + 22, { align: "center" });
 
-  // Le QR code renvoie vers le document PDF (programme, etc.) choisi
-  // par l'admin pour la langue courante — pas simplement le numéro.
+  // QR code : petit format, en bas à droite du pied de page — renvoie
+  // vers le document PDF configuré pour la langue courante.
   const pdfLink = pickBadgePdfLink(eventData, lang);
   const qrValue = pdfLink || p.regNumber || p.id || "";
-  const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 240 });
-  doc.addImage(qrDataUrl, "PNG", (BADGE_W - 42) / 2, 72, 42, 42);
-  doc.setFont(undefined, "bold");
-  doc.setFontSize(8.5);
-  doc.setTextColor(26, 23, 18);
-  doc.text(p.regNumber || "", BADGE_W / 2, 120, { align: "center" });
+  const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 160 });
+  const qrSize = 15;
+  const qrY = BADGE_HEADER_H + BADGE_BODY_H + (BADGE_FOOTER_H - qrSize) / 2;
+  doc.addImage(qrDataUrl, "PNG", BADGE_W - qrSize - 4, qrY, qrSize, qrSize);
 }
 
-async function downloadBadges(participants, eventData, logoUrl, lang, filename) {
-  const [logoDataUrlRaw, bgDataUrl] = await Promise.all([
-    loadImageAsDataURL(logoUrl),
-    loadImageAsDataURL(eventData.badgeBackground),
+async function downloadBadges(participants, eventData, lang, filename) {
+  const [headerImg, bodyImg, footerImg] = await Promise.all([
+    loadImageAsDataURL(eventData.badgeHeaderImage),
+    loadImageAsDataURL(eventData.badgeBodyImage),
+    loadImageAsDataURL(eventData.badgeFooterImage),
   ]);
-  const logoDataUrl = await stripWhiteBackground(logoDataUrlRaw);
   const doc = new jsPDF({ unit: "mm", format: [BADGE_W, BADGE_H] });
   for (let i = 0; i < participants.length; i++) {
     if (i > 0) doc.addPage([BADGE_W, BADGE_H]);
-    await drawBadgePage(doc, participants[i], eventData, logoDataUrl, bgDataUrl, lang);
+    await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang);
   }
   doc.save(filename);
 }
 
-const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: DEFAULT_ORG_TYPES[0].label.fr, orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: DEFAULT_HOTELS[0].id, roomId: DEFAULT_HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", arrivalTime: "", departureDate: "", departureTime: "", departureFlightNumber: "", transfer: "yes" };
+const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: DEFAULT_ORG_TYPES[0].label.fr, orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: DEFAULT_HOTELS[0].id, roomId: DEFAULT_HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", arrivalTime: "", departureDate: "", departureTime: "", departureFlightNumber: "" };
 
 export default function App() {
   const [lang, setLang] = useState("fr");
@@ -578,8 +560,9 @@ export default function App() {
       venue: r.venue || DEFAULT_EVENT.venue,
       city: r.city || DEFAULT_EVENT.city,
       country: r.country || DEFAULT_EVENT.country,
-      badgeHeader: r.badge_header || { fr: "", en: "", pt: "" },
-      badgeBackground: r.badge_background || "",
+      badgeHeaderImage: r.badge_header_image || "",
+      badgeBodyImage: r.badge_body_image || "",
+      badgeFooterImage: r.badge_footer_image || "",
       badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
       programPdf: r.program_pdf || { fr: "", en: "", pt: "" },
     };
@@ -1127,6 +1110,27 @@ function ReviewRow({ label, value }) {
   );
 }
 
+function Captcha({ lang, valid, onValidChange }) {
+  const [nums] = useState(() => ({ a: 2 + Math.floor(Math.random() * 8), b: 2 + Math.floor(Math.random() * 8) }));
+  const [input, setInput] = useState("");
+
+  function handleChange(v) {
+    setInput(v);
+    onValidChange(v.trim() !== "" && Number(v) === nums.a + nums.b);
+  }
+
+  return (
+    <div className="max-w-xs">
+      <label className="cb-label">{t("captcha_label", lang)}</label>
+      <div className="flex items-center gap-3">
+        <span className="font-mono font-semibold text-base" style={{ color: "var(--navy)" }}>{nums.a} + {nums.b} =</span>
+        <input type="number" className="cb-input" style={{ width: "90px" }} value={input} onChange={e => handleChange(e.target.value)} />
+        {input !== "" && (valid ? <Check size={18} color="var(--vert-fonce)" /> : <X size={18} color="#8A2A2A" />)}
+      </div>
+    </div>
+  );
+}
+
 function DynamicField({ field, lang, value, onChange }) {
   const label = field.label[lang] + (field.required ? " *" : "");
   if (field.field_type === "textarea") {
@@ -1139,6 +1143,7 @@ function DynamicField({ field, lang, value, onChange }) {
 function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels, orgTypes, formFields }) {
   const titles = ["step1_title","step2_title","step3_title","step4_title","step5_title"];
   const [stepError, setStepError] = useState("");
+  const [captchaValid, setCaptchaValid] = useState(false);
   const fieldsForStep = (n) => formFields.filter(f => f.step === n).sort((a,b) => a.display_order - b.display_order);
 
   function validateAndAdvance() {
@@ -1148,6 +1153,7 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
       return;
     }
     setStepError("");
+    if (step === 5 && !captchaValid) return;
     if (step < 5) setStep(s => s + 1); else onSubmit();
   }
 
@@ -1235,16 +1241,6 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
           {fieldsForStep(4).map(f => (
             <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />
           ))}
-          <div>
-            <label className="cb-label">{t("transfer", lang)}</label>
-            <div className="flex gap-3">
-              {["yes","no"].map(v => (
-                <div key={v} onClick={() => update("transfer", v)} className={`radio-card ${form.transfer===v?"active":""}`}>
-                  {form.transfer===v && <Check size={14} color="var(--lagune)"/>} {v==="yes" ? t("yes",lang) : t("no",lang)}
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
@@ -1296,8 +1292,11 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
               {fieldsForStep(4).map(f => (
                 <ReviewRow key={f.id} label={f.label[lang]} value={form[f.field_key]} />
               ))}
-              <ReviewRow label={t("transfer", lang)} value={form.transfer === "yes" ? t("yes", lang) : t("no", lang)} />
             </div>
+          </div>
+
+          <div className="border-t pt-5" style={{ borderColor: "#E7DCC2" }}>
+            <Captcha lang={lang} valid={captchaValid} onValidChange={setCaptchaValid} />
           </div>
         </div>
       )}
@@ -1314,7 +1313,7 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
         {step < 5 ? (
           <button onClick={validateAndAdvance} className="cb-btn">{t("next", lang)} <ChevronRight size={16} /></button>
         ) : (
-          <button onClick={validateAndAdvance} className="cb-btn" disabled={submitting} style={{ opacity: submitting ? 0.7 : 1 }}>
+          <button onClick={validateAndAdvance} className="cb-btn" disabled={submitting || !captchaValid} style={{ opacity: (submitting || !captchaValid) ? 0.5 : 1 }}>
             {submitting ? t("submitting", lang) : t("submit", lang)} {!submitting && <Check size={16} />}
           </button>
         )}
@@ -1384,7 +1383,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
   async function handleDownloadBadges() {
     setGeneratingBadges(true);
     try {
-      await downloadBadges(filtered, eventData, logoUrl, lang, `badges-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`);
+      await downloadBadges(filtered, eventData, lang, `badges-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`);
     } catch (e) { /* best effort */ }
     setGeneratingBadges(false);
   }
@@ -1507,7 +1506,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureTime || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureFlightNumber || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  <button onClick={() => downloadBadges([p], eventData, logoUrl, lang, `badge-${p.regNumber}.pdf`)} title={t("download_badge", lang)}><QrCode size={14} color="var(--vert-fonce)" /></button>
+                  <button onClick={() => downloadBadges([p], eventData, lang, `badge-${p.regNumber}.pdf`)} title={t("download_badge", lang)}><QrCode size={14} color="var(--vert-fonce)" /></button>
                 </td>
                 {canEdit && (
                   <td className="px-3 py-2 whitespace-nowrap">
@@ -2479,6 +2478,7 @@ function UsersManager({ lang, currentUserId }) {
 function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView }) {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [expired, setExpired] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -2489,6 +2489,7 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
       if (!token) { setNotFound(true); setLoading(false); return; }
       const { data, error } = await supabase.rpc("get_participant_by_token", { p_token: token });
       if (error || !data) { setNotFound(true); setLoading(false); return; }
+      if (data.expired) { setExpired(true); setLoading(false); return; }
       setForm({
         lastName: data.last_name || "", firstName: data.first_name || "", position: data.position || "", organization: data.organization || "",
         orgType: data.org_type || (orgTypes[0]?.label.fr || ""), orgOther: data.org_other || "",
@@ -2497,7 +2498,6 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
         checkIn: data.check_in || "", checkOut: data.check_out || "",
         flightNumber: data.flight_number || "", airline: data.airline || "", arrivalDate: data.arrival_date || "", arrivalTime: data.arrival_time || "",
         departureDate: data.departure_date || "", departureTime: data.departure_time || "", departureFlightNumber: data.departure_flight_number || "",
-        transfer: data.transfer || "yes",
       });
       setLoading(false);
     })();
@@ -2513,9 +2513,10 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
       hotelName: form.wantsHotel === "yes" ? (selectedHotel?.name || "") : "",
       roomType: form.wantsHotel === "yes" ? (selectedRoom?.type || "") : "",
     };
-    const { error } = await supabase.rpc("update_participant_by_token", { p_token: token, payload });
+    const { data, error } = await supabase.rpc("update_participant_by_token", { p_token: token, payload });
     setSaving(false);
     if (error) { setError(t("submit_error", lang)); return; }
+    if (data === false) { setExpired(true); return; }
     setSaved(true);
   }
 
@@ -2523,6 +2524,12 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
   if (notFound) return (
     <div className="max-w-xl mx-auto px-5 py-20 text-center">
       <p className="text-black/60 mb-6">{t("update_link_invalid", lang)}</p>
+      <button onClick={() => setView("public")} className="cb-btn">{t("back_home", lang)}</button>
+    </div>
+  );
+  if (expired) return (
+    <div className="max-w-xl mx-auto px-5 py-20 text-center">
+      <p className="text-black/60 mb-6">{t("update_link_expired", lang)}</p>
       <button onClick={() => setView("public")} className="cb-btn">{t("back_home", lang)}</button>
     </div>
   );
@@ -2604,16 +2611,6 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
           <div className="cb-label mb-3">{t("step4_title", lang)}</div>
           <div className="grid sm:grid-cols-2 gap-5">
             {fieldsForStep(4).map(f => <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />)}
-            <div>
-              <label className="cb-label">{t("transfer", lang)}</label>
-              <div className="flex gap-3">
-                {["yes","no"].map(v => (
-                  <div key={v} onClick={() => update("transfer", v)} className={`radio-card ${form.transfer===v?"active":""}`}>
-                    {form.transfer===v && <Check size={14} color="var(--lagune)"/>} {v==="yes" ? t("yes",lang) : t("no",lang)}
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -2640,6 +2637,7 @@ function EmailTemplateManager({ lang, canEdit }) {
       setDraft({
         email_subject_fr: s.email_subject_fr || "", email_subject_en: s.email_subject_en || "", email_subject_pt: s.email_subject_pt || "",
         email_body_fr: s.email_body_fr || "", email_body_en: s.email_body_en || "", email_body_pt: s.email_body_pt || "",
+        edit_link_expiry_days: s.edit_link_expiry_days || "30",
       });
     })();
   }, []);
@@ -2672,6 +2670,12 @@ function EmailTemplateManager({ lang, canEdit }) {
       <Field label={t("email_body_label", lang)}>
         <textarea className="cb-input" rows={10} disabled={!canEdit} value={draft[`email_body_${activeLang}`]} onChange={e=>set(`email_body_${activeLang}`, e.target.value)} />
       </Field>
+      <div className="border-t pt-4" style={{ borderColor: "#E7DCC2" }}>
+        <Field label={t("edit_link_expiry_label", lang)}>
+          <input type="number" min="1" className="cb-input" style={{ maxWidth: "140px" }} disabled={!canEdit} value={draft.edit_link_expiry_days} onChange={e=>set("edit_link_expiry_days", e.target.value)} />
+        </Field>
+        <p className="text-xs text-black/50 mt-2">{t("edit_link_security_note", lang)}</p>
+      </div>
       {canEdit && (
         <div className="flex gap-2 items-center">
           <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
@@ -2693,7 +2697,7 @@ function emptyEventDraft() {
     title: { ...EMPTY_LANG3 }, theme: { ...EMPTY_LANG3 }, subtitle: { ...EMPTY_LANG3 },
     date_short: { ...EMPTY_LANG3 }, month_year: { ...EMPTY_LANG3 }, venue: { ...EMPTY_LANG3 },
     city: "", country: "", status: "draft",
-    badge_header: { ...EMPTY_LANG3 }, badge_background: "", badge_pdf: { ...EMPTY_LANG3 },
+    badge_header_image: "", badge_body_image: "", badge_footer_image: "", badge_pdf: { ...EMPTY_LANG3 },
     program_pdf: { ...EMPTY_LANG3 },
   };
 }
@@ -2843,12 +2847,19 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
 
           <div className="border-t pt-5" style={{ borderColor: "#E7DCC2" }}>
             <div className="cb-label mb-3">{t("badge_header_tab", lang)}</div>
-            <div className="grid sm:grid-cols-3 gap-3 mb-4">
-              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.badge_header[l]} onChange={e=>set3("badge_header", l, e.target.value)} />)}
-            </div>
-            <div className="mb-4">
-              <ImageUploader lang={lang} value={editing.badge_background} onChange={url => setEditing(x => ({ ...x, badge_background: url }))} folder="badges" />
-              <div className="cb-label mt-1">{t("badge_background_label", lang)}</div>
+            <div className="grid sm:grid-cols-3 gap-4 mb-4">
+              <div>
+                <ImageUploader lang={lang} value={editing.badge_header_image} onChange={url => setEditing(x => ({ ...x, badge_header_image: url }))} folder="badges" />
+                <div className="cb-label mt-1">{t("badge_header_image_label", lang)}</div>
+              </div>
+              <div>
+                <ImageUploader lang={lang} value={editing.badge_body_image} onChange={url => setEditing(x => ({ ...x, badge_body_image: url }))} folder="badges" />
+                <div className="cb-label mt-1">{t("badge_body_image_label", lang)}</div>
+              </div>
+              <div>
+                <ImageUploader lang={lang} value={editing.badge_footer_image} onChange={url => setEditing(x => ({ ...x, badge_footer_image: url }))} folder="badges" />
+                <div className="cb-label mt-1">{t("badge_footer_image_label", lang)}</div>
+              </div>
             </div>
             <div>
               <div className="cb-label mb-2">{t("badge_pdf_label", lang)}</div>
