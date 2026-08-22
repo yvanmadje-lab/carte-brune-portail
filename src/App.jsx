@@ -61,7 +61,7 @@ const DEFAULT_FORM_FIELDS = [
   { id: "position", field_key: "position", step: 1, label: { fr: "Fonction", en: "Position", pt: "Função" }, field_type: "text", required: false, display_order: 3 },
   { id: "organization", field_key: "organization", step: 1, label: { fr: "Organisme", en: "Organization", pt: "Organização" }, field_type: "text", required: false, display_order: 4 },
   { id: "city", field_key: "city", step: 2, label: { fr: "Ville", en: "City", pt: "Cidade" }, field_type: "text", required: false, display_order: 1 },
-  { id: "phone", field_key: "phone", step: 2, label: { fr: "Téléphone", en: "Phone", pt: "Telefone" }, field_type: "tel", required: false, display_order: 2 },
+  { id: "phone", field_key: "phone", step: 2, label: { fr: "Numéro WhatsApp (avec indicatif, ex: +225 07 12 34 56 78)", en: "WhatsApp number (with country code, e.g. +225 07 12 34 56 78)", pt: "Número WhatsApp (com indicativo, ex: +225 07 12 34 56 78)" }, field_type: "tel", required: true, display_order: 2 },
   { id: "email", field_key: "email", step: 2, label: { fr: "Email", en: "Email", pt: "Email" }, field_type: "email", required: false, display_order: 3 },
   { id: "address", field_key: "address", step: 2, label: { fr: "Adresse", en: "Address", pt: "Endereço" }, field_type: "text", required: false, display_order: 4 },
   { id: "flightNumber", field_key: "flightNumber", step: 4, label: { fr: "Numéro de vol (arrivée)", en: "Flight number (arrival)", pt: "Número do voo (chegada)" }, field_type: "text", required: false, display_order: 1 },
@@ -139,6 +139,11 @@ const T = {
   update_link_expired: { fr: "Ce lien de modification a expiré. Contactez le Secrétariat pour toute modification.", en: "This update link has expired. Please contact the Secretariat for any changes.", pt: "Este link de atualização expirou. Contacte o Secretariado para qualquer alteração." },
   edit_link_expiry_label: { fr: "Durée de validité du lien de modification (en jours après l'inscription)", en: "Update link validity period (days after registration)", pt: "Duração de validade do link de atualização (dias após a inscrição)" },
   edit_link_security_note: { fr: "Ce lien est personnel : seul le participant qui le reçoit par email doit l'utiliser pour modifier ses propres données. Il n'est jamais affiché sur le site.", en: "This link is personal: only the participant who receives it by email should use it to update their own data. It is never shown on the site.", pt: "Este link é pessoal: apenas o participante que o recebe por email deve utilizá-lo para atualizar os seus dados. Nunca é apresentado no site." },
+  whatsapp_tab: { fr: "WhatsApp", en: "WhatsApp", pt: "WhatsApp" },
+  whatsapp_body_label: { fr: "Message WhatsApp de confirmation", en: "WhatsApp confirmation message", pt: "Mensagem de confirmação no WhatsApp" },
+  whatsapp_group_link_label: { fr: "Lien d'invitation du groupe WhatsApp \"Browncard Event\"", en: "Invite link for the \"Browncard Event\" WhatsApp group", pt: "Link de convite do grupo WhatsApp \"Browncard Event\"" },
+  whatsapp_group_help: { fr: "Créez d'abord ce groupe manuellement dans WhatsApp (WhatsApp n'autorise aucune création de groupe par un logiciel externe), puis collez ici son lien d'invitation (Infos du groupe → Inviter via un lien). Il sera automatiquement inclus dans le message envoyé à chaque participant. Variable disponible : {{whatsappGroupLink}}", en: "First create this group manually in WhatsApp (WhatsApp does not allow group creation via external software), then paste its invite link here (Group info → Invite via link). It will be automatically included in the message sent to each participant. Available variable: {{whatsappGroupLink}}", pt: "Crie primeiro este grupo manualmente no WhatsApp (o WhatsApp não permite a criação de grupos por software externo), depois cole aqui o link de convite (Informações do grupo → Convidar através de link). Será incluído automaticamente na mensagem enviada a cada participante. Variável disponível: {{whatsappGroupLink}}" },
+  whatsapp_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}" },
   email_tab: { fr: "Email de confirmation", en: "Confirmation email", pt: "Email de confirmação" },
   email_subject_label: { fr: "Objet de l'email", en: "Email subject", pt: "Assunto do email" },
   email_body_label: { fr: "Corps de l'email", en: "Email body", pt: "Corpo do email" },
@@ -267,6 +272,7 @@ const T = {
   org_types_tab: { fr: "Types d'organisme", en: "Organization types", pt: "Tipos de organização" },
   is_other_label: { fr: "Déclenche le champ \"précisez\" (option \"Autre\")", en: "Triggers the \"please specify\" field (the \"Other\" option)", pt: "Ativa o campo \"especifique\" (opção \"Outro\")" },
   required_fields_error: { fr: "Merci de compléter les champs obligatoires :", en: "Please complete the required fields:", pt: "Preencha os campos obrigatórios:" },
+  phone_format_error: { fr: "Merci d'indiquer l'indicatif pays (commençant par +) pour :", en: "Please include the country code (starting with +) for:", pt: "Indique o indicativo do país (começando por +) para:" },
   form_fields_tab: { fr: "Champs du formulaire", en: "Form fields", pt: "Campos do formulário" },
   field_key_label: { fr: "Clé technique (unique, sans espace)", en: "Technical key (unique, no spaces)", pt: "Chave técnica (única, sem espaços)" },
   field_type_label: { fr: "Type de champ", en: "Field type", pt: "Tipo de campo" },
@@ -759,6 +765,19 @@ export default function App() {
         }),
       }).catch(() => { /* best effort */ });
     }
+
+    // Envoi du message WhatsApp de confirmation (avec le lien du
+    // groupe "Browncard Event") — également au mieux.
+    if (form.phone) {
+      fetch("/api/send-whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: form.phone, lang, firstName: form.firstName, lastName: form.lastName,
+          regNumber, eventTitle: eventData.title[lang],
+        }),
+      }).catch(() => { /* best effort */ });
+    }
   }
 
   function startOver() {
@@ -1150,6 +1169,11 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
     const missing = fieldsForStep(step).filter(f => f.required && !String(form[f.field_key] || "").trim());
     if (missing.length) {
       setStepError(t("required_fields_error", lang) + " " + missing.map(f => f.label[lang]).join(", "));
+      return;
+    }
+    const badPhones = fieldsForStep(step).filter(f => f.field_type === "tel" && form[f.field_key] && !/^\+\d{6,15}$/.test(String(form[f.field_key]).replace(/[\s.-]/g, "")));
+    if (badPhones.length) {
+      setStepError(t("phone_format_error", lang) + " " + badPhones.map(f => f.label[lang]).join(", "));
       return;
     }
     setStepError("");
@@ -1625,6 +1649,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
     ["orgtypes", t("org_types_tab", lang)],
     ["formfields", t("form_fields_tab", lang)],
     ["email", t("email_tab", lang)],
+    ["whatsapp", t("whatsapp_tab", lang)],
     ["tourism", t("tourism_tab", lang)],
     ["hotels", t("hotels_tab", lang)],
     ["speakers", t("speakers_tab", lang)],
@@ -1656,6 +1681,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
       {sub === "orgtypes" && <OrgTypesManager lang={lang} canEdit={canEdit} />}
       {sub === "formfields" && <FormFieldsManager lang={lang} canEdit={canEdit} />}
       {sub === "email" && <EmailTemplateManager lang={lang} canEdit={canEdit} />}
+      {sub === "whatsapp" && <WhatsAppTemplateManager lang={lang} canEdit={canEdit} />}
       {sub === "tourism" && <TourismManager lang={lang} canEdit={canEdit} eventId={eventId} />}
       {sub === "hotels" && <HotelsManager lang={lang} canEdit={canEdit} eventId={eventId} />}
       {sub === "speakers" && <SpeakersManager lang={lang} canEdit={canEdit} eventId={eventId} />}
@@ -2962,6 +2988,66 @@ function FooterManager({ lang, footerText, onFooterChange, canEdit }) {
       <Field label={t("footer_text_label", lang)}>
         <textarea className="cb-input" rows={4} disabled={!canEdit} value={draft[activeLang]} onChange={e=>set(activeLang, e.target.value)} />
       </Field>
+      {canEdit && (
+        <div className="flex gap-2 items-center">
+          <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+          {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WhatsAppTemplateManager({ lang, canEdit }) {
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [activeLang, setActiveLang] = useState("fr");
+
+  useEffect(() => {
+    (async () => {
+      const s = await getAllSettings();
+      setDraft({
+        whatsapp_body_fr: s.whatsapp_body_fr || "", whatsapp_body_en: s.whatsapp_body_en || "", whatsapp_body_pt: s.whatsapp_body_pt || "",
+        whatsapp_group_link: s.whatsapp_group_link || "",
+      });
+    })();
+  }, []);
+
+  function set(key, value) { setDraft(d => ({ ...d, [key]: value })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await Promise.all(Object.entries(draft).map(([key, value]) => setSetting(key, value)));
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  if (!draft) return null;
+
+  return (
+    <div className="bg-white border p-5 max-w-2xl space-y-4" style={{ borderColor: "#CFC4A3" }}>
+      {!canEdit && <div className="text-xs px-3 py-2 mb-2 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
+
+      <Field label={t("whatsapp_group_link_label", lang)}>
+        <input type="url" className="cb-input" disabled={!canEdit} value={draft.whatsapp_group_link} onChange={e=>set("whatsapp_group_link", e.target.value)} placeholder="https://chat.whatsapp.com/..." />
+      </Field>
+      <p className="text-xs text-black/50">{t("whatsapp_group_help", lang)}</p>
+
+      <div className="border-t pt-4" style={{ borderColor: "#E7DCC2" }}>
+        <div className="flex gap-2 mb-2">
+          {["fr","en","pt"].map(l => (
+            <button key={l} onClick={() => setActiveLang(l)} className="px-3 py-1 text-xs" style={{ background: activeLang === l ? "var(--vert-fonce)" : "#fff", color: activeLang === l ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{l.toUpperCase()}</button>
+          ))}
+        </div>
+        <p className="text-xs text-black/50 mb-2">{t("whatsapp_vars_help", lang)}</p>
+        <Field label={t("whatsapp_body_label", lang)}>
+          <textarea className="cb-input" rows={8} disabled={!canEdit} value={draft[`whatsapp_body_${activeLang}`]} onChange={e=>set(`whatsapp_body_${activeLang}`, e.target.value)} />
+        </Field>
+      </div>
+
       {canEdit && (
         <div className="flex gap-2 items-center">
           <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>

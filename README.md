@@ -35,7 +35,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 12. `supabase/multi_event_schema.sql` (architecture multi-événements complète : table `events`, contenu par événement, duplication, archives, badges personnalisables)
 13. `supabase/program_pdf_schema.sql` (document Programme en PDF, par événement et par langue)
 14. `supabase/edit_link_expiry_badges_schema.sql` (délai d'expiration configurable du lien de modification + badges en 3 images en-tête/corps/pied de page)
-14. `supabase/edit_link_expiry_badges_schema.sql` (délai d'expiration configurable du lien de modification + badges en 3 images)
+15. `supabase/whatsapp_schema.sql` (numéro WhatsApp obligatoire + confirmation WhatsApp + lien du groupe "Browncard Event")
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -403,6 +403,52 @@ son destinataire est censé l'utiliser pour modifier ses propres
 données — c'est une convention d'usage, pas une restriction technique
 supplémentaire au-delà du secret du lien lui-même et de son
 expiration.
+
+## Numéro WhatsApp obligatoire + confirmation par WhatsApp + groupe "Browncard Event"
+
+Le champ "Téléphone" du formulaire d'inscription est renommé
+**"Numéro WhatsApp"**, devient **obligatoire**, et exige l'indicatif
+pays (le participant doit saisir un numéro commençant par `+`, ex.
+`+225 07 12 34 56 78`) — une erreur claire s'affiche sinon.
+
+En plus de l'email, un **message WhatsApp de confirmation** est
+maintenant envoyé automatiquement à chaque participant.
+
+⚠️ **Important, limite de la plateforme WhatsApp** : il n'existe
+**aucune API officielle permettant de créer un groupe WhatsApp par
+logiciel** — Meta réserve cette fonctionnalité à l'application
+WhatsApp elle-même. La solution mise en place :
+1. Créez vous-même le groupe **"Browncard Event"** dans WhatsApp
+   (comme d'habitude, depuis votre téléphone) ;
+2. Dans le groupe : **Infos du groupe → Inviter via un lien** →
+   copiez ce lien ;
+3. Collez-le dans **Contenu du site → "WhatsApp"** (nouvel onglet) —
+   il sera automatiquement inclus dans le message WhatsApp envoyé à
+   chaque participant, qui pourra rejoindre le groupe en un clic.
+
+Le même onglet permet aussi d'éditer le texte du message WhatsApp
+dans les 3 langues (variables : `{{firstName}}`, `{{lastName}}`,
+`{{regNumber}}`, `{{eventTitle}}`, `{{whatsappGroupLink}}`).
+
+### Mise en place (obligatoire pour que les messages WhatsApp partent réellement)
+
+1. Exécutez `supabase/whatsapp_schema.sql` dans Supabase.
+2. Créez un compte sur **twilio.com**, activez le **WhatsApp
+   Sandbox** (gratuit, pour tester) ou une ligne WhatsApp Business
+   vérifiée (pour la production). Récupérez : Account SID, Auth
+   Token, et le numéro WhatsApp expéditeur.
+3. Sur Vercel, **Project → Settings → Environment Variables**,
+   ajoutez :
+   ```
+   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+   ```
+4. Redéployez (**Deployments → ⋯ → Redeploy**).
+
+Sans cette configuration, les inscriptions continuent de fonctionner
+normalement — seul l'envoi WhatsApp échoue silencieusement (comme
+pour l'email sans Resend configuré).
 
 ## Correctif — modification d'inscription via le lien email
 
