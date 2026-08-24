@@ -1,7 +1,7 @@
 // Fonction serverless Vercel — envoie le message WhatsApp de
 // confirmation d'inscription (avec le lien du groupe "Browncard
-// Event") via l'API WhatsApp de Twilio.
-// Ne s'exécute jamais dans le navigateur : les identifiants restent secrets.
+// Event") via l'API Zavu.
+// Ne s'exécute jamais dans le navigateur : la clé API reste secrète.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -45,30 +45,25 @@ export default async function handler(req, res) {
       whatsappGroupLink: map.whatsapp_group_link || "",
     };
 
-    const body = fillTemplate(map[`whatsapp_body_${safeLang}`] || "Votre inscription est confirmée : {{regNumber}}", vars);
+    const text = fillTemplate(map[`whatsapp_body_${safeLang}`] || "Votre inscription est confirmée : {{regNumber}}", vars);
 
-    const sid = process.env.TWILIO_ACCOUNT_SID;
-    const token = process.env.TWILIO_AUTH_TOKEN;
-    const from = process.env.TWILIO_WHATSAPP_FROM; // ex: whatsapp:+14155238886
-
-    if (!sid || !token || !from) {
-      res.status(500).json({ error: "Twilio credentials missing on server" });
+    const apiKey = process.env.ZAVU_API_KEY;
+    if (!apiKey) {
+      res.status(500).json({ error: "ZAVU_API_KEY missing on server" });
       return;
     }
 
-    const to = phone.startsWith("whatsapp:") ? phone : `whatsapp:${phone}`;
-
-    const twilioRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    const zavuRes = await fetch("https://api.zavu.dev/v1/messages", {
       method: "POST",
       headers: {
-        "Authorization": "Basic " + Buffer.from(`${sid}:${token}`).toString("base64"),
-        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-      body: new URLSearchParams({ From: from, To: to, Body: body }),
+      body: JSON.stringify({ to: phone, channel: "whatsapp", text }),
     });
 
-    if (!twilioRes.ok) {
-      const errText = await twilioRes.text();
+    if (!zavuRes.ok) {
+      const errText = await zavuRes.text();
       res.status(502).json({ error: "WhatsApp provider error", detail: errText });
       return;
     }
