@@ -144,6 +144,8 @@ const T = {
   whatsapp_group_link_label: { fr: "Lien d'invitation du groupe WhatsApp \"Browncard Event\"", en: "Invite link for the \"Browncard Event\" WhatsApp group", pt: "Link de convite do grupo WhatsApp \"Browncard Event\"" },
   whatsapp_group_help: { fr: "Créez d'abord ce groupe manuellement dans WhatsApp (WhatsApp n'autorise aucune création de groupe par un logiciel externe), puis collez ici son lien d'invitation (Infos du groupe → Inviter via un lien). Il sera automatiquement inclus dans le message envoyé à chaque participant. Variable disponible : {{whatsappGroupLink}}", en: "First create this group manually in WhatsApp (WhatsApp does not allow group creation via external software), then paste its invite link here (Group info → Invite via link). It will be automatically included in the message sent to each participant. Available variable: {{whatsappGroupLink}}", pt: "Crie primeiro este grupo manualmente no WhatsApp (o WhatsApp não permite a criação de grupos por software externo), depois cole aqui o link de convite (Informações do grupo → Convidar através de link). Será incluído automaticamente na mensagem enviada a cada participante. Variável disponível: {{whatsappGroupLink}}" },
   whatsapp_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}" },
+  whatsapp_template_id_label: { fr: "Identifiant du modèle WhatsApp approuvé (Zavu)", en: "Approved WhatsApp template ID (Zavu)", pt: "ID do modelo WhatsApp aprovado (Zavu)" },
+  whatsapp_template_help: { fr: "Laissez vide pour envoyer en texte libre (peut échouer, WhatsApp l'exige rarement en dehors d'une conversation déjà commencée par le participant). Une fois votre modèle approuvé par Meta dans Zavu, collez son identifiant ici — il sera utilisé automatiquement à la place.\n\nLors de la création du modèle dans Zavu, utilisez impérativement 5 variables DANS CET ORDRE : 1) Prénom, 2) Nom, 3) Nom de l'événement, 4) Numéro d'inscription, 5) Lien du groupe WhatsApp.", en: "Leave empty to send as free text (may fail — WhatsApp rarely allows this outside a conversation the participant already started). Once your template is approved by Meta in Zavu, paste its ID here — it will be used automatically instead.\n\nWhen creating the template in Zavu, use exactly 5 variables IN THIS ORDER: 1) First name, 2) Last name, 3) Event name, 4) Registration number, 5) WhatsApp group link.", pt: "Deixe vazio para enviar como texto livre (pode falhar — o WhatsApp raramente permite isto fora de uma conversa já iniciada pelo participante). Assim que o seu modelo for aprovado pela Meta no Zavu, cole aqui o seu ID — será utilizado automaticamente.\n\nAo criar o modelo no Zavu, utilize exatamente 5 variáveis NESTA ORDEM: 1) Nome próprio, 2) Apelido, 3) Nome do evento, 4) Número de inscrição, 5) Link do grupo WhatsApp." },
   email_tab: { fr: "Email de confirmation", en: "Confirmation email", pt: "Email de confirmação" },
   email_subject_label: { fr: "Objet de l'email", en: "Email subject", pt: "Assunto do email" },
   email_body_label: { fr: "Corps de l'email", en: "Email body", pt: "Corpo do email" },
@@ -3010,6 +3012,7 @@ function WhatsAppTemplateManager({ lang, canEdit }) {
       setDraft({
         whatsapp_body_fr: s.whatsapp_body_fr || "", whatsapp_body_en: s.whatsapp_body_en || "", whatsapp_body_pt: s.whatsapp_body_pt || "",
         whatsapp_group_link: s.whatsapp_group_link || "",
+        whatsapp_template_id: s.whatsapp_template_id || "",
       });
     })();
   }, []);
@@ -3035,6 +3038,13 @@ function WhatsAppTemplateManager({ lang, canEdit }) {
         <input type="url" className="cb-input" disabled={!canEdit} value={draft.whatsapp_group_link} onChange={e=>set("whatsapp_group_link", e.target.value)} placeholder="https://chat.whatsapp.com/..." />
       </Field>
       <p className="text-xs text-black/50">{t("whatsapp_group_help", lang)}</p>
+
+      <div className="border-t pt-4" style={{ borderColor: "#E7DCC2" }}>
+        <Field label={t("whatsapp_template_id_label", lang)}>
+          <input className="cb-input font-mono" disabled={!canEdit} value={draft.whatsapp_template_id} onChange={e=>set("whatsapp_template_id", e.target.value)} placeholder="tpl_confirmation_inscription" />
+        </Field>
+        <p className="text-xs text-black/50 mt-2 whitespace-pre-line">{t("whatsapp_template_help", lang)}</p>
+      </div>
 
       <div className="border-t pt-4" style={{ borderColor: "#E7DCC2" }}>
         <div className="flex gap-2 mb-2">

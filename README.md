@@ -36,6 +36,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 13. `supabase/program_pdf_schema.sql` (document Programme en PDF, par événement et par langue)
 14. `supabase/edit_link_expiry_badges_schema.sql` (délai d'expiration configurable du lien de modification + badges en 3 images en-tête/corps/pied de page)
 15. `supabase/whatsapp_schema.sql` (numéro WhatsApp obligatoire + confirmation WhatsApp + lien du groupe "Browncard Event")
+16. `supabase/whatsapp_template_schema.sql` (identifiant du modèle WhatsApp approuvé)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -432,23 +433,50 @@ dans les 3 langues (variables : `{{firstName}}`, `{{lastName}}`,
 
 ### Mise en place (obligatoire pour que les messages WhatsApp partent réellement)
 
+Vous avez déjà un compte **Zavu** connecté à votre WhatsApp Business —
+il ne reste que la connexion au site :
+
 1. Exécutez `supabase/whatsapp_schema.sql` dans Supabase.
-2. Créez un compte sur **twilio.com**, activez le **WhatsApp
-   Sandbox** (gratuit, pour tester) ou une ligne WhatsApp Business
-   vérifiée (pour la production). Récupérez : Account SID, Auth
-   Token, et le numéro WhatsApp expéditeur.
+2. Dans votre tableau de bord Zavu, récupérez votre **clé API**
+   (généralement au format `zavu_live_...`).
 3. Sur Vercel, **Project → Settings → Environment Variables**,
    ajoutez :
    ```
-   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-   TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-   TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+   ZAVU_API_KEY=zavu_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    ```
 4. Redéployez (**Deployments → ⋯ → Redeploy**).
 
 Sans cette configuration, les inscriptions continuent de fonctionner
 normalement — seul l'envoi WhatsApp échoue silencieusement (comme
 pour l'email sans Resend configuré).
+
+**Si les messages n'arrivent pas** (icône ❌ rouge dans le journal
+Zavu) : WhatsApp (règle de Meta, pas de Zavu) exige un **modèle de
+message pré-approuvé** pour tout message envoyé à l'initiative de
+l'entreprise — ce qui est le cas ici, puisque c'est l'inscription sur
+le site qui déclenche l'envoi, pas une conversation commencée par le
+participant.
+
+**La solution est déjà prête côté code**, il ne reste que la partie
+côté Zavu/Meta :
+1. Dans le tableau de bord Zavu, section **Templates**, créez un
+   modèle (ex. `confirmation_inscription`), catégorie *Utility*, avec
+   **exactement 5 variables dans cet ordre** : 1) Prénom, 2) Nom,
+   3) Nom de l'événement, 4) Numéro d'inscription, 5) Lien du groupe
+   WhatsApp. Exemple de texte à soumettre :
+   > Bonjour {{1}} {{2}}, votre inscription à {{3}} est confirmée
+   > sous le numéro {{4}}. Rejoignez le groupe WhatsApp officiel :
+   > {{5}}
+2. Une fois Meta l'a approuvé (généralement sous 24h), copiez
+   l'**identifiant du modèle** depuis Zavu ;
+3. Collez-le dans **Administration → Contenu du site → WhatsApp →
+   "Identifiant du modèle WhatsApp approuvé"**, puis enregistrez.
+
+Dès que ce champ est rempli, le site bascule automatiquement sur
+l'envoi par modèle approuvé — aucune autre modification de code n'est
+nécessaire. Tant qu'il est vide, le site continue d'essayer l'envoi en
+texte libre (qui échouera probablement hors modèle, sans bloquer le
+reste de l'inscription).
 
 ## Correctif — modification d'inscription via le lien email
 
