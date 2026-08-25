@@ -2,6 +2,14 @@
 // confirmation d'inscription (avec le lien du groupe "Browncard
 // Event") via l'API Zavu.
 // Ne s'exécute jamais dans le navigateur : la clé API reste secrète.
+//
+// Deux modes :
+// - Si un modèle WhatsApp approuvé (whatsapp_template_id) est
+//   configuré dans l'admin, on l'utilise (obligatoire pour les
+//   messages envoyés à l'initiative de l'entreprise, règle Meta).
+// - Sinon, on retente un envoi en texte libre (ne sera livré que si
+//   le participant a déjà écrit au numéro WhatsApp dans les 24h, ou
+//   pas livré du tout en dehors de cette fenêtre).
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -32,7 +40,7 @@ export default async function handler(req, res) {
     const { data: settings } = await supabase
       .from("site_settings")
       .select("key, value")
-      .in("key", [`whatsapp_body_${safeLang}`, "whatsapp_group_link"]);
+      .in("key", [`whatsapp_body_${safeLang}`, "whatsapp_group_link", "whatsapp_template_id"]);
 
     const map = {};
     (settings || []).forEach(r => { map[r.key] = r.value; });
@@ -45,13 +53,37 @@ export default async function handler(req, res) {
       whatsappGroupLink: map.whatsapp_group_link || "",
     };
 
-    const text = fillTemplate(map[`whatsapp_body_${safeLang}`] || "Votre inscription est confirmée : {{regNumber}}", vars);
-
     const apiKey = process.env.ZAVU_API_KEY;
     if (!apiKey) {
       res.status(500).json({ error: "ZAVU_API_KEY missing on server" });
       return;
     }
+
+    const templateId = (map.whatsapp_template_id || "").trim();
+
+    const body = templateId
+      ? {
+          to: phone,
+          channel: "whatsapp",
+          messageType: "template",
+          content: {
+            templateId,
+            // Ordre fixe des variables — voir l'aide de l'onglet
+            // WhatsApp de l'admin pour créer le modèle dans le même ordre.
+            templateVariables: {
+              "1": vars.firstName,
+              "2": vars.lastName,
+              "3": vars.eventTitle,
+              "4": vars.regNumber,
+              "5": vars.whatsappGroupLink,
+            },
+          },
+        }
+      : {
+          to: phone,
+          channel: "whatsapp",
+          text: fillTemplate(map[`whatsapp_body_${safeLang}`] || "Votre inscription est confirmée : {{regNumber}}", vars),
+        };
 
     const zavuRes = await fetch("https://api.zavu.dev/v1/messages", {
       method: "POST",
@@ -59,7 +91,7 @@ export default async function handler(req, res) {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ to: phone, channel: "whatsapp", text }),
+      body: JSON.stringify(body),
     });
 
     if (!zavuRes.ok) {
