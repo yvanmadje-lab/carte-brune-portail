@@ -36,7 +36,7 @@ Dans Supabase → **SQL Editor**, exécutez dans l'ordre :
 13. `supabase/program_pdf_schema.sql` (document Programme en PDF, par événement et par langue)
 14. `supabase/edit_link_expiry_badges_schema.sql` (délai d'expiration configurable du lien de modification + badges en 3 images en-tête/corps/pied de page)
 15. `supabase/whatsapp_schema.sql` (numéro WhatsApp obligatoire + confirmation WhatsApp + lien du groupe "Browncard Event")
-16. `supabase/whatsapp_template_schema.sql` (identifiant du modèle WhatsApp approuvé)
+16. `supabase/whatsapp_template_per_lang_schema.sql` (un identifiant de modèle WhatsApp approuvé par langue, FR/EN/PT)
 
 Dans **Authentication → Users → Add user**, créez votre compte admin.
 
@@ -457,26 +457,34 @@ l'entreprise — ce qui est le cas ici, puisque c'est l'inscription sur
 le site qui déclenche l'envoi, pas une conversation commencée par le
 participant.
 
+**Important — un modèle par langue.** Un modèle approuvé par Meta a un
+texte figé dans **une seule langue**. Pour que chaque participant
+reçoive la confirmation dans sa propre langue (FR/EN/PT), il faut donc
+créer et faire approuver **trois modèles distincts**, pas un seul.
+
 **La solution est déjà prête côté code**, il ne reste que la partie
-côté Zavu/Meta :
+côté Zavu/Meta, à répéter pour chacune des 3 langues :
 1. Dans le tableau de bord Zavu, section **Templates**, créez un
-   modèle (ex. `confirmation_inscription`), catégorie *Utility*, avec
-   **exactement 5 variables dans cet ordre** : 1) Prénom, 2) Nom,
-   3) Nom de l'événement, 4) Numéro d'inscription, 5) Lien du groupe
-   WhatsApp. Exemple de texte à soumettre :
+   modèle par langue (ex. `confirmation_fr`, `confirmation_en`,
+   `confirmation_pt`), catégorie *Utility*, avec **exactement 5
+   variables dans cet ordre** : 1) Prénom, 2) Nom, 3) Nom de
+   l'événement, 4) Numéro d'inscription, 5) Lien du groupe WhatsApp.
+   Exemple de texte pour la version française (veillez à ne jamais
+   terminer le message par une variable — Meta l'interdit, ajoutez
+   toujours un mot après la dernière) :
    > Bonjour {{1}} {{2}}, votre inscription à {{3}} est confirmée
    > sous le numéro {{4}}. Rejoignez le groupe WhatsApp officiel :
-   > {{5}}
-2. Une fois Meta l'a approuvé (généralement sous 24h), copiez
-   l'**identifiant du modèle** depuis Zavu ;
-3. Collez-le dans **Administration → Contenu du site → WhatsApp →
-   "Identifiant du modèle WhatsApp approuvé"**, puis enregistrez.
+   > {{5}}. À bientôt !
+2. Une fois chaque modèle approuvé par Meta (généralement sous 24h),
+   copiez son **identifiant** depuis Zavu ;
+3. Collez chaque identifiant dans **Administration → Contenu du site
+   → WhatsApp → "Identifiants des modèles WhatsApp approuvés"**, dans
+   le champ correspondant à sa langue (FR/EN/PT), puis enregistrez.
 
-Dès que ce champ est rempli, le site bascule automatiquement sur
-l'envoi par modèle approuvé — aucune autre modification de code n'est
-nécessaire. Tant qu'il est vide, le site continue d'essayer l'envoi en
-texte libre (qui échouera probablement hors modèle, sans bloquer le
-reste de l'inscription).
+Le site choisit automatiquement le bon modèle selon la langue du
+participant au moment de l'inscription. Une langue dont le champ est
+laissé vide retombe sur l'envoi en texte libre (qui échouera
+probablement hors modèle, sans bloquer le reste de l'inscription).
 
 ## Correctif — modification d'inscription via le lien email
 

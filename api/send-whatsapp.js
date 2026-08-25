@@ -4,12 +4,15 @@
 // Ne s'exécute jamais dans le navigateur : la clé API reste secrète.
 //
 // Deux modes :
-// - Si un modèle WhatsApp approuvé (whatsapp_template_id) est
-//   configuré dans l'admin, on l'utilise (obligatoire pour les
-//   messages envoyés à l'initiative de l'entreprise, règle Meta).
-// - Sinon, on retente un envoi en texte libre (ne sera livré que si
-//   le participant a déjà écrit au numéro WhatsApp dans les 24h, ou
-//   pas livré du tout en dehors de cette fenêtre).
+// - Si un modèle WhatsApp approuvé existe pour la langue du
+//   participant (whatsapp_template_id_fr/en/pt), on l'utilise
+//   (obligatoire pour les messages envoyés à l'initiative de
+//   l'entreprise, règle Meta) — un modèle Meta approuvé a un texte
+//   figé dans UNE langue, d'où un identifiant distinct par langue.
+// - Sinon (aucun modèle configuré pour cette langue), on retente un
+//   envoi en texte libre dans la langue du participant — ne sera
+//   livré que si le participant a déjà écrit au numéro WhatsApp dans
+//   les 24h, sinon l'envoi échouera.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -40,7 +43,11 @@ export default async function handler(req, res) {
     const { data: settings } = await supabase
       .from("site_settings")
       .select("key, value")
-      .in("key", [`whatsapp_body_${safeLang}`, "whatsapp_group_link", "whatsapp_template_id"]);
+      .in("key", [
+        `whatsapp_body_${safeLang}`,
+        "whatsapp_group_link",
+        `whatsapp_template_id_${safeLang}`,
+      ]);
 
     const map = {};
     (settings || []).forEach(r => { map[r.key] = r.value; });
@@ -59,7 +66,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const templateId = (map.whatsapp_template_id || "").trim();
+    const templateId = (map[`whatsapp_template_id_${safeLang}`] || "").trim();
 
     const body = templateId
       ? {
