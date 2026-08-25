@@ -141,6 +141,8 @@ const T = {
   edit_link_security_note: { fr: "Ce lien est personnel : seul le participant qui le reçoit par email doit l'utiliser pour modifier ses propres données. Il n'est jamais affiché sur le site.", en: "This link is personal: only the participant who receives it by email should use it to update their own data. It is never shown on the site.", pt: "Este link é pessoal: apenas o participante que o recebe por email deve utilizá-lo para atualizar os seus dados. Nunca é apresentado no site." },
   whatsapp_tab: { fr: "WhatsApp", en: "WhatsApp", pt: "WhatsApp" },
   whatsapp_body_label: { fr: "Message WhatsApp de confirmation", en: "WhatsApp confirmation message", pt: "Mensagem de confirmação no WhatsApp" },
+  whatsapp_body_active: { fr: "✓ Utilisé actuellement — aucun modèle approuvé n'est configuré pour cette langue.", en: "✓ Currently used — no approved template is configured for this language.", pt: "✓ Utilizado atualmente — nenhum modelo aprovado está configurado para este idioma." },
+  whatsapp_body_ignored: { fr: "Ignoré — un modèle approuvé est configuré pour cette langue et sera utilisé à la place.", en: "Ignored — an approved template is configured for this language and will be used instead.", pt: "Ignorado — um modelo aprovado está configurado para este idioma e será utilizado em vez disso." },
   whatsapp_group_link_label: { fr: "Lien d'invitation du groupe WhatsApp \"Browncard Event\"", en: "Invite link for the \"Browncard Event\" WhatsApp group", pt: "Link de convite do grupo WhatsApp \"Browncard Event\"" },
   whatsapp_group_help: { fr: "Créez d'abord ce groupe manuellement dans WhatsApp (WhatsApp n'autorise aucune création de groupe par un logiciel externe), puis collez ici son lien d'invitation (Infos du groupe → Inviter via un lien). Il sera automatiquement inclus dans le message envoyé à chaque participant. Variable disponible : {{whatsappGroupLink}}", en: "First create this group manually in WhatsApp (WhatsApp does not allow group creation via external software), then paste its invite link here (Group info → Invite via link). It will be automatically included in the message sent to each participant. Available variable: {{whatsappGroupLink}}", pt: "Crie primeiro este grupo manualmente no WhatsApp (o WhatsApp não permite a criação de grupos por software externo), depois cole aqui o link de convite (Informações do grupo → Convidar através de link). Será incluído automaticamente na mensagem enviada a cada participante. Variável disponível: {{whatsappGroupLink}}" },
   whatsapp_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}" },
@@ -3066,6 +3068,11 @@ function WhatsAppTemplateManager({ lang, canEdit }) {
             <button key={l} onClick={() => setActiveLang(l)} className="px-3 py-1 text-xs" style={{ background: activeLang === l ? "var(--vert-fonce)" : "#fff", color: activeLang === l ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{l.toUpperCase()}</button>
           ))}
         </div>
+        {draft[`whatsapp_template_id_${activeLang}`] ? (
+          <div className="text-xs px-2.5 py-1.5 mb-3 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("whatsapp_body_ignored", lang)}</div>
+        ) : (
+          <div className="text-xs px-2.5 py-1.5 mb-3 inline-block" style={{ background: "#EAF6EE", color: "var(--vert-fonce)" }}>{t("whatsapp_body_active", lang)}</div>
+        )}
         <p className="text-xs text-black/50 mb-2">{t("whatsapp_vars_help", lang)}</p>
         <Field label={t("whatsapp_body_label", lang)}>
           <textarea className="cb-input" rows={8} disabled={!canEdit} value={draft[`whatsapp_body_${activeLang}`]} onChange={e=>set(`whatsapp_body_${activeLang}`, e.target.value)} />
