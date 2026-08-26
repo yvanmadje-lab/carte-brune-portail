@@ -660,10 +660,7 @@ export default function App() {
     const norm = (target || "").trim().toLowerCase();
     if (!norm || norm === "top") { setView("public"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     if (norm === "programme" || norm === "program") {
-      const pdf = eventData.programPdf || {};
-      const link = pdf[lang] || pdf.fr || pdf.en || pdf.pt || "";
-      if (link) window.open(link, "_blank");
-      else window.alert(t("no_program_pdf", lang));
+      window.open(`/api/program?lang=${lang}`, "_blank");
       return;
     }
     if (norm.startsWith("http")) { window.open(target.trim(), "_blank"); return; }
