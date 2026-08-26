@@ -252,6 +252,7 @@ const T = {
   no_archived_events: { fr: "Aucun événement archivé pour le moment.", en: "No archived events yet.", pt: "Ainda sem eventos arquivados." },
   program_pdf_label: { fr: "Programme (document PDF, un par langue)", en: "Programme (PDF document, one per language)", pt: "Programa (documento PDF, um por idioma)" },
   program_pdf_help: { fr: "Pour l'afficher dans le menu, créez un lien dans l'onglet \"Menu\" avec comme cible : programme", en: "To show it in the menu, create a link in the \"Menu\" tab with target: programme", pt: "Para o mostrar no menu, crie um link no separador \"Menu\" com o destino: programme" },
+  no_program_pdf: { fr: "Aucun document Programme n'a encore été chargé pour cet événement.", en: "No Programme document has been uploaded yet for this event.", pt: "Ainda não foi carregado nenhum documento de Programa para este evento." },
   menu_tab: { fr: "Menu", en: "Menu", pt: "Menu" },
   edition_number: { fr: "Numéro d'édition (ex: 42)", en: "Edition number (e.g. 42)", pt: "Número da edição (ex: 42)" },
   title_fr: { fr: "Titre (Français)", en: "Title (French)", pt: "Título (Francês)" },
@@ -269,7 +270,7 @@ const T = {
   city_label: { fr: "Ville", en: "City", pt: "Cidade" },
   country_label: { fr: "Pays", en: "Country", pt: "País" },
   hero_theme_help: { fr: "Si rempli, un bandeau \"Thème de la réunion\" apparaît sur la page d'accueil. Laissez vide pour le masquer.", en: "If filled, a \"Meeting theme\" banner appears on the homepage. Leave empty to hide it.", pt: "Se preenchido, um banner \"Tema da reunião\" aparece na página inicial. Deixe vazio para ocultar." },
-  menu_target_help: { fr: "Où mène ce lien : event-section (haut de page), hotels-section, tourism-section, top (accueil), ou une URL complète (https://...)", en: "Where this link goes: event-section (top), hotels-section, tourism-section, top (home), or a full URL (https://...)", pt: "Para onde este link vai: event-section, hotels-section, tourism-section, top, ou um URL completo" },
+  menu_target_help: { fr: "Où mène ce lien : event-section (haut de page), hotels-section, tourism-section, speakers-section (comité d'organisation), programme (ouvre le PDF du programme dans la langue du visiteur), top (accueil), ou une URL complète (https://...)", en: "Where this link goes: event-section (top), hotels-section, tourism-section, speakers-section (organizing committee), programme (opens the programme PDF in the visitor's language), top (home), or a full URL (https://...)", pt: "Para onde este link vai: event-section, hotels-section, tourism-section, speakers-section (comité organizador), programme (abre o PDF do programa no idioma do visitante), top, ou um URL completo" },
   menu_target: { fr: "Cible du lien", en: "Link target", pt: "Destino do link" },
   ordinal_label: { fr: "Lettre en exposant (ex: e, nd, ª)", en: "Superscript suffix (e.g. e, nd, ª)", pt: "Sufixo sobrescrito" },
   brand_help: { fr: "Nom affiché dans l'en-tête et le bandeau d'accueil, dans chaque langue.", en: "Name shown in the header and homepage banner, in each language.", pt: "Nome exibido no cabeçalho e no banner inicial, em cada idioma." },
@@ -656,16 +657,18 @@ export default function App() {
   useEffect(() => { loadPublicContent(); }, []);
 
   function goToMenuTarget(target) {
-    if (!target || target === "top") { setView("public"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
-    if (target === "programme") {
+    const norm = (target || "").trim().toLowerCase();
+    if (!norm || norm === "top") { setView("public"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (norm === "programme" || norm === "program") {
       const pdf = eventData.programPdf || {};
       const link = pdf[lang] || pdf.fr || pdf.en || pdf.pt || "";
       if (link) window.open(link, "_blank");
+      else window.alert(t("no_program_pdf", lang));
       return;
     }
-    if (target.startsWith("http")) { window.open(target, "_blank"); return; }
+    if (norm.startsWith("http")) { window.open(target.trim(), "_blank"); return; }
     setView("public");
-    setTimeout(() => document.getElementById(target)?.scrollIntoView({ behavior: "smooth" }), 50);
+    setTimeout(() => document.getElementById(norm)?.scrollIntoView({ behavior: "smooth" }), 50);
   }
 
   // Session admin : suit l'état de connexion Supabase Auth.
@@ -1008,7 +1011,7 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
       )}
 
       {/* PARTENAIRES & INTERVENANTS */}
-      <section className="max-w-6xl mx-auto px-5 py-14">
+      <section id="speakers-section" className="max-w-6xl mx-auto px-5 py-14">
         <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--vert-fonce)" }}>{t("speakers_title", lang)}</h2>
         <div className="grid sm:grid-cols-2 gap-5">
           {speakers.map((s, i) => (
