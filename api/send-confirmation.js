@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     const { data: settings } = await supabase
       .from("site_settings")
       .select("key, value")
-      .in("key", [`email_subject_${safeLang}`, `email_body_${safeLang}`]);
+      .in("key", [`email_subject_${safeLang}`, `email_body_${safeLang}`, "whatsapp_group_link"]);
 
     const map = {};
     (settings || []).forEach(r => { map[r.key] = r.value; });
@@ -42,11 +42,15 @@ export default async function handler(req, res) {
       regNumber: regNumber || "",
       editLink,
       eventTitle: eventTitle || "",
+      whatsappGroupLink: map.whatsapp_group_link || "",
     };
 
     const subject = fillTemplate(map[`email_subject_${safeLang}`] || "Confirmation d'inscription", vars);
     const text = fillTemplate(map[`email_body_${safeLang}`] || `Votre lien : ${editLink}`, vars);
-    const html = text.replace(/\n/g, "<br/>").replace(editLink, `<a href="${editLink}">${editLink}</a>`);
+    let html = text.replace(/\n/g, "<br/>").replace(editLink, `<a href="${editLink}">${editLink}</a>`);
+    if (vars.whatsappGroupLink) {
+      html = html.replace(vars.whatsappGroupLink, `<a href="${vars.whatsappGroupLink}">${vars.whatsappGroupLink}</a>`);
+    }
 
     const resendKey = process.env.RESEND_API_KEY;
     if (!resendKey) {
