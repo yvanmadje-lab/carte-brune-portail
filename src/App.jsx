@@ -151,7 +151,7 @@ const T = {
   email_tab: { fr: "Email de confirmation", en: "Confirmation email", pt: "Email de confirmação" },
   email_subject_label: { fr: "Objet de l'email", en: "Email subject", pt: "Assunto do email" },
   email_body_label: { fr: "Corps de l'email", en: "Email body", pt: "Corpo do email" },
-  email_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}}" },
+  email_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}" },
   download_badge: { fr: "Télécharger le badge", en: "Download badge", pt: "Descarregar crachá" },
   download_all_badges: { fr: "Télécharger les badges", en: "Download badges", pt: "Descarregar crachás" },
   generating_badges: { fr: "Génération en cours…", en: "Generating…", pt: "A gerar…" },
