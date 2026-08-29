@@ -740,8 +740,11 @@ export default function App() {
   async function submitRegistration() {
     setSubmitting(true);
     setSubmitError("");
+    const isOtherSelected = orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther;
+    const finalOrgType = isOtherSelected && form.orgOther.trim() ? form.orgOther.trim() : form.orgType;
     const payload = {
       ...form,
+      orgType: finalOrgType,
       hotelName: form.wantsHotel === "yes" ? selectedHotel.name : "",
       roomType: form.wantsHotel === "yes" ? selectedRoom.type : "",
     };
@@ -753,7 +756,7 @@ export default function App() {
     }
     const regNumber = data.regNumber;
     const editToken = data.editToken;
-    setConfirmed({ ...form, regNumber });
+    setConfirmed({ ...form, orgType: finalOrgType, regNumber });
     setStep(6);
 
     // Envoi de l'email de confirmation — au mieux, n'empêche jamais
@@ -949,7 +952,7 @@ function HeroCarousel({ images }) {
       {images.map((src, idx) => (
         <div key={idx} className="absolute inset-0 transition-opacity duration-[1500ms]" style={{ opacity: idx === i ? 1 : 0, backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center" }} />
       ))}
-      <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(11,13,12,.55), rgba(11,13,12,.9))" }} />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(11,13,12,.18), rgba(11,13,12,.55))" }} />
     </div>
   );
 }
@@ -964,14 +967,14 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
         <HeroCarousel images={heroSlides} />
         <div className="dots absolute inset-0 pointer-events-none" style={{ maskImage: "radial-gradient(ellipse at bottom left, black, transparent 70%)" }} />
         <div className="max-w-6xl mx-auto relative">
-          <div className="flex items-start gap-2 sm:gap-3 mb-4 sm:mb-6">
+          <div className="flex items-start gap-2 sm:gap-3 mb-4 sm:mb-6" style={{ textShadow: "0 2px 10px rgba(0,0,0,.55)" }}>
             <span className="font-display font-bold leading-none" style={{ fontSize: "clamp(2.6rem, 14vw, 5rem)", color: "var(--vert)" }}>{event.edition}</span>
             <span className="font-display" style={{ fontSize: "clamp(1rem, 4vw, 1.6rem)", color: "var(--brun-clair)", marginTop: "0.6rem" }}>{event.ordinal[lang]}</span>
           </div>
-          <h1 className="font-display font-semibold leading-tight -mt-6 sm:-mt-10 mb-4 sm:mb-6" style={{ fontSize: "clamp(1.6rem, 6vw, 2.4rem)" }}>
+          <h1 className="font-display font-semibold leading-tight -mt-6 sm:-mt-10 mb-4 sm:mb-6" style={{ fontSize: "clamp(1.6rem, 6vw, 2.4rem)", textShadow: "0 2px 10px rgba(0,0,0,.55)" }}>
             {event.title[lang]}
           </h1>
-          <p className="text-white/80 max-w-xl leading-relaxed mb-6 sm:mb-8 text-sm sm:text-base">{event.desc[lang]}</p>
+          <p className="text-white/90 max-w-xl leading-relaxed mb-6 sm:mb-8 text-sm sm:text-base" style={{ textShadow: "0 1px 6px rgba(0,0,0,.5)" }}>{event.desc[lang]}</p>
 
           <div className="flex flex-wrap items-stretch gap-0 mb-6 sm:mb-8" style={{ background: "var(--vert-fonce)" }}>
             <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-2.5 sm:py-3">
@@ -2538,8 +2541,11 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
   async function handleSave() {
     setSaving(true);
     setError("");
+    const isOtherSelected = orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther;
+    const finalOrgType = isOtherSelected && form.orgOther.trim() ? form.orgOther.trim() : form.orgType;
     const payload = {
       ...form,
+      orgType: finalOrgType,
       hotelName: form.wantsHotel === "yes" ? (selectedHotel?.name || "") : "",
       roomType: form.wantsHotel === "yes" ? (selectedRoom?.type || "") : "",
     };
