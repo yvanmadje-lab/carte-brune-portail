@@ -3264,7 +3264,9 @@ function MfaSetup({ lang }) {
       {enrolling && enrollData && (
         <div className="space-y-4">
           <p className="text-sm">{t("mfa_scan_help", lang)}</p>
-          <div className="flex justify-center bg-white p-3" style={{ border: "1px solid #CFC4A3", maxWidth: "220px" }} dangerouslySetInnerHTML={{ __html: enrollData.qrCode }} />
+          <div className="flex justify-center bg-white p-3" style={{ border: "1px solid #CFC4A3", maxWidth: "220px" }}>
+            <img src={enrollData.qrCode} alt="QR code" style={{ width: "100%", height: "auto" }} />
+          </div>
           <div className="text-xs text-black/50">
             {t("mfa_manual_key", lang)} <span className="font-mono select-all">{enrollData.secret}</span>
           </div>
