@@ -191,6 +191,10 @@ const T = {
   uploading: { fr: "Envoi de l'image…", en: "Uploading image…", pt: "A enviar imagem…" },
   display_order: { fr: "Ordre d'affichage", en: "Display order", pt: "Ordem de exibição" },
   amenities_help: { fr: "Commodités, séparées par des virgules", en: "Amenities, comma-separated", pt: "Comodidades, separadas por vírgulas" },
+  room_categories_label: { fr: "Types de chambre proposés (affichés sur la carte de l'hôtel)", en: "Room categories offered (shown on the hotel card)", pt: "Categorias de quarto oferecidas (exibidas no cartão do hotel)" },
+  add_room_category: { fr: "Ajouter un type de chambre", en: "Add room category", pt: "Adicionar categoria de quarto" },
+  room_order_label: { fr: "Ordre", en: "Order", pt: "Ordem" },
+  hotel_order_label: { fr: "Ordre d'affichage de l'hôtel", en: "Hotel display order", pt: "Ordem de exibição do hotel" },
   price: { fr: "Prix / nuit", en: "Price / night", pt: "Preço / noite" },
   currency: { fr: "Devise", en: "Currency", pt: "Moeda" },
   room_type: { fr: "Type de chambre", en: "Room type", pt: "Tipo de quarto" },
@@ -614,18 +618,28 @@ export default function App() {
       name: { fr: r.name_fr, en: r.name_en, pt: r.name_pt },
       desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
       image: r.image_url,
-    })));
-    if (h.length) setHotels(h.map(r => ({
-      id: r.id,
-      name: r.name,
-      distance: r.distance,
-      desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
-      amenities: (r.amenities || "").split(",").map(a => a.trim()).filter(Boolean),
-      image: r.image_url,
       gallery: Array.isArray(r.gallery) ? r.gallery : [],
-      website: r.website || "",
-      rooms: [{ id: r.id + "-r1", type: r.room_type || "Standard", price: Number(r.price) || 0, cur: r.currency || "FCFA" }],
     })));
+    if (h.length) setHotels(h.map(r => {
+      const extraRooms = Array.isArray(r.rooms) ? r.rooms : [];
+      const rooms = extraRooms.length
+        ? extraRooms
+            .slice()
+            .sort((a, b) => (a.order || 0) - (b.order || 0))
+            .map((room, i) => ({ id: `${r.id}-r${i}`, type: room.type || "Standard", price: Number(room.price) || 0, cur: room.currency || "FCFA" }))
+        : [{ id: r.id + "-r1", type: r.room_type || "Standard", price: Number(r.price) || 0, cur: r.currency || "FCFA" }];
+      return {
+        id: r.id,
+        name: r.name,
+        distance: r.distance,
+        desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
+        amenities: (r.amenities || "").split(",").map(a => a.trim()).filter(Boolean),
+        image: r.image_url,
+        gallery: Array.isArray(r.gallery) ? r.gallery : [],
+        website: r.website || "",
+        rooms,
+      };
+    }));
     if (s.length) setHeroSlides(s.map(r => r.image_url));
     if (settings.event_logo) setLogoUrl(settings.event_logo);
     setFooterText({
@@ -991,7 +1005,7 @@ function HeroCarousel({ images }) {
 
 function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speakers, event }) {
   const hasTheme = event.theme && (event.theme.fr || event.theme.en || event.theme.pt);
-  const [galleryHotel, setGalleryHotel] = useState(null);
+  const [galleryItem, setGalleryItem] = useState(null);
   return (
     <>
       {/* HERO — fond noir + trame de points, dans l'esprit du bandeau vidéo */}
@@ -1067,19 +1081,24 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
         <div className="max-w-6xl mx-auto">
           <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("tourism_title", lang)}</h2>
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5">
-            {tourism.map((site, i) => (
+            {tourism.map((site, i) => {
+              const siteGallery = [site.image, ...(site.gallery || [])].filter(Boolean);
+              return (
               <div key={site.id || i} className="bg-white">
                 {site.image ? (
-                  <div style={{ height: "280px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+                  <button onClick={() => siteGallery.length && setGalleryItem({ title: site.name[lang], images: siteGallery })} className="w-full text-left" style={{ height: "280px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center", cursor: siteGallery.length ? "pointer" : "default" }} />
                 ) : (
                   <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "280px" }} />
                 )}
                 <div className="p-4">
                   <div className="font-semibold text-sm mb-1">{site.name[lang]}</div>
-                  <div className="text-xs text-black/60 leading-relaxed">{site.desc[lang]}</div>
+                  <div className="text-xs text-black/60 leading-relaxed mb-2">{site.desc[lang]}</div>
+                  {siteGallery.length > 1 && (
+                    <button onClick={() => setGalleryItem({ title: site.name[lang], images: siteGallery })} className="cb-btn-outline text-xs py-1 px-2"><ImageIcon size={12} /> {t("view_photos", lang)}</button>
+                  )}
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         </div>
       </section>
@@ -1093,7 +1112,7 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
             return (
             <div key={h.id} className="border" style={{ borderColor: "#CFC4A3" }}>
               {h.image ? (
-                <button onClick={() => gallery.length && setGalleryHotel(h)} className="w-full flex items-end p-3 text-left" style={{ height: "280px", backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center", cursor: gallery.length ? "pointer" : "default" }}>
+                <button onClick={() => gallery.length && setGalleryItem({ title: h.name, images: gallery })} className="w-full flex items-end p-3 text-left" style={{ height: "280px", backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center", cursor: gallery.length ? "pointer" : "default" }}>
                   <span className="text-white font-display font-semibold text-lg" style={{ textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>{h.name}</span>
                 </button>
               ) : (
@@ -1107,12 +1126,17 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {h.amenities.map(a => <span key={a} className="text-[11px] px-2 py-0.5 bg-[var(--sable-deep)]">{a}</span>)}
                 </div>
-                <div className="text-sm font-mono font-semibold mb-3" style={{ color: "var(--argile)" }}>
-                  {h.rooms[0].price.toLocaleString()} {h.rooms[0].cur} {t("per_night", lang)}
+                <div className="space-y-1 mb-3">
+                  {h.rooms.map(r => (
+                    <div key={r.id} className="flex justify-between items-baseline text-sm">
+                      <span className="text-black/70">{r.type}</span>
+                      <span className="font-mono font-semibold whitespace-nowrap" style={{ color: "var(--argile)" }}>{r.price.toLocaleString()} {r.cur} {t("per_night", lang)}</span>
+                    </div>
+                  ))}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {gallery.length > 0 && (
-                    <button onClick={() => setGalleryHotel(h)} className="cb-btn-outline text-xs py-1.5 px-3"><ImageIcon size={13} /> {t("view_photos", lang)}</button>
+                    <button onClick={() => setGalleryItem({ title: h.name, images: gallery })} className="cb-btn-outline text-xs py-1.5 px-3"><ImageIcon size={13} /> {t("view_photos", lang)}</button>
                   )}
                   {h.website && (
                     <a href={h.website} target="_blank" rel="noopener noreferrer" className="cb-btn-outline text-xs py-1.5 px-3" style={{ textDecoration: "none" }}><Globe2 size={13} /> {t("visit_website", lang)}</a>
@@ -1124,23 +1148,23 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
         </div>
       </section>
 
-      {galleryHotel && (
-        <HotelGalleryModal hotel={galleryHotel} images={[galleryHotel.image, ...(galleryHotel.gallery || [])].filter(Boolean)} onClose={() => setGalleryHotel(null)} />
+      {galleryItem && (
+        <GalleryModal title={galleryItem.title} images={galleryItem.images} onClose={() => setGalleryItem(null)} />
       )}
     </>
   );
 }
 
-function HotelGalleryModal({ hotel, images, onClose }) {
+function GalleryModal({ title, images, onClose }) {
   const [index, setIndex] = useState(0);
   const next = () => setIndex(i => (i + 1) % images.length);
   const prev = () => setIndex(i => (i - 1 + images.length) % images.length);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(11,13,12,.92)" }} onClick={onClose}>
       <button onClick={onClose} className="absolute top-5 right-5 text-white"><X size={28} /></button>
-      <div className="text-white absolute top-5 left-5 font-display font-semibold text-lg">{hotel.name}</div>
+      <div className="text-white absolute top-5 left-5 font-display font-semibold text-lg">{title}</div>
       <div className="relative max-w-5xl w-full px-16" onClick={e => e.stopPropagation()}>
-        <img src={images[index]} alt={hotel.name} className="w-full object-contain" style={{ maxHeight: "80vh" }} />
+        <img src={images[index]} alt={title} className="w-full object-contain" style={{ maxHeight: "80vh" }} />
         {images.length > 1 && (
           <>
             <button onClick={prev} className="absolute left-0 top-1/2 -translate-y-1/2 text-white p-2"><ChevronLeft size={36} /></button>
@@ -1880,6 +1904,20 @@ function TourismManager({ lang , canEdit, eventId }) {
       {editing ? (
         <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
           <ImageUploader lang={lang} value={editing.image_url} onChange={url => setEditing(e => ({ ...e, image_url: url }))} folder="tourism" />
+          <div>
+            <label className="cb-label">{t("gallery_label", lang)}</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {(editing.gallery || []).map((url, idx) => (
+                <div key={idx} className="relative" style={{ width: "110px", height: "110px" }}>
+                  <img src={url} alt="" className="w-full h-full object-cover" style={{ border: "1px solid #CFC4A3" }} />
+                  <button onClick={() => setEditing(x => ({ ...x, gallery: x.gallery.filter((_, i) => i !== idx) }))} className="absolute -top-2 -right-2 bg-white rounded-full" style={{ border: "1px solid #CFC4A3", width: "22px", height: "22px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <X size={13} color="#8A2A2A" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <ImageUploader lang={lang} value="" onChange={url => setEditing(x => ({ ...x, gallery: [...(x.gallery || []), url] }))} folder="tourism" />
+          </div>
           <div className="grid sm:grid-cols-3 gap-3">
             <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.name_fr || ""} onChange={e=>setEditing(x=>({ ...x, name_fr: e.target.value }))} /></Field>
             <Field label={t("name_en", lang)}><input className="cb-input" value={editing.name_en || ""} onChange={e=>setEditing(x=>({ ...x, name_en: e.target.value }))} /></Field>
@@ -1906,7 +1944,7 @@ function TourismManager({ lang , canEdit, eventId }) {
           </div>
         </div>
       ) : (
-        canEdit && <button onClick={() => setEditing({ name_fr: "", name_en: "", name_pt: "", desc_fr: "", desc_en: "", desc_pt: "", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name_fr: "", name_en: "", name_pt: "", desc_fr: "", desc_en: "", desc_pt: "", image_url: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
@@ -1982,11 +2020,39 @@ function HotelsManager({ lang , canEdit, eventId }) {
             <Field label={t("desc_pt", lang)}><textarea className="cb-input" rows={3} value={editing.desc_pt || ""} onChange={e=>setEditing(x=>({ ...x, desc_pt: e.target.value }))} /></Field>
           </div>
           <Field label={t("amenities_help", lang)}><input className="cb-input" value={editing.amenities || ""} onChange={e=>setEditing(x=>({ ...x, amenities: e.target.value }))} placeholder="Wi-Fi, Piscine, Parking" /></Field>
-          <div className="grid sm:grid-cols-4 gap-3">
-            <Field label={t("price", lang)}><input type="number" className="cb-input" value={editing.price || 0} onChange={e=>setEditing(x=>({ ...x, price: Number(e.target.value) }))} /></Field>
-            <Field label={t("currency", lang)}><input className="cb-input" value={editing.currency || "FCFA"} onChange={e=>setEditing(x=>({ ...x, currency: e.target.value }))} /></Field>
-            <Field label={t("room_type", lang)}><input className="cb-input" value={editing.room_type || "Standard"} onChange={e=>setEditing(x=>({ ...x, room_type: e.target.value }))} /></Field>
-            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+          <div>
+            <label className="cb-label mb-2 block">{t("room_categories_label", lang)}</label>
+            <div className="space-y-2 mb-2">
+              {(editing.rooms || []).map((room, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2 items-end p-2" style={{ background: "var(--sable-deep)" }}>
+                  <div className="col-span-4">
+                    <label className="text-[10px] text-black/50 uppercase">{t("room_type", lang)}</label>
+                    <input className="cb-input" value={room.type || ""} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,type:e.target.value}:r) }))} />
+                  </div>
+                  <div className="col-span-3">
+                    <label className="text-[10px] text-black/50 uppercase">{t("price", lang)}</label>
+                    <input type="number" className="cb-input" value={room.price || 0} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,price:Number(e.target.value)}:r) }))} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] text-black/50 uppercase">{t("currency", lang)}</label>
+                    <input className="cb-input" value={room.currency || "FCFA"} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,currency:e.target.value}:r) }))} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] text-black/50 uppercase">{t("room_order_label", lang)}</label>
+                    <input type="number" className="cb-input" value={room.order || 0} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,order:Number(e.target.value)}:r) }))} />
+                  </div>
+                  <div className="col-span-1 flex justify-center pb-2">
+                    <button onClick={() => setEditing(x => ({ ...x, rooms: x.rooms.filter((_, i) => i !== idx) }))}><X size={16} color="#8A2A2A" /></button>
+                  </div>
+                </div>
+              ))}
+              {(editing.rooms || []).length === 0 && <p className="text-xs text-black/40">{t("no_items", lang)}</p>}
+            </div>
+            <button onClick={() => setEditing(x => ({ ...x, rooms: [...(x.rooms || []), { type: "Standard", price: 0, currency: "FCFA", order: (x.rooms || []).length }] }))} className="cb-btn-outline text-xs py-1.5 px-3"><Plus size={13} /> {t("add_room_category", lang)}</button>
+          </div>
+          <div>
+            <label className="cb-label">{t("hotel_order_label", lang)}</label>
+            <input type="number" className="cb-input" style={{ maxWidth: "140px" }} value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} />
           </div>
           <div>
             <label className="cb-label">{t("published", lang)}</label>
@@ -2001,7 +2067,7 @@ function HotelsManager({ lang , canEdit, eventId }) {
           </div>
         </div>
       ) : (
-        canEdit && <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities: "", price: 0, currency: "FCFA", room_type: "Standard", image_url: "", website: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities: "", rooms: [{ type: "Standard", price: 0, currency: "FCFA", order: 0 }], image_url: "", website: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
