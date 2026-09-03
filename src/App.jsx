@@ -271,6 +271,9 @@ const T = {
   date_short_label: { fr: "Dates (format court, ex: DU 19 AU 22)", en: "Dates (short format, e.g. FROM 19 TO 22)", pt: "Datas (formato curto)" },
   month_year_label: { fr: "Mois et année (ex: OCTOBRE 2026)", en: "Month and year (e.g. OCTOBER 2026)", pt: "Mês e ano" },
   venue_label: { fr: "Lieu (nom de l'hôtel/salle)", en: "Venue name", pt: "Nome do local" },
+  participation_fee_label: { fr: "Frais de participation", en: "Participation fee", pt: "Taxa de participação" },
+  participation_fee_help: { fr: "Affiché juste à côté du lieu dans le bandeau d'accueil. Laissez vide pour ne rien afficher.", en: "Shown right next to the venue in the homepage banner. Leave empty to show nothing.", pt: "Exibido mesmo ao lado do local no banner da página inicial. Deixe vazio para não mostrar nada." },
+  participation_fee_chip_label: { fr: "Frais :", en: "Fee:", pt: "Taxa:" },
   city_label: { fr: "Ville", en: "City", pt: "Cidade" },
   country_label: { fr: "Pays", en: "Country", pt: "País" },
   hero_theme_help: { fr: "Si rempli, un bandeau \"Thème de la réunion\" apparaît sur la page d'accueil. Laissez vide pour le masquer.", en: "If filled, a \"Meeting theme\" banner appears on the homepage. Leave empty to hide it.", pt: "Se preenchido, um banner \"Tema da reunião\" aparece na página inicial. Deixe vazio para ocultar." },
@@ -594,6 +597,7 @@ export default function App() {
       badgeFooterImage: r.badge_footer_image || "",
       badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
       programPdf: r.program_pdf || { fr: "", en: "", pt: "" },
+      participationFee: r.participation_fee || { fr: "", en: "", pt: "" },
     };
   }
 
@@ -1040,6 +1044,12 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
             <div className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm border-l border-white/10">
               <MapPin size={14} color="var(--vert)" /> <span className="font-semibold">{event.venue[lang]}</span>&nbsp;{event.city}
             </div>
+            {event.participationFee && event.participationFee[lang] && (
+              <div className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm border-l border-white/10">
+                <span className="opacity-70">{t("participation_fee_chip_label", lang)}</span>
+                <span className="font-semibold">{event.participationFee[lang]}</span>
+              </div>
+            )}
           </div>
           <div>
             <button onClick={() => setView("register")} className="cb-btn w-full sm:w-auto justify-center">{t("hero_cta", lang)} <ChevronRight size={16} /></button>
@@ -2836,6 +2846,7 @@ function emptyEventDraft() {
     city: "", country: "", status: "draft",
     badge_header_image: "", badge_body_image: "", badge_footer_image: "", badge_pdf: { ...EMPTY_LANG3 },
     program_pdf: { ...EMPTY_LANG3 },
+    participation_fee: { ...EMPTY_LANG3 },
   };
 }
 
@@ -2975,6 +2986,13 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
             <label className="cb-label mb-1 block">{t("venue_label", lang)}</label>
             <div className="grid sm:grid-cols-3 gap-3">
               {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.venue[l]} onChange={e=>set3("venue", l, e.target.value)} />)}
+            </div>
+          </div>
+          <div>
+            <label className="cb-label mb-1 block">{t("participation_fee_label", lang)}</label>
+            <p className="text-xs text-black/50 mb-2">{t("participation_fee_help", lang)}</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase() + " — ex: 50 000 FCFA"} value={editing.participation_fee[l]} onChange={e=>set3("participation_fee", l, e.target.value)} />)}
             </div>
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
