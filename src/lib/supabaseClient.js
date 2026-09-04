@@ -112,6 +112,31 @@ export async function listMyManagedHotels() {
   return (data || []).map(row => row.cms_hotels).filter(Boolean);
 }
 
+export async function listCountryManagerLinks() {
+  const { data, error } = await supabase.from("country_managers").select("*");
+  if (error) return [];
+  return data || [];
+}
+
+export async function addCountryManager(userId, country) {
+  const { error } = await supabase.from("country_managers").upsert({ user_id: userId, country });
+  if (error) throw error;
+}
+
+export async function removeCountryManager(userId, country) {
+  const { error } = await supabase.from("country_managers").delete().eq("user_id", userId).eq("country", country);
+  if (error) throw error;
+}
+
+export async function listMyManagedCountries() {
+  const { data: userData } = await supabase.auth.getUser();
+  const uid = userData?.user?.id;
+  if (!uid) return [];
+  const { data, error } = await supabase.from("country_managers").select("country").eq("user_id", uid);
+  if (error) return [];
+  return (data || []).map(row => row.country);
+}
+
 export async function fetchPublishedForEvent(table, eventId) {
   if (!eventId) return [];
   const { data, error } = await supabase.from(table).select("*").eq("status", "published").eq("event_id", eventId).order("display_order", { ascending: true });
