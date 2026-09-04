@@ -1596,7 +1596,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         </div>
         <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
         <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
-        <button onClick={handleDownloadBadges} disabled={generatingBadges || filtered.length === 0} className="cb-btn-outline whitespace-nowrap" style={{ opacity: generatingBadges ? 0.7 : 1 }}><Download size={15} /> {generatingBadges ? t("generating_badges", lang) : t("download_all_badges", lang)}</button>
+        {!isHotelRole && !isCountryRole && <button onClick={handleDownloadBadges} disabled={generatingBadges || filtered.length === 0} className="cb-btn-outline whitespace-nowrap" style={{ opacity: generatingBadges ? 0.7 : 1 }}><Download size={15} /> {generatingBadges ? t("generating_badges", lang) : t("download_all_badges", lang)}</button>}
       </div>
       <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
         <select className="cb-input sm:w-48" value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
@@ -1653,7 +1653,9 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureTime || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureFlightNumber || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  <button onClick={() => downloadBadges([p], eventData, lang, `badge-${p.regNumber}.pdf`)} title={t("download_badge", lang)}><QrCode size={14} color="var(--vert-fonce)" /></button>
+                  {!isHotelRole && !isCountryRole && (
+                    <button onClick={() => downloadBadges([p], eventData, lang, `badge-${p.regNumber}.pdf`)} title={t("download_badge", lang)}><QrCode size={14} color="var(--vert-fonce)" /></button>
+                  )}
                 </td>
                 {canEdit && (
                   <td className="px-3 py-2 whitespace-nowrap">
