@@ -87,6 +87,31 @@ export async function removeAdminProfile(userId) {
   if (error) throw error;
 }
 
+export async function listHotelManagerLinks() {
+  const { data, error } = await supabase.from("hotel_managers").select("*");
+  if (error) return [];
+  return data || [];
+}
+
+export async function addHotelManager(userId, hotelId) {
+  const { error } = await supabase.from("hotel_managers").upsert({ user_id: userId, hotel_id: hotelId });
+  if (error) throw error;
+}
+
+export async function removeHotelManager(userId, hotelId) {
+  const { error } = await supabase.from("hotel_managers").delete().eq("user_id", userId).eq("hotel_id", hotelId);
+  if (error) throw error;
+}
+
+export async function listMyManagedHotels() {
+  const { data: userData } = await supabase.auth.getUser();
+  const uid = userData?.user?.id;
+  if (!uid) return [];
+  const { data, error } = await supabase.from("hotel_managers").select("hotel_id, cms_hotels(id, name_fr, name_en, name_pt, name)").eq("user_id", uid);
+  if (error) return [];
+  return (data || []).map(row => row.cms_hotels).filter(Boolean);
+}
+
 export async function fetchPublishedForEvent(table, eventId) {
   if (!eventId) return [];
   const { data, error } = await supabase.from(table).select("*").eq("status", "published").eq("event_id", eventId).order("display_order", { ascending: true });
