@@ -137,6 +137,12 @@ export async function listMyManagedCountries() {
   return (data || []).map(row => row.country);
 }
 
+export async function clearParticipantsForActiveEvent() {
+  const { data, error } = await supabase.rpc("clear_participants_for_active_event");
+  if (error) throw error;
+  return data;
+}
+
 export async function fetchPublishedForEvent(table, eventId) {
   if (!eventId) return [];
   const { data, error } = await supabase.from(table).select("*").eq("status", "published").eq("event_id", eventId).order("display_order", { ascending: true });
