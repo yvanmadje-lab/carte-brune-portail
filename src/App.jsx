@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff, QrCode } from "lucide-react";
-import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile, fetchPublishedForEvent, fetchAllForEvent, getActiveEvent, listAllEvents, setActiveEvent, duplicateEvent, listArchivedEvents, listHotelManagerLinks, addHotelManager, removeHotelManager, listMyManagedHotels, listCountryManagerLinks, addCountryManager, removeCountryManager, listMyManagedCountries } from "./lib/supabaseClient";
+import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile, fetchPublishedForEvent, fetchAllForEvent, getActiveEvent, listAllEvents, setActiveEvent, duplicateEvent, listArchivedEvents, listHotelManagerLinks, addHotelManager, removeHotelManager, listMyManagedHotels, listCountryManagerLinks, addCountryManager, removeCountryManager, listMyManagedCountries, clearParticipantsForActiveEvent } from "./lib/supabaseClient";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
@@ -357,6 +357,12 @@ const T = {
   assign_countries_help: { fr: "Cochez un ou plusieurs pays : ce compte ne verra que les participants de ces pays-là.", en: "Check one or more countries: this account will only see participants from those countries.", pt: "Marque um ou vários países: esta conta só verá os participantes desses países." },
   my_hotels_banner: { fr: "Hôtel(s) consulté(s)", en: "Hotel(s) shown", pt: "Hotel(éis) exibido(s)" },
   my_countries_banner: { fr: "Pays consulté(s)", en: "Country/countries shown", pt: "País(es) exibido(s)" },
+  clear_participants_btn: { fr: "Vider la liste des participants", en: "Clear participant list", pt: "Limpar lista de participantes" },
+  clear_participants_confirm_title: { fr: "Action irréversible", en: "Irreversible action", pt: "Ação irreversível" },
+  clear_participants_confirm_text: { fr: "Ceci va supprimer DÉFINITIVEMENT tous les participants déjà inscrits pour l'événement actif (à utiliser juste avant le passage en live). Les autres événements/archives ne sont pas touchés. Tapez SUPPRIMER pour confirmer.", en: "This will PERMANENTLY delete all participants already registered for the active event (use just before going live). Other events/archives are not affected. Type DELETE to confirm.", pt: "Isto irá apagar DEFINITIVAMENTE todos os participantes já inscritos no evento ativo (usar mesmo antes de entrar em direto). Outros eventos/arquivos não são afetados. Digite APAGAR para confirmar." },
+  clear_participants_confirm_word: { fr: "SUPPRIMER", en: "DELETE", pt: "APAGAR" },
+  clear_participants_wrong_word: { fr: "Texte de confirmation incorrect — rien n'a été supprimé.", en: "Confirmation text incorrect — nothing was deleted.", pt: "Texto de confirmação incorreto — nada foi apagado." },
+  clear_participants_success: { fr: "participant(s) supprimé(s). La liste est maintenant vide.", en: "participant(s) deleted. The list is now empty.", pt: "participante(s) apagado(s). A lista está agora vazia." },
   read_only_notice: { fr: "Vous êtes en lecture seule : consultation uniquement, aucune modification possible.", en: "You are in read-only mode: viewing only, no changes possible.", pt: "Está em modo de apenas leitura: apenas consulta, sem alterações possíveis." },
   filter_hotel: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
   filter_arrival: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
@@ -1497,6 +1503,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const [myHotels, setMyHotels] = useState([]);
   const [myCountries, setMyCountries] = useState([]);
+  const [clearing, setClearing] = useState(false);
   const canEdit = myRole === "super_admin" || myRole === "manager";
   const isSuperAdmin = myRole === "super_admin";
   const isHotelRole = myRole === "hotel";
@@ -1517,6 +1524,24 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
     } catch (e) { /* best effort */ }
     setGeneratingBadges(false);
   }
+
+  async function handleClearParticipants() {
+    const typed = window.prompt(`${t("clear_participants_confirm_text", lang)}\n\n(${t("clear_participants_confirm_word", lang)})`);
+    if (typed === null) return;
+    if (typed.trim().toUpperCase() !== t("clear_participants_confirm_word", lang)) {
+      alert(t("clear_participants_wrong_word", lang));
+      return;
+    }
+    setClearing(true);
+    try {
+      const count = await clearParticipantsForActiveEvent();
+      alert(`${count} ${t("clear_participants_success", lang)}`);
+      onRefresh();
+    } catch (e) {
+      alert(String(e.message || e));
+    }
+    setClearing(false);
+  }
   if (!authChecked) return null;
   if (!adminUser) return <AdminLogin lang={lang} />;
   if (needsMfa) return <MfaChallenge lang={lang} factorId={mfaFactorId} onVerified={onMfaVerified} />;
@@ -1532,6 +1557,11 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           {isCountryRole && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><Globe2 size={11}/> {t("role_country", lang)}</span>}
         </div>
         <div className="flex items-center gap-3">
+          {tab === "participants" && isSuperAdmin && (
+            <button onClick={handleClearParticipants} disabled={clearing} className="text-sm py-1.5 px-3 flex items-center gap-1.5" style={{ border: "1px solid #8A2A2A", color: "#8A2A2A", opacity: clearing ? 0.6 : 1 }}>
+              <Trash2 size={14} /> {t("clear_participants_btn", lang)}
+            </button>
+          )}
           {tab === "participants" && <button onClick={onRefresh} className="cb-btn-outline text-sm py-1.5 px-3"><RefreshCw size={14} className={participantsLoading ? "animate-spin" : ""} /> {t("refresh", lang)}</button>}
           <button onClick={() => supabase.auth.signOut()} className="text-sm flex items-center gap-1 text-black/60 hover:text-black"><LogOut size={14} /> {t("admin_logout", lang)}</button>
         </div>
