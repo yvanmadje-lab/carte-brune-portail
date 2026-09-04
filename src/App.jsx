@@ -273,7 +273,7 @@ const T = {
   venue_label: { fr: "Lieu (nom de l'hôtel/salle)", en: "Venue name", pt: "Nome do local" },
   participation_fee_label: { fr: "Frais de participation", en: "Participation fee", pt: "Taxa de participação" },
   participation_fee_help: { fr: "Affiché juste à côté du lieu dans le bandeau d'accueil. Laissez vide pour ne rien afficher.", en: "Shown right next to the venue in the homepage banner. Leave empty to show nothing.", pt: "Exibido mesmo ao lado do local no banner da página inicial. Deixe vazio para não mostrar nada." },
-  participation_fee_chip_label: { fr: "Frais :", en: "Fee:", pt: "Taxa:" },
+  participation_fee_chip_label: { fr: "Frais de participation :", en: "Participation fee:", pt: "Taxa de participação:" },
   city_label: { fr: "Ville", en: "City", pt: "Cidade" },
   country_label: { fr: "Pays", en: "Country", pt: "País" },
   hero_theme_help: { fr: "Si rempli, un bandeau \"Thème de la réunion\" apparaît sur la page d'accueil. Laissez vide pour le masquer.", en: "If filled, a \"Meeting theme\" banner appears on the homepage. Leave empty to hide it.", pt: "Se preenchido, um banner \"Tema da reunião\" aparece na página inicial. Deixe vazio para ocultar." },
@@ -1027,16 +1027,6 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
           <p className="text-white/90 max-w-xl leading-relaxed mb-6 sm:mb-8 text-sm sm:text-base" style={{ textShadow: "0 1px 6px rgba(0,0,0,.5)" }}>{event.desc[lang]}</p>
 
           <div className="flex flex-wrap items-stretch gap-0 mb-6 sm:mb-8" style={{ background: "var(--vert-fonce)" }}>
-            <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-2.5 sm:py-3">
-              {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="w-10 h-10 sm:w-16 sm:h-16 rounded-full object-cover flex-shrink-0" />
-              ) : (
-                <div className="seal w-10 h-10 sm:w-16 sm:h-16 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:3, background:"#fff", borderRadius:"50%" }} /></div>
-              )}
-              <div className="text-xs sm:text-sm leading-tight">
-                <div className="font-semibold">{event.brand[lang]}</div>
-              </div>
-            </div>
             <div className="ribbon flex items-center px-4 sm:px-5 py-2.5 sm:py-3" style={{ background: "var(--brun)" }}>
               <span className="font-display font-bold text-base sm:text-lg tracking-wide">{event.dateShort[lang]}</span>
             </div>
