@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff, QrCode } from "lucide-react";
-import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile, fetchPublishedForEvent, fetchAllForEvent, getActiveEvent, listAllEvents, setActiveEvent, duplicateEvent, listArchivedEvents, listHotelManagerLinks, addHotelManager, removeHotelManager, listMyManagedHotels } from "./lib/supabaseClient";
+import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile, fetchPublishedForEvent, fetchAllForEvent, getActiveEvent, listAllEvents, setActiveEvent, duplicateEvent, listArchivedEvents, listHotelManagerLinks, addHotelManager, removeHotelManager, listMyManagedHotels, listCountryManagerLinks, addCountryManager, removeCountryManager, listMyManagedCountries } from "./lib/supabaseClient";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
@@ -324,6 +324,7 @@ const T = {
   role_super_admin: { fr: "Super administrateur", en: "Super admin", pt: "Super administrador" },
   role_manager: { fr: "Gestionnaire", en: "Manager", pt: "Gestor" },
   role_hotel: { fr: "Accès hôtel", en: "Hotel access", pt: "Acesso hotel" },
+  role_country: { fr: "Accès pays", en: "Country access", pt: "Acesso país" },
   role_label: { fr: "Rôle", en: "Role", pt: "Função" },
   you_label: { fr: "Vous", en: "You", pt: "Você" },
   users_help: { fr: "Pour donner accès à l'admin à quelqu'un, créez d'abord son compte dans Supabase (Authentication → Users → Add user). Il apparaîtra automatiquement ici en \"Lecture seule\" — changez ensuite son rôle.", en: "To give someone admin access, first create their account in Supabase (Authentication → Users → Add user). They'll appear here automatically as \"Read-only\" — then change their role.", pt: "Para dar acesso de administrador a alguém, crie primeiro a conta no Supabase (Authentication → Users → Add user). Aparecerá aqui automaticamente como \"Apenas leitura\" — depois altere a função." },
@@ -349,9 +350,13 @@ const T = {
   role_viewer_help: { fr: "Lecture seule : consultation des participants uniquement, pas de modification.", en: "Read-only: can view participants only, no changes.", pt: "Apenas leitura: pode ver os participantes, sem alterações." },
   role_super_admin_help: { fr: "Super administrateur : accès complet, y compris la gestion des utilisateurs.", en: "Super admin: full access, including user management.", pt: "Super administrador: acesso total, incluindo gestão de utilizadores." },
   role_hotel_help: { fr: "Accès hôtel : voit uniquement les participants ayant réservé dans le(s) hôtel(s) qui lui sont assignés ci-dessous, lecture seule.", en: "Hotel access: only sees participants who booked at the hotel(s) assigned below, read-only.", pt: "Acesso hotel: vê apenas os participantes que reservaram no(s) hotel(s) atribuídos abaixo, apenas leitura." },
+  role_country_help: { fr: "Accès pays : voit uniquement les participants du (des) pays qui lui sont assignés ci-dessous, lecture seule.", en: "Country access: only sees participants from the country/countries assigned below, read-only.", pt: "Acesso país: vê apenas os participantes do(s) país(es) atribuído(s) abaixo, apenas leitura." },
   assign_hotels_label: { fr: "Hôtel(s) assigné(s)", en: "Assigned hotel(s)", pt: "Hotel(éis) atribuído(s)" },
   assign_hotels_help: { fr: "Cochez un ou plusieurs hôtels : ce compte ne verra que les participants de ces hôtels-là.", en: "Check one or more hotels: this account will only see participants from those hotels.", pt: "Marque um ou vários hotéis: esta conta só verá os participantes desses hotéis." },
+  assign_countries_label: { fr: "Pays assigné(s)", en: "Assigned country/countries", pt: "País(es) atribuído(s)" },
+  assign_countries_help: { fr: "Cochez un ou plusieurs pays : ce compte ne verra que les participants de ces pays-là.", en: "Check one or more countries: this account will only see participants from those countries.", pt: "Marque um ou vários países: esta conta só verá os participantes desses países." },
   my_hotels_banner: { fr: "Hôtel(s) consulté(s)", en: "Hotel(s) shown", pt: "Hotel(éis) exibido(s)" },
+  my_countries_banner: { fr: "Pays consulté(s)", en: "Country/countries shown", pt: "País(es) exibido(s)" },
   read_only_notice: { fr: "Vous êtes en lecture seule : consultation uniquement, aucune modification possible.", en: "You are in read-only mode: viewing only, no changes possible.", pt: "Está em modo de apenas leitura: apenas consulta, sem alterações possíveis." },
   filter_hotel: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
   filter_arrival: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
@@ -1491,13 +1496,19 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const [myHotels, setMyHotels] = useState([]);
+  const [myCountries, setMyCountries] = useState([]);
   const canEdit = myRole === "super_admin" || myRole === "manager";
   const isSuperAdmin = myRole === "super_admin";
   const isHotelRole = myRole === "hotel";
+  const isCountryRole = myRole === "country";
 
   useEffect(() => {
     if (isHotelRole) listMyManagedHotels().then(setMyHotels);
   }, [isHotelRole]);
+
+  useEffect(() => {
+    if (isCountryRole) listMyManagedCountries().then(setMyCountries);
+  }, [isCountryRole]);
 
   async function handleDownloadBadges() {
     setGeneratingBadges(true);
@@ -1518,6 +1529,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <h2 className="font-display font-semibold text-2xl" style={{ color: "var(--navy)" }}>{t("dashboard", lang)}</h2>
           {myRole === "viewer" && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><Eye size={11}/> {t("role_viewer", lang)}</span>}
           {isHotelRole && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><HotelIcon size={11}/> {t("role_hotel", lang)}</span>}
+          {isCountryRole && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><Globe2 size={11}/> {t("role_country", lang)}</span>}
         </div>
         <div className="flex items-center gap-3">
           {tab === "participants" && <button onClick={onRefresh} className="cb-btn-outline text-sm py-1.5 px-3"><RefreshCw size={14} className={participantsLoading ? "animate-spin" : ""} /> {t("refresh", lang)}</button>}
@@ -1538,6 +1550,13 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <HotelIcon size={13} color="var(--vert-fonce)" />
           <strong>{t("my_hotels_banner", lang)} :</strong>
           {myHotels.map((h, i) => <span key={h.id}>{h.name_fr || h.name}{i < myHotels.length - 1 ? "," : ""}</span>)}
+        </div>
+      )}
+      {isCountryRole && myCountries.length > 0 && (
+        <div className="text-xs px-3 py-2 mb-4 flex items-center gap-2 flex-wrap" style={{ background: "var(--sable-deep)" }}>
+          <Globe2 size={13} color="var(--vert-fonce)" />
+          <strong>{t("my_countries_banner", lang)} :</strong>
+          {myCountries.map((c, i) => <span key={c}>{c}{i < myCountries.length - 1 ? "," : ""}</span>)}
         </div>
       )}
       <div className="grid sm:grid-cols-3 gap-5 mb-10">
@@ -2582,26 +2601,29 @@ function FormFieldsManager({ lang , canEdit }) {
   );
 }
 
-const ROLE_OPTIONS = ["super_admin", "manager", "viewer", "hotel"];
+const ROLE_OPTIONS = ["super_admin", "manager", "viewer", "hotel", "country"];
 
 function UsersManager({ lang, currentUserId, eventId }) {
   const [items, setItems] = useState([]);
   const [hotels, setHotels] = useState([]);
   const [links, setLinks] = useState([]);
+  const [countryLinks, setCountryLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState("");
 
   async function load() {
     setLoading(true);
-    const [profiles, hotelList, linkList] = await Promise.all([
+    const [profiles, hotelList, linkList, countryLinkList] = await Promise.all([
       listAdminProfiles(),
       fetchAllForEvent("cms_hotels", eventId),
       listHotelManagerLinks(),
+      listCountryManagerLinks(),
     ]);
     setItems(profiles);
     setHotels(hotelList);
     setLinks(linkList);
+    setCountryLinks(countryLinkList);
     setLoading(false);
   }
   useEffect(() => { load(); }, [eventId]);
@@ -2650,6 +2672,21 @@ function UsersManager({ lang, currentUserId, eventId }) {
     }
   }
 
+  async function toggleCountry(userId, country, checked) {
+    setError("");
+    try {
+      if (checked) {
+        await addCountryManager(userId, country);
+        setCountryLinks(l => [...l, { user_id: userId, country }]);
+      } else {
+        await removeCountryManager(userId, country);
+        setCountryLinks(l => l.filter(x => !(x.user_id === userId && x.country === country)));
+      }
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+  }
+
   return (
     <div>
       <MfaSetup lang={lang} />
@@ -2660,6 +2697,7 @@ function UsersManager({ lang, currentUserId, eventId }) {
         <div><strong>{t("role_manager", lang)}</strong> — {t("role_manager_help", lang)}</div>
         <div><strong>{t("role_viewer", lang)}</strong> — {t("role_viewer_help", lang)}</div>
         <div><strong>{t("role_hotel", lang)}</strong> — {t("role_hotel_help", lang)}</div>
+        <div><strong>{t("role_country", lang)}</strong> — {t("role_country_help", lang)}</div>
       </div>
 
       {error && <div className="text-sm px-3 py-2 mb-4" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>{error}</div>}
@@ -2708,6 +2746,25 @@ function UsersManager({ lang, currentUserId, eventId }) {
                           <label key={h.id} className="flex items-center gap-1.5 text-sm bg-white px-2 py-1 border" style={{ borderColor: "#CFC4A3" }}>
                             <input type="checkbox" checked={checked} onChange={e => toggleHotel(u.user_id, h.id, e.target.checked)} />
                             {h.name_fr || h.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {u.role === "country" && (
+                <tr className="border-t" style={{ borderColor: "#E7DCC2", background: "var(--sable-deep)" }}>
+                  <td colSpan={3} className="px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-wide text-black/50 mb-1">{t("assign_countries_label", lang)}</div>
+                    <p className="text-xs text-black/50 mb-2">{t("assign_countries_help", lang)}</p>
+                    <div className="flex flex-wrap gap-3">
+                      {COUNTRIES.map(c => {
+                        const checked = countryLinks.some(l => l.user_id === u.user_id && l.country === c);
+                        return (
+                          <label key={c} className="flex items-center gap-1.5 text-sm bg-white px-2 py-1 border" style={{ borderColor: "#CFC4A3" }}>
+                            <input type="checkbox" checked={checked} onChange={e => toggleCountry(u.user_id, c, e.target.checked)} />
+                            {c}
                           </label>
                         );
                       })}
