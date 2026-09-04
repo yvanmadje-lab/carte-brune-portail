@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff, QrCode } from "lucide-react";
-import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile, fetchPublishedForEvent, fetchAllForEvent, getActiveEvent, listAllEvents, setActiveEvent, duplicateEvent, listArchivedEvents } from "./lib/supabaseClient";
+import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile, fetchPublishedForEvent, fetchAllForEvent, getActiveEvent, listAllEvents, setActiveEvent, duplicateEvent, listArchivedEvents, listHotelManagerLinks, addHotelManager, removeHotelManager, listMyManagedHotels } from "./lib/supabaseClient";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
@@ -323,6 +323,7 @@ const T = {
   role_viewer: { fr: "Lecture seule", en: "Read-only", pt: "Apenas leitura" },
   role_super_admin: { fr: "Super administrateur", en: "Super admin", pt: "Super administrador" },
   role_manager: { fr: "Gestionnaire", en: "Manager", pt: "Gestor" },
+  role_hotel: { fr: "Accès hôtel", en: "Hotel access", pt: "Acesso hotel" },
   role_label: { fr: "Rôle", en: "Role", pt: "Função" },
   you_label: { fr: "Vous", en: "You", pt: "Você" },
   users_help: { fr: "Pour donner accès à l'admin à quelqu'un, créez d'abord son compte dans Supabase (Authentication → Users → Add user). Il apparaîtra automatiquement ici en \"Lecture seule\" — changez ensuite son rôle.", en: "To give someone admin access, first create their account in Supabase (Authentication → Users → Add user). They'll appear here automatically as \"Read-only\" — then change their role.", pt: "Para dar acesso de administrador a alguém, crie primeiro a conta no Supabase (Authentication → Users → Add user). Aparecerá aqui automaticamente como \"Apenas leitura\" — depois altere a função." },
@@ -347,6 +348,10 @@ const T = {
   role_manager_help: { fr: "Gestionnaire : accès complet aux participants et au contenu du site.", en: "Manager: full access to participants and site content.", pt: "Gestor: acesso total aos participantes e ao conteúdo do site." },
   role_viewer_help: { fr: "Lecture seule : consultation des participants uniquement, pas de modification.", en: "Read-only: can view participants only, no changes.", pt: "Apenas leitura: pode ver os participantes, sem alterações." },
   role_super_admin_help: { fr: "Super administrateur : accès complet, y compris la gestion des utilisateurs.", en: "Super admin: full access, including user management.", pt: "Super administrador: acesso total, incluindo gestão de utilizadores." },
+  role_hotel_help: { fr: "Accès hôtel : voit uniquement les participants ayant réservé dans le(s) hôtel(s) qui lui sont assignés ci-dessous, lecture seule.", en: "Hotel access: only sees participants who booked at the hotel(s) assigned below, read-only.", pt: "Acesso hotel: vê apenas os participantes que reservaram no(s) hotel(s) atribuídos abaixo, apenas leitura." },
+  assign_hotels_label: { fr: "Hôtel(s) assigné(s)", en: "Assigned hotel(s)", pt: "Hotel(éis) atribuído(s)" },
+  assign_hotels_help: { fr: "Cochez un ou plusieurs hôtels : ce compte ne verra que les participants de ces hôtels-là.", en: "Check one or more hotels: this account will only see participants from those hotels.", pt: "Marque um ou vários hotéis: esta conta só verá os participantes desses hotéis." },
+  my_hotels_banner: { fr: "Hôtel(s) consulté(s)", en: "Hotel(s) shown", pt: "Hotel(éis) exibido(s)" },
   read_only_notice: { fr: "Vous êtes en lecture seule : consultation uniquement, aucune modification possible.", en: "You are in read-only mode: viewing only, no changes possible.", pt: "Está em modo de apenas leitura: apenas consulta, sem alterações possíveis." },
   filter_hotel: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
   filter_arrival: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
@@ -1485,8 +1490,14 @@ function AdminLogin({ lang }) {
 function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
+  const [myHotels, setMyHotels] = useState([]);
   const canEdit = myRole === "super_admin" || myRole === "manager";
   const isSuperAdmin = myRole === "super_admin";
+  const isHotelRole = myRole === "hotel";
+
+  useEffect(() => {
+    if (isHotelRole) listMyManagedHotels().then(setMyHotels);
+  }, [isHotelRole]);
 
   async function handleDownloadBadges() {
     setGeneratingBadges(true);
@@ -1506,6 +1517,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <LayoutDashboard size={20} color="var(--navy)" />
           <h2 className="font-display font-semibold text-2xl" style={{ color: "var(--navy)" }}>{t("dashboard", lang)}</h2>
           {myRole === "viewer" && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><Eye size={11}/> {t("role_viewer", lang)}</span>}
+          {isHotelRole && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><HotelIcon size={11}/> {t("role_hotel", lang)}</span>}
         </div>
         <div className="flex items-center gap-3">
           {tab === "participants" && <button onClick={onRefresh} className="cb-btn-outline text-sm py-1.5 px-3"><RefreshCw size={14} className={participantsLoading ? "animate-spin" : ""} /> {t("refresh", lang)}</button>}
@@ -1521,6 +1533,13 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
 
       {tab === "participants" && (
       <>
+      {isHotelRole && myHotels.length > 0 && (
+        <div className="text-xs px-3 py-2 mb-4 flex items-center gap-2 flex-wrap" style={{ background: "var(--sable-deep)" }}>
+          <HotelIcon size={13} color="var(--vert-fonce)" />
+          <strong>{t("my_hotels_banner", lang)} :</strong>
+          {myHotels.map((h, i) => <span key={h.id}>{h.name_fr || h.name}{i < myHotels.length - 1 ? "," : ""}</span>)}
+        </div>
+      )}
       <div className="grid sm:grid-cols-3 gap-5 mb-10">
         <div className="bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
           <div className="cb-label">{t("total_reg", lang)}</div>
@@ -1632,7 +1651,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
 
       {tab === "events" && isSuperAdmin && <EventsManager lang={lang} activeEventId={eventData.id} onActiveEventChanged={onEventChange} eventData={eventData} />}
       {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} eventData={eventData} onEventChange={onEventChange} canEdit={canEdit} footerText={footerText} onFooterChange={onFooterChange} />}
-      {tab === "users" && isSuperAdmin && <UsersManager lang={lang} currentUserId={adminUser.id} />}
+      {tab === "users" && isSuperAdmin && <UsersManager lang={lang} currentUserId={adminUser.id} eventId={eventData.id} />}
     </div>
   );
 }
@@ -2563,20 +2582,29 @@ function FormFieldsManager({ lang , canEdit }) {
   );
 }
 
-const ROLE_OPTIONS = ["super_admin", "manager", "viewer"];
+const ROLE_OPTIONS = ["super_admin", "manager", "viewer", "hotel"];
 
-function UsersManager({ lang, currentUserId }) {
+function UsersManager({ lang, currentUserId, eventId }) {
   const [items, setItems] = useState([]);
+  const [hotels, setHotels] = useState([]);
+  const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState("");
 
   async function load() {
     setLoading(true);
-    setItems(await listAdminProfiles());
+    const [profiles, hotelList, linkList] = await Promise.all([
+      listAdminProfiles(),
+      fetchAllForEvent("cms_hotels", eventId),
+      listHotelManagerLinks(),
+    ]);
+    setItems(profiles);
+    setHotels(hotelList);
+    setLinks(linkList);
     setLoading(false);
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [eventId]);
 
   async function handleRoleChange(userId, role) {
     setSavingId(userId);
@@ -2607,6 +2635,21 @@ function UsersManager({ lang, currentUserId }) {
     setSavingId(null);
   }
 
+  async function toggleHotel(userId, hotelId, checked) {
+    setError("");
+    try {
+      if (checked) {
+        await addHotelManager(userId, hotelId);
+        setLinks(l => [...l, { user_id: userId, hotel_id: hotelId }]);
+      } else {
+        await removeHotelManager(userId, hotelId);
+        setLinks(l => l.filter(x => !(x.user_id === userId && x.hotel_id === hotelId)));
+      }
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+  }
+
   return (
     <div>
       <MfaSetup lang={lang} />
@@ -2616,6 +2659,7 @@ function UsersManager({ lang, currentUserId }) {
         <div><strong>{t("role_super_admin", lang)}</strong> — {t("role_super_admin_help", lang)}</div>
         <div><strong>{t("role_manager", lang)}</strong> — {t("role_manager_help", lang)}</div>
         <div><strong>{t("role_viewer", lang)}</strong> — {t("role_viewer_help", lang)}</div>
+        <div><strong>{t("role_hotel", lang)}</strong> — {t("role_hotel_help", lang)}</div>
       </div>
 
       {error && <div className="text-sm px-3 py-2 mb-4" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>{error}</div>}
@@ -2634,7 +2678,8 @@ function UsersManager({ lang, currentUserId }) {
               <tr><td colSpan={3} className="px-3 py-8 text-center text-black/40">{t("no_users", lang)}</td></tr>
             )}
             {items.map(u => (
-              <tr key={u.user_id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
+              <React.Fragment key={u.user_id}>
+              <tr className="border-t" style={{ borderColor: "#E7DCC2" }}>
                 <td className="px-3 py-2">
                   {u.email}
                   {u.user_id === currentUserId && <span className="text-[10px] px-1.5 py-0.5 ml-2" style={{ background: "var(--sable-deep)" }}>{t("you_label", lang)}</span>}
@@ -2650,6 +2695,27 @@ function UsersManager({ lang, currentUserId }) {
                   </button>
                 </td>
               </tr>
+              {u.role === "hotel" && (
+                <tr className="border-t" style={{ borderColor: "#E7DCC2", background: "var(--sable-deep)" }}>
+                  <td colSpan={3} className="px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-wide text-black/50 mb-1">{t("assign_hotels_label", lang)}</div>
+                    <p className="text-xs text-black/50 mb-2">{t("assign_hotels_help", lang)}</p>
+                    <div className="flex flex-wrap gap-3">
+                      {hotels.length === 0 && <span className="text-xs text-black/40">{t("no_items", lang)}</span>}
+                      {hotels.map(h => {
+                        const checked = links.some(l => l.user_id === u.user_id && l.hotel_id === h.id);
+                        return (
+                          <label key={h.id} className="flex items-center gap-1.5 text-sm bg-white px-2 py-1 border" style={{ borderColor: "#CFC4A3" }}>
+                            <input type="checkbox" checked={checked} onChange={e => toggleHotel(u.user_id, h.id, e.target.checked)} />
+                            {h.name_fr || h.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
