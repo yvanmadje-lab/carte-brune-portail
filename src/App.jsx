@@ -20,9 +20,9 @@ import QRCode from "qrcode";
 const COUNTRIES = ["Bénin","Cabo Verde","Côte d'Ivoire","Gambie","Ghana","Guinée","Guinée-Bissau","Liberia","Nigeria","Sénégal","Sierra Leone","Togo"];
 
 const DEFAULT_HOTELS = [
-  { id: "h1", name: "Hôtel Pullman Dakar", distance: "Lieu officiel de l'Assemblée Générale", desc: { fr: "Hôtel hôte de la 42ᵉ Assemblée Générale, en front de mer sur la Corniche.", en: "Host hotel of the 42nd General Assembly, on the seafront Corniche.", pt: "Hotel anfitrião da 42ª Assembleia Geral, à beira-mar na Corniche." }, amenities: ["Wi‑Fi", "Piscine", "Salles de conférence", "Restaurant"], rooms: [ { id: "h1r1", type: "Standard", price: 85000, cur: "FCFA" }, { id: "h1r2", type: "Deluxe", price: 120000, cur: "FCFA" } ] },
-  { id: "h2", name: "Radisson Blu Dakar Sea Plaza", distance: "2,1 km du lieu de réunion", desc: { fr: "Établissement moderne surplombant la baie de Dakar.", en: "Modern property overlooking Dakar bay.", pt: "Estabelecimento moderno com vista para a baía de Dakar." }, amenities: ["Wi‑Fi", "Salle de sport", "Climatisation", "Parking"], rooms: [ { id: "h2r1", type: "Standard", price: 75000, cur: "FCFA" }, { id: "h2r2", type: "Suite", price: 140000, cur: "FCFA" } ] },
-  { id: "h3", name: "Novotel Dakar", distance: "3,4 km du lieu de réunion", desc: { fr: "Option confortable au centre-ville, proche du Plateau.", en: "Comfortable downtown option, near Le Plateau.", pt: "Opção confortável no centro, perto do Plateau." }, amenities: ["Wi‑Fi", "Petit-déjeuner", "Climatisation"], rooms: [ { id: "h3r1", type: "Standard", price: 55000, cur: "FCFA" } ] },
+  { id: "h1", name: "Hôtel Pullman Dakar", distance: "Lieu officiel de l'Assemblée Générale", desc: { fr: "Hôtel hôte de la 42ᵉ Assemblée Générale, en front de mer sur la Corniche.", en: "Host hotel of the 42nd General Assembly, on the seafront Corniche.", pt: "Hotel anfitrião da 42ª Assembleia Geral, à beira-mar na Corniche." }, amenities: { fr: ["Wi‑Fi", "Piscine", "Salles de conférence", "Restaurant"], en: ["Wi‑Fi", "Pool", "Conference rooms", "Restaurant"], pt: ["Wi‑Fi", "Piscina", "Salas de conferência", "Restaurante"] }, rooms: [ { id: "h1r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 85000, cur: "FCFA" }, { id: "h1r2", type: { fr: "Deluxe", en: "Deluxe", pt: "Deluxe" }, price: 120000, cur: "FCFA" } ] },
+  { id: "h2", name: "Radisson Blu Dakar Sea Plaza", distance: "2,1 km du lieu de réunion", desc: { fr: "Établissement moderne surplombant la baie de Dakar.", en: "Modern property overlooking Dakar bay.", pt: "Estabelecimento moderno com vista para a baía de Dakar." }, amenities: { fr: ["Wi‑Fi", "Salle de sport", "Climatisation", "Parking"], en: ["Wi‑Fi", "Gym", "Air conditioning", "Parking"], pt: ["Wi‑Fi", "Ginásio", "Ar condicionado", "Estacionamento"] }, rooms: [ { id: "h2r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 75000, cur: "FCFA" }, { id: "h2r2", type: { fr: "Suite", en: "Suite", pt: "Suite" }, price: 140000, cur: "FCFA" } ] },
+  { id: "h3", name: "Novotel Dakar", distance: "3,4 km du lieu de réunion", desc: { fr: "Option confortable au centre-ville, proche du Plateau.", en: "Comfortable downtown option, near Le Plateau.", pt: "Opção confortável no centro, perto do Plateau." }, amenities: { fr: ["Wi‑Fi", "Petit-déjeuner", "Climatisation"], en: ["Wi‑Fi", "Breakfast", "Air conditioning"], pt: ["Wi‑Fi", "Pequeno-almoço", "Ar condicionado"] }, rooms: [ { id: "h3r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 55000, cur: "FCFA" } ] },
 ];
 
 const DEFAULT_TOURISM = [
@@ -190,10 +190,17 @@ const T = {
   upload_image: { fr: "Choisir une image", en: "Choose image", pt: "Escolher imagem" },
   uploading: { fr: "Envoi de l'image…", en: "Uploading image…", pt: "A enviar imagem…" },
   display_order: { fr: "Ordre d'affichage", en: "Display order", pt: "Ordem de exibição" },
-  amenities_help: { fr: "Commodités, séparées par des virgules", en: "Amenities, comma-separated", pt: "Comodidades, separadas por vírgulas" },
+  amenities_help: { fr: "Séparées par des virgules, ex: Wi-Fi, Piscine, Parking", en: "Comma-separated, e.g. Wi-Fi, Pool, Parking", pt: "Separadas por vírgulas, ex: Wi-Fi, Piscina, Estacionamento" },
+  amenities_fr_label: { fr: "Commodités (Français)", en: "Amenities (French)", pt: "Comodidades (Francês)" },
+  amenities_en_label: { fr: "Commodités (Anglais)", en: "Amenities (English)", pt: "Comodidades (Inglês)" },
+  amenities_pt_label: { fr: "Commodités (Portugais)", en: "Amenities (Portuguese)", pt: "Comodidades (Português)" },
+  amenities_title: { fr: "Commodités", en: "Amenities", pt: "Comodidades" },
   room_categories_label: { fr: "Types de chambre proposés (affichés sur la carte de l'hôtel)", en: "Room categories offered (shown on the hotel card)", pt: "Categorias de quarto oferecidas (exibidas no cartão do hotel)" },
   add_room_category: { fr: "Ajouter un type de chambre", en: "Add room category", pt: "Adicionar categoria de quarto" },
   room_order_label: { fr: "Ordre", en: "Order", pt: "Ordem" },
+  room_type_fr: { fr: "Type (Français)", en: "Type (French)", pt: "Tipo (Francês)" },
+  room_type_en: { fr: "Type (Anglais)", en: "Type (English)", pt: "Tipo (Inglês)" },
+  room_type_pt: { fr: "Type (Portugais)", en: "Type (Portuguese)", pt: "Tipo (Português)" },
   hotel_order_label: { fr: "Ordre d'affichage de l'hôtel", en: "Hotel display order", pt: "Ordem de exibição do hotel" },
   price: { fr: "Prix / nuit", en: "Price / night", pt: "Preço / noite" },
   currency: { fr: "Devise", en: "Currency", pt: "Moeda" },
@@ -626,18 +633,26 @@ export default function App() {
     })));
     if (h.length) setHotels(h.map(r => {
       const extraRooms = Array.isArray(r.rooms) ? r.rooms : [];
+      const normType = (type) => typeof type === "object" && type !== null
+        ? { fr: type.fr || "", en: type.en || type.fr || "", pt: type.pt || type.fr || "" }
+        : { fr: type || "Standard", en: type || "Standard", pt: type || "Standard" };
       const rooms = extraRooms.length
         ? extraRooms
             .slice()
             .sort((a, b) => (a.order || 0) - (b.order || 0))
-            .map((room, i) => ({ id: `${r.id}-r${i}`, type: room.type || "Standard", price: Number(room.price) || 0, cur: room.currency || "FCFA" }))
-        : [{ id: r.id + "-r1", type: r.room_type || "Standard", price: Number(r.price) || 0, cur: r.currency || "FCFA" }];
+            .map((room, i) => ({ id: `${r.id}-r${i}`, type: normType(room.type), price: Number(room.price) || 0, cur: room.currency || "FCFA" }))
+        : [{ id: r.id + "-r1", type: normType(r.room_type), price: Number(r.price) || 0, cur: r.currency || "FCFA" }];
+      const splitAmenities = (txt) => (txt || "").split(",").map(a => a.trim()).filter(Boolean);
       return {
         id: r.id,
         name: r.name,
         distance: r.distance,
         desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
-        amenities: (r.amenities || "").split(",").map(a => a.trim()).filter(Boolean),
+        amenities: {
+          fr: splitAmenities(r.amenities_fr || r.amenities),
+          en: splitAmenities(r.amenities_en) .length ? splitAmenities(r.amenities_en) : splitAmenities(r.amenities_fr || r.amenities),
+          pt: splitAmenities(r.amenities_pt).length ? splitAmenities(r.amenities_pt) : splitAmenities(r.amenities_fr || r.amenities),
+        },
         image: r.image_url,
         gallery: Array.isArray(r.gallery) ? r.gallery : [],
         website: r.website || "",
@@ -796,7 +811,7 @@ export default function App() {
       ...form,
       orgType: finalOrgType,
       hotelName: form.wantsHotel === "yes" ? selectedHotel.name : "",
-      roomType: form.wantsHotel === "yes" ? selectedRoom.type : "",
+      roomType: form.wantsHotel === "yes" ? (selectedRoom.type[lang] || selectedRoom.type.fr) : "",
     };
     const { data, error } = await supabase.rpc("register_participant", { payload });
     setSubmitting(false);
@@ -1124,12 +1139,12 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
                 <div className="text-xs text-black/50 mb-2 flex items-center gap-1"><MapPin size={12} /> {h.distance}</div>
                 <p className="text-sm mb-3 leading-relaxed">{h.desc[lang]}</p>
                 <div className="flex flex-wrap gap-1.5 mb-3">
-                  {h.amenities.map(a => <span key={a} className="text-[11px] px-2 py-0.5 bg-[var(--sable-deep)]">{a}</span>)}
+                  {(h.amenities[lang] || []).map(a => <span key={a} className="text-[11px] px-2 py-0.5 bg-[var(--sable-deep)]">{a}</span>)}
                 </div>
                 <div className="space-y-1 mb-3">
                   {h.rooms.map(r => (
                     <div key={r.id} className="flex justify-between items-baseline text-sm">
-                      <span className="text-black/70">{r.type}</span>
+                      <span className="text-black/70">{r.type[lang] || r.type.fr}</span>
                       <span className="font-mono font-semibold whitespace-nowrap" style={{ color: "var(--argile)" }}>{r.price.toLocaleString()} {r.cur} {t("per_night", lang)}</span>
                     </div>
                   ))}
@@ -1309,9 +1324,9 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
                   {hotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                 </select>
               </Field>
-              <Field label="Type de chambre">
+              <Field label={t("room_type", lang)}>
                 <select className="cb-input" value={form.roomId} onChange={e=>update("roomId", e.target.value)}>
-                  {selectedHotel.rooms.map(r => <option key={r.id} value={r.id}>{r.type} — {r.price.toLocaleString()} {r.cur}</option>)}
+                  {selectedHotel.rooms.map(r => <option key={r.id} value={r.id}>{r.type[lang] || r.type.fr} — {r.price.toLocaleString()} {r.cur}</option>)}
                 </select>
               </Field>
               <div className="grid sm:grid-cols-2 gap-5">
@@ -1365,7 +1380,7 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
               {form.wantsHotel === "yes" && selectedHotel && (
                 <>
                   <ReviewRow label={t("nav_hotels", lang)} value={selectedHotel.name} />
-                  <ReviewRow label={t("room_type", lang)} value={selectedRoom?.type} />
+                  <ReviewRow label={t("room_type", lang)} value={selectedRoom?.type ? (selectedRoom.type[lang] || selectedRoom.type.fr) : ""} />
                   <ReviewRow label={t("check_in", lang)} value={form.checkIn} />
                   <ReviewRow label={t("check_out", lang)} value={form.checkOut} />
                 </>
@@ -2019,36 +2034,58 @@ function HotelsManager({ lang , canEdit, eventId }) {
             <Field label={t("desc_en", lang)}><textarea className="cb-input" rows={3} value={editing.desc_en || ""} onChange={e=>setEditing(x=>({ ...x, desc_en: e.target.value }))} /></Field>
             <Field label={t("desc_pt", lang)}><textarea className="cb-input" rows={3} value={editing.desc_pt || ""} onChange={e=>setEditing(x=>({ ...x, desc_pt: e.target.value }))} /></Field>
           </div>
-          <Field label={t("amenities_help", lang)}><input className="cb-input" value={editing.amenities || ""} onChange={e=>setEditing(x=>({ ...x, amenities: e.target.value }))} placeholder="Wi-Fi, Piscine, Parking" /></Field>
+          <div>
+            <label className="cb-label mb-2 block">{t("amenities_title", lang)}</label>
+            <p className="text-xs text-black/50 mb-2">{t("amenities_help", lang)}</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field label={t("amenities_fr_label", lang)}><input className="cb-input" value={editing.amenities_fr || ""} onChange={e=>setEditing(x=>({ ...x, amenities_fr: e.target.value }))} placeholder="Wi-Fi, Piscine, Parking" /></Field>
+              <Field label={t("amenities_en_label", lang)}><input className="cb-input" value={editing.amenities_en || ""} onChange={e=>setEditing(x=>({ ...x, amenities_en: e.target.value }))} placeholder="Wi-Fi, Pool, Parking" /></Field>
+              <Field label={t("amenities_pt_label", lang)}><input className="cb-input" value={editing.amenities_pt || ""} onChange={e=>setEditing(x=>({ ...x, amenities_pt: e.target.value }))} placeholder="Wi-Fi, Piscina, Estacionamento" /></Field>
+            </div>
+          </div>
           <div>
             <label className="cb-label mb-2 block">{t("room_categories_label", lang)}</label>
-            <div className="space-y-2 mb-2">
-              {(editing.rooms || []).map((room, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-end p-2" style={{ background: "var(--sable-deep)" }}>
-                  <div className="col-span-4">
-                    <label className="text-[10px] text-black/50 uppercase">{t("room_type", lang)}</label>
-                    <input className="cb-input" value={room.type || ""} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,type:e.target.value}:r) }))} />
+            <div className="space-y-3 mb-2">
+              {(editing.rooms || []).map((room, idx) => {
+                const rt = typeof room.type === "object" && room.type !== null ? room.type : { fr: room.type || "", en: "", pt: "" };
+                return (
+                <div key={idx} className="p-3 space-y-2" style={{ background: "var(--sable-deep)" }}>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] text-black/50 uppercase">{t("room_type_fr", lang)}</label>
+                      <input className="cb-input" value={rt.fr || ""} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,type:{...rt,fr:e.target.value}}:r) }))} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-black/50 uppercase">{t("room_type_en", lang)}</label>
+                      <input className="cb-input" value={rt.en || ""} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,type:{...rt,en:e.target.value}}:r) }))} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-black/50 uppercase">{t("room_type_pt", lang)}</label>
+                      <input className="cb-input" value={rt.pt || ""} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,type:{...rt,pt:e.target.value}}:r) }))} />
+                    </div>
                   </div>
-                  <div className="col-span-3">
-                    <label className="text-[10px] text-black/50 uppercase">{t("price", lang)}</label>
-                    <input type="number" className="cb-input" value={room.price || 0} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,price:Number(e.target.value)}:r) }))} />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] text-black/50 uppercase">{t("currency", lang)}</label>
-                    <input className="cb-input" value={room.currency || "FCFA"} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,currency:e.target.value}:r) }))} />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] text-black/50 uppercase">{t("room_order_label", lang)}</label>
-                    <input type="number" className="cb-input" value={room.order || 0} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,order:Number(e.target.value)}:r) }))} />
-                  </div>
-                  <div className="col-span-1 flex justify-center pb-2">
-                    <button onClick={() => setEditing(x => ({ ...x, rooms: x.rooms.filter((_, i) => i !== idx) }))}><X size={16} color="#8A2A2A" /></button>
+                  <div className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-4">
+                      <label className="text-[10px] text-black/50 uppercase">{t("price", lang)}</label>
+                      <input type="number" className="cb-input" value={room.price || 0} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,price:Number(e.target.value)}:r) }))} />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="text-[10px] text-black/50 uppercase">{t("currency", lang)}</label>
+                      <input className="cb-input" value={room.currency || "FCFA"} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,currency:e.target.value}:r) }))} />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="text-[10px] text-black/50 uppercase">{t("room_order_label", lang)}</label>
+                      <input type="number" className="cb-input" value={room.order || 0} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,order:Number(e.target.value)}:r) }))} />
+                    </div>
+                    <div className="col-span-2 flex justify-center pb-2">
+                      <button onClick={() => setEditing(x => ({ ...x, rooms: x.rooms.filter((_, i) => i !== idx) }))}><X size={16} color="#8A2A2A" /></button>
+                    </div>
                   </div>
                 </div>
-              ))}
+              );})}
               {(editing.rooms || []).length === 0 && <p className="text-xs text-black/40">{t("no_items", lang)}</p>}
             </div>
-            <button onClick={() => setEditing(x => ({ ...x, rooms: [...(x.rooms || []), { type: "Standard", price: 0, currency: "FCFA", order: (x.rooms || []).length }] }))} className="cb-btn-outline text-xs py-1.5 px-3"><Plus size={13} /> {t("add_room_category", lang)}</button>
+            <button onClick={() => setEditing(x => ({ ...x, rooms: [...(x.rooms || []), { type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 0, currency: "FCFA", order: (x.rooms || []).length }] }))} className="cb-btn-outline text-xs py-1.5 px-3"><Plus size={13} /> {t("add_room_category", lang)}</button>
           </div>
           <div>
             <label className="cb-label">{t("hotel_order_label", lang)}</label>
@@ -2067,7 +2104,7 @@ function HotelsManager({ lang , canEdit, eventId }) {
           </div>
         </div>
       ) : (
-        canEdit && <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities: "", rooms: [{ type: "Standard", price: 0, currency: "FCFA", order: 0 }], image_url: "", website: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities_fr: "", amenities_en: "", amenities_pt: "", rooms: [{ type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 0, currency: "FCFA", order: 0 }], image_url: "", website: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
@@ -2648,7 +2685,7 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
       ...form,
       orgType: finalOrgType,
       hotelName: form.wantsHotel === "yes" ? (selectedHotel?.name || "") : "",
-      roomType: form.wantsHotel === "yes" ? (selectedRoom?.type || "") : "",
+      roomType: form.wantsHotel === "yes" ? (selectedRoom?.type ? (selectedRoom.type[lang] || selectedRoom.type.fr) : "") : "",
     };
     const { data, error } = await supabase.rpc("update_participant_by_token", { p_token: token, payload });
     setSaving(false);
@@ -2732,7 +2769,7 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
                 </Field>
                 <Field label={t("room_type", lang)}>
                   <select className="cb-input" value={form.roomId} onChange={e=>update("roomId", e.target.value)}>
-                    {selectedHotel.rooms.map(r => <option key={r.id} value={r.id}>{r.type} — {r.price.toLocaleString()} {r.cur}</option>)}
+                    {selectedHotel.rooms.map(r => <option key={r.id} value={r.id}>{r.type[lang] || r.type.fr} — {r.price.toLocaleString()} {r.cur}</option>)}
                   </select>
                 </Field>
                 <div className="grid sm:grid-cols-2 gap-5">
