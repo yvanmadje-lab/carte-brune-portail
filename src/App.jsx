@@ -363,6 +363,10 @@ const T = {
   clear_participants_confirm_word: { fr: "SUPPRIMER", en: "DELETE", pt: "APAGAR" },
   clear_participants_wrong_word: { fr: "Texte de confirmation incorrect — rien n'a été supprimé.", en: "Confirmation text incorrect — nothing was deleted.", pt: "Texto de confirmação incorreto — nada foi apagado." },
   clear_participants_success: { fr: "participant(s) supprimé(s). La liste est maintenant vide.", en: "participant(s) deleted. The list is now empty.", pt: "participante(s) apagado(s). A lista está agora vazia." },
+  email_sent_ok: { fr: "Email de confirmation envoyé", en: "Confirmation email sent", pt: "Email de confirmação enviado" },
+  email_sent_fail: { fr: "Échec de l'envoi de l'email de confirmation", en: "Confirmation email failed to send", pt: "Falha ao enviar o email de confirmação" },
+  resend_email_btn: { fr: "Renvoyer", en: "Resend", pt: "Reenviar" },
+  resend_failed: { fr: "Échec du renvoi", en: "Resend failed", pt: "Falha ao reenviar" },
   read_only_notice: { fr: "Vous êtes en lecture seule : consultation uniquement, aucune modification possible.", en: "You are in read-only mode: viewing only, no changes possible.", pt: "Está em modo de apenas leitura: apenas consulta, sem alterações possíveis." },
   filter_hotel: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
   filter_arrival: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
@@ -793,6 +797,9 @@ export default function App() {
       departureDate: row.departure_date,
       departureTime: row.departure_time,
       departureFlightNumber: row.departure_flight_number,
+      editToken: row.edit_token,
+      confirmationEmailSent: row.confirmation_email_sent,
+      confirmationEmailError: row.confirmation_email_error,
     };
   }
 
@@ -812,6 +819,26 @@ export default function App() {
       await deleteRow("participants", id);
       setParticipants(list => list.filter(p => p.id !== id));
     } catch (e) { /* best effort */ }
+  }
+
+  async function resendConfirmationEmail(p) {
+    if (!p.email || !p.editToken) return;
+    setParticipants(list => list.map(x => x.id === p.id ? { ...x, confirmationEmailSent: null } : x));
+    const editLink = `${window.location.origin}${window.location.pathname}?edit=${p.editToken}`;
+    try {
+      const res = await fetch("/api/send-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: p.email, lang, firstName: p.firstName, lastName: p.lastName,
+          regNumber: p.regNumber, editLink, eventTitle: eventData.title[lang],
+        }),
+      });
+      const ok = res.ok;
+      setParticipants(list => list.map(x => x.id === p.id ? { ...x, confirmationEmailSent: ok, confirmationEmailError: ok ? null : t("resend_failed", lang) } : x));
+    } catch (e) {
+      setParticipants(list => list.map(x => x.id === p.id ? { ...x, confirmationEmailSent: false, confirmationEmailError: String(e.message || e) } : x));
+    }
   }
 
   useEffect(() => {
@@ -847,23 +874,31 @@ export default function App() {
 
     // Envoi de l'email de confirmation — au mieux, n'empêche jamais
     // la confirmation de s'afficher si l'envoi échoue.
+    // keepalive: true est essentiel ici — sans lui, si le visiteur
+    // quitte ou referme la page juste après l'inscription (fréquent
+    // sur mobile, l'écran de confirmation étant déjà affiché), le
+    // navigateur annule cette requête en plein vol et l'email ne
+    // part jamais, sans aucune erreur visible nulle part.
     if (form.email && editToken) {
       const editLink = `${window.location.origin}${window.location.pathname}?edit=${editToken}`;
       fetch("/api/send-confirmation", {
         method: "POST",
+        keepalive: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: form.email, lang, firstName: form.firstName, lastName: form.lastName,
           regNumber, editLink, eventTitle: eventData.title[lang],
         }),
-      }).catch(() => { /* best effort */ });
+      }).catch(() => { /* best effort — le serveur retente 3 fois et journalise l'échec dans confirmation_email_error, visible/renvoyable depuis l'admin */ });
     }
 
     // Envoi du message WhatsApp de confirmation (avec le lien du
-    // groupe "Browncard Event") — également au mieux.
+    // groupe "Browncard Event") — également au mieux. keepalive
+    // pour la même raison que ci-dessus (voir commentaire email).
     if (form.phone) {
       fetch("/api/send-whatsapp", {
         method: "POST",
+        keepalive: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: form.phone, lang, firstName: form.firstName, lastName: form.lastName,
@@ -1000,7 +1035,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
       )}
 
       {view === "archives" && (
@@ -1498,7 +1533,7 @@ function AdminLogin({ lang }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, needsMfa, mfaFactorId, onMfaVerified }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const [myHotels, setMyHotels] = useState([]);
@@ -1673,7 +1708,17 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
                 <td className="px-3 py-2 whitespace-nowrap">{p.organization}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.orgType || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.country}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{p.email}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <span>{p.email}</span>
+                    {p.email && p.confirmationEmailSent === true && <span title={t("email_sent_ok", lang)}><Check size={13} color="var(--vert-fonce)" /></span>}
+                    {p.email && p.confirmationEmailSent === false && <span title={p.confirmationEmailError || t("email_sent_fail", lang)}><X size={13} color="#8A2A2A" /></span>}
+                    {canEdit && p.email && p.editToken && p.confirmationEmailSent !== null && (
+                      <button onClick={() => onResendConfirmation(p)} title={t("resend_email_btn", lang)} className="text-[10px] underline text-black/50 whitespace-nowrap">{t("resend_email_btn", lang)}</button>
+                    )}
+                    {p.confirmationEmailSent === null && <span className="text-[10px] text-black/40">…</span>}
+                  </div>
+                </td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.hotelName || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.roomType || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.arrivalDate || "—"}</td>
