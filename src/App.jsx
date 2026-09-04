@@ -20,9 +20,9 @@ import QRCode from "qrcode";
 const COUNTRIES = ["Bénin","Cabo Verde","Côte d'Ivoire","Gambie","Ghana","Guinée","Guinée-Bissau","Liberia","Nigeria","Sénégal","Sierra Leone","Togo"];
 
 const DEFAULT_HOTELS = [
-  { id: "h1", name: "Hôtel Pullman Dakar", distance: "Lieu officiel de l'Assemblée Générale", desc: { fr: "Hôtel hôte de la 42ᵉ Assemblée Générale, en front de mer sur la Corniche.", en: "Host hotel of the 42nd General Assembly, on the seafront Corniche.", pt: "Hotel anfitrião da 42ª Assembleia Geral, à beira-mar na Corniche." }, amenities: { fr: ["Wi‑Fi", "Piscine", "Salles de conférence", "Restaurant"], en: ["Wi‑Fi", "Pool", "Conference rooms", "Restaurant"], pt: ["Wi‑Fi", "Piscina", "Salas de conferência", "Restaurante"] }, rooms: [ { id: "h1r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 85000, cur: "FCFA" }, { id: "h1r2", type: { fr: "Deluxe", en: "Deluxe", pt: "Deluxe" }, price: 120000, cur: "FCFA" } ] },
-  { id: "h2", name: "Radisson Blu Dakar Sea Plaza", distance: "2,1 km du lieu de réunion", desc: { fr: "Établissement moderne surplombant la baie de Dakar.", en: "Modern property overlooking Dakar bay.", pt: "Estabelecimento moderno com vista para a baía de Dakar." }, amenities: { fr: ["Wi‑Fi", "Salle de sport", "Climatisation", "Parking"], en: ["Wi‑Fi", "Gym", "Air conditioning", "Parking"], pt: ["Wi‑Fi", "Ginásio", "Ar condicionado", "Estacionamento"] }, rooms: [ { id: "h2r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 75000, cur: "FCFA" }, { id: "h2r2", type: { fr: "Suite", en: "Suite", pt: "Suite" }, price: 140000, cur: "FCFA" } ] },
-  { id: "h3", name: "Novotel Dakar", distance: "3,4 km du lieu de réunion", desc: { fr: "Option confortable au centre-ville, proche du Plateau.", en: "Comfortable downtown option, near Le Plateau.", pt: "Opção confortável no centro, perto do Plateau." }, amenities: { fr: ["Wi‑Fi", "Petit-déjeuner", "Climatisation"], en: ["Wi‑Fi", "Breakfast", "Air conditioning"], pt: ["Wi‑Fi", "Pequeno-almoço", "Ar condicionado"] }, rooms: [ { id: "h3r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 55000, cur: "FCFA" } ] },
+  { id: "h1", name: { fr: "Hôtel Pullman Dakar", en: "Pullman Dakar Hotel", pt: "Hotel Pullman Dakar" }, distance: { fr: "Lieu officiel de l'Assemblée Générale", en: "Official venue of the General Assembly", pt: "Local oficial da Assembleia Geral" }, desc: { fr: "Hôtel hôte de la 42ᵉ Assemblée Générale, en front de mer sur la Corniche.", en: "Host hotel of the 42nd General Assembly, on the seafront Corniche.", pt: "Hotel anfitrião da 42ª Assembleia Geral, à beira-mar na Corniche." }, amenities: { fr: ["Wi‑Fi", "Piscine", "Salles de conférence", "Restaurant"], en: ["Wi‑Fi", "Pool", "Conference rooms", "Restaurant"], pt: ["Wi‑Fi", "Piscina", "Salas de conferência", "Restaurante"] }, rooms: [ { id: "h1r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 85000, cur: "FCFA" }, { id: "h1r2", type: { fr: "Deluxe", en: "Deluxe", pt: "Deluxe" }, price: 120000, cur: "FCFA" } ] },
+  { id: "h2", name: { fr: "Radisson Blu Dakar Sea Plaza", en: "Radisson Blu Dakar Sea Plaza", pt: "Radisson Blu Dakar Sea Plaza" }, distance: { fr: "2,1 km du lieu de réunion", en: "2.1 km from the meeting venue", pt: "2,1 km do local da reunião" }, desc: { fr: "Établissement moderne surplombant la baie de Dakar.", en: "Modern property overlooking Dakar bay.", pt: "Estabelecimento moderno com vista para a baía de Dakar." }, amenities: { fr: ["Wi‑Fi", "Salle de sport", "Climatisation", "Parking"], en: ["Wi‑Fi", "Gym", "Air conditioning", "Parking"], pt: ["Wi‑Fi", "Ginásio", "Ar condicionado", "Estacionamento"] }, rooms: [ { id: "h2r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 75000, cur: "FCFA" }, { id: "h2r2", type: { fr: "Suite", en: "Suite", pt: "Suite" }, price: 140000, cur: "FCFA" } ] },
+  { id: "h3", name: { fr: "Novotel Dakar", en: "Novotel Dakar", pt: "Novotel Dakar" }, distance: { fr: "3,4 km du lieu de réunion", en: "3.4 km from the meeting venue", pt: "3,4 km do local da reunião" }, desc: { fr: "Option confortable au centre-ville, proche du Plateau.", en: "Comfortable downtown option, near Le Plateau.", pt: "Opção confortável no centro, perto do Plateau." }, amenities: { fr: ["Wi‑Fi", "Petit-déjeuner", "Climatisation"], en: ["Wi‑Fi", "Breakfast", "Air conditioning"], pt: ["Wi‑Fi", "Pequeno-almoço", "Ar condicionado"] }, rooms: [ { id: "h3r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 55000, cur: "FCFA" } ] },
 ];
 
 const DEFAULT_TOURISM = [
@@ -195,6 +195,9 @@ const T = {
   amenities_en_label: { fr: "Commodités (Anglais)", en: "Amenities (English)", pt: "Comodidades (Inglês)" },
   amenities_pt_label: { fr: "Commodités (Portugais)", en: "Amenities (Portuguese)", pt: "Comodidades (Português)" },
   amenities_title: { fr: "Commodités", en: "Amenities", pt: "Comodidades" },
+  distance_fr: { fr: "Distance / lieu (Français)", en: "Distance / venue (French)", pt: "Distância / local (Francês)" },
+  distance_en: { fr: "Distance / lieu (Anglais)", en: "Distance / venue (English)", pt: "Distância / local (Inglês)" },
+  distance_pt: { fr: "Distance / lieu (Portugais)", en: "Distance / venue (Portuguese)", pt: "Distância / local (Português)" },
   room_categories_label: { fr: "Types de chambre proposés (affichés sur la carte de l'hôtel)", en: "Room categories offered (shown on the hotel card)", pt: "Categorias de quarto oferecidas (exibidas no cartão do hotel)" },
   add_room_category: { fr: "Ajouter un type de chambre", en: "Add room category", pt: "Adicionar categoria de quarto" },
   room_order_label: { fr: "Ordre", en: "Order", pt: "Ordem" },
@@ -643,10 +646,12 @@ export default function App() {
             .map((room, i) => ({ id: `${r.id}-r${i}`, type: normType(room.type), price: Number(room.price) || 0, cur: room.currency || "FCFA" }))
         : [{ id: r.id + "-r1", type: normType(r.room_type), price: Number(r.price) || 0, cur: r.currency || "FCFA" }];
       const splitAmenities = (txt) => (txt || "").split(",").map(a => a.trim()).filter(Boolean);
+      const nameFr = r.name_fr || r.name || "";
+      const distFr = r.distance_fr || r.distance || "";
       return {
         id: r.id,
-        name: r.name,
-        distance: r.distance,
+        name: { fr: nameFr, en: r.name_en || nameFr, pt: r.name_pt || nameFr },
+        distance: { fr: distFr, en: r.distance_en || distFr, pt: r.distance_pt || distFr },
         desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
         amenities: {
           fr: splitAmenities(r.amenities_fr || r.amenities),
@@ -810,7 +815,7 @@ export default function App() {
     const payload = {
       ...form,
       orgType: finalOrgType,
-      hotelName: form.wantsHotel === "yes" ? selectedHotel.name : "",
+      hotelName: form.wantsHotel === "yes" ? (selectedHotel.name[lang] || selectedHotel.name.fr) : "",
       roomType: form.wantsHotel === "yes" ? (selectedRoom.type[lang] || selectedRoom.type.fr) : "",
     };
     const { data, error } = await supabase.rpc("register_participant", { payload });
@@ -1124,19 +1129,20 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
         <div className="grid md:grid-cols-3 gap-6">
           {hotels.map(h => {
             const gallery = [h.image, ...(h.gallery || [])].filter(Boolean);
+            const hName = h.name[lang] || h.name.fr;
             return (
             <div key={h.id} className="border" style={{ borderColor: "#CFC4A3" }}>
               {h.image ? (
-                <button onClick={() => gallery.length && setGalleryItem({ title: h.name, images: gallery })} className="w-full flex items-end p-3 text-left" style={{ height: "280px", backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center", cursor: gallery.length ? "pointer" : "default" }}>
-                  <span className="text-white font-display font-semibold text-lg" style={{ textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>{h.name}</span>
+                <button onClick={() => gallery.length && setGalleryItem({ title: hName, images: gallery })} className="w-full flex items-end p-3 text-left" style={{ height: "280px", backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center", cursor: gallery.length ? "pointer" : "default" }}>
+                  <span className="text-white font-display font-semibold text-lg" style={{ textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>{hName}</span>
                 </button>
               ) : (
                 <div style={{ background: "var(--navy)", height: "280px" }} className="flex items-end p-3">
-                  <span className="text-white font-display font-semibold text-lg">{h.name}</span>
+                  <span className="text-white font-display font-semibold text-lg">{hName}</span>
                 </div>
               )}
               <div className="p-4">
-                <div className="text-xs text-black/50 mb-2 flex items-center gap-1"><MapPin size={12} /> {h.distance}</div>
+                <div className="text-xs text-black/50 mb-2 flex items-center gap-1"><MapPin size={12} /> {h.distance[lang] || h.distance.fr}</div>
                 <p className="text-sm mb-3 leading-relaxed">{h.desc[lang]}</p>
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {(h.amenities[lang] || []).map(a => <span key={a} className="text-[11px] px-2 py-0.5 bg-[var(--sable-deep)]">{a}</span>)}
@@ -1151,7 +1157,7 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {gallery.length > 0 && (
-                    <button onClick={() => setGalleryItem({ title: h.name, images: gallery })} className="cb-btn-outline text-xs py-1.5 px-3"><ImageIcon size={13} /> {t("view_photos", lang)}</button>
+                    <button onClick={() => setGalleryItem({ title: hName, images: gallery })} className="cb-btn-outline text-xs py-1.5 px-3"><ImageIcon size={13} /> {t("view_photos", lang)}</button>
                   )}
                   {h.website && (
                     <a href={h.website} target="_blank" rel="noopener noreferrer" className="cb-btn-outline text-xs py-1.5 px-3" style={{ textDecoration: "none" }}><Globe2 size={13} /> {t("visit_website", lang)}</a>
@@ -1321,7 +1327,7 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
             <>
               <Field label={t("nav_hotels", lang)}>
                 <select className="cb-input" value={form.hotelId} onChange={e=>{ const h = hotels.find(x=>x.id===e.target.value); update("hotelId", e.target.value); update("roomId", h.rooms[0].id); }}>
-                  {hotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                  {hotels.map(h => <option key={h.id} value={h.id}>{h.name[lang] || h.name.fr}</option>)}
                 </select>
               </Field>
               <Field label={t("room_type", lang)}>
@@ -1379,7 +1385,7 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
               <ReviewRow label={t("want_hotel", lang)} value={form.wantsHotel === "yes" ? t("yes", lang) : t("no", lang)} />
               {form.wantsHotel === "yes" && selectedHotel && (
                 <>
-                  <ReviewRow label={t("nav_hotels", lang)} value={selectedHotel.name} />
+                  <ReviewRow label={t("nav_hotels", lang)} value={selectedHotel.name[lang] || selectedHotel.name.fr} />
                   <ReviewRow label={t("room_type", lang)} value={selectedRoom?.type ? (selectedRoom.type[lang] || selectedRoom.type.fr) : ""} />
                   <ReviewRow label={t("check_in", lang)} value={form.checkIn} />
                   <ReviewRow label={t("check_out", lang)} value={form.checkOut} />
@@ -1974,7 +1980,7 @@ function HotelsManager({ lang , canEdit, eventId }) {
   useEffect(() => { load(); }, [eventId]);
 
   async function save() {
-    if (!editing.name) return;
+    if (!editing.name_fr) return;
     await upsertRow("cms_hotels", { ...editing, event_id: eventId });
     setEditing(null);
     load();
@@ -1992,7 +1998,7 @@ function HotelsManager({ lang , canEdit, eventId }) {
           <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
             {it.image_url ? <div className="h-72" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-72" style={{ background: "var(--navy)" }} />}
             <div className="p-3">
-              <div className="text-sm font-semibold mb-1">{it.name}</div>
+              <div className="text-sm font-semibold mb-1">{it.name_fr || it.name}</div>
               <div className="text-xs text-black/50 mb-2">{Number(it.price || 0).toLocaleString()} {it.currency}</div>
               <div className="flex items-center justify-between">
                 <StatusBadge status={it.status} />
@@ -2010,9 +2016,15 @@ function HotelsManager({ lang , canEdit, eventId }) {
       {editing ? (
         <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
           <ImageUploader lang={lang} value={editing.image_url} onChange={url => setEditing(e => ({ ...e, image_url: url }))} folder="hotels" />
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Field label={t("organization", lang) === "Organization" ? "Hotel name" : "Nom de l'hôtel"}><input className="cb-input" value={editing.name || ""} onChange={e=>setEditing(x=>({ ...x, name: e.target.value }))} /></Field>
-            <Field label="Distance"><input className="cb-input" value={editing.distance || ""} onChange={e=>setEditing(x=>({ ...x, distance: e.target.value }))} /></Field>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.name_fr || ""} onChange={e=>setEditing(x=>({ ...x, name_fr: e.target.value }))} /></Field>
+            <Field label={t("name_en", lang)}><input className="cb-input" value={editing.name_en || ""} onChange={e=>setEditing(x=>({ ...x, name_en: e.target.value }))} /></Field>
+            <Field label={t("name_pt", lang)}><input className="cb-input" value={editing.name_pt || ""} onChange={e=>setEditing(x=>({ ...x, name_pt: e.target.value }))} /></Field>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("distance_fr", lang)}><input className="cb-input" value={editing.distance_fr || ""} onChange={e=>setEditing(x=>({ ...x, distance_fr: e.target.value }))} /></Field>
+            <Field label={t("distance_en", lang)}><input className="cb-input" value={editing.distance_en || ""} onChange={e=>setEditing(x=>({ ...x, distance_en: e.target.value }))} /></Field>
+            <Field label={t("distance_pt", lang)}><input className="cb-input" value={editing.distance_pt || ""} onChange={e=>setEditing(x=>({ ...x, distance_pt: e.target.value }))} /></Field>
           </div>
           <Field label={t("website_label", lang)}><input type="url" className="cb-input" value={editing.website || ""} onChange={e=>setEditing(x=>({ ...x, website: e.target.value }))} placeholder="https://..." /></Field>
           <div>
@@ -2104,7 +2116,7 @@ function HotelsManager({ lang , canEdit, eventId }) {
           </div>
         </div>
       ) : (
-        canEdit && <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities_fr: "", amenities_en: "", amenities_pt: "", rooms: [{ type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 0, currency: "FCFA", order: 0 }], image_url: "", website: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name_fr: "", name_en: "", name_pt: "", distance_fr: "", distance_en: "", distance_pt: "", desc_fr: "", desc_en: "", desc_pt: "", amenities_fr: "", amenities_en: "", amenities_pt: "", rooms: [{ type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 0, currency: "FCFA", order: 0 }], image_url: "", website: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
@@ -2684,7 +2696,7 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
     const payload = {
       ...form,
       orgType: finalOrgType,
-      hotelName: form.wantsHotel === "yes" ? (selectedHotel?.name || "") : "",
+      hotelName: form.wantsHotel === "yes" ? (selectedHotel?.name ? (selectedHotel.name[lang] || selectedHotel.name.fr) : "") : "",
       roomType: form.wantsHotel === "yes" ? (selectedRoom?.type ? (selectedRoom.type[lang] || selectedRoom.type.fr) : "") : "",
     };
     const { data, error } = await supabase.rpc("update_participant_by_token", { p_token: token, payload });
@@ -2764,7 +2776,7 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
               <>
                 <Field label={t("nav_hotels", lang)}>
                   <select className="cb-input" value={form.hotelId} onChange={e=>{ const h = hotels.find(x=>x.id===e.target.value); update("hotelId", e.target.value); update("roomId", h.rooms[0].id); }}>
-                    {hotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                    {hotels.map(h => <option key={h.id} value={h.id}>{h.name[lang] || h.name.fr}</option>)}
                   </select>
                 </Field>
                 <Field label={t("room_type", lang)}>
