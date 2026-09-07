@@ -309,6 +309,8 @@ const T = {
   badge_pdf_label: { fr: "Document PDF (le QR code du badge y renverra)", en: "PDF document (the badge QR code will link to it)", pt: "Documento PDF (o QR code do crachá remeterá para ele)" },
   upload_pdf: { fr: "Choisir un PDF", en: "Choose PDF", pt: "Escolher PDF" },
   archives_title: { fr: "Archives des réunions", en: "Meeting archives", pt: "Arquivo de reuniões" },
+  privacy_policy_title: { fr: "Politique de confidentialité", en: "Privacy Policy", pt: "Política de Privacidade" },
+  back_to_site: { fr: "Retour au site", en: "Back to site", pt: "Voltar ao site" },
   no_archived_events: { fr: "Aucun événement archivé pour le moment.", en: "No archived events yet.", pt: "Ainda sem eventos arquivados." },
   program_pdf_label: { fr: "Programme (document PDF, un par langue)", en: "Programme (PDF document, one per language)", pt: "Programa (documento PDF, um por idioma)" },
   program_pdf_help: { fr: "Pour l'afficher dans le menu, créez un lien dans l'onglet \"Menu\" avec comme cible : programme", en: "To show it in the menu, create a link in the \"Menu\" tab with target: programme", pt: "Para o mostrar no menu, crie um link no separador \"Menu\" com o destino: programme" },
@@ -648,6 +650,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("edit");
     if (token) { setEditToken(token); setView("update"); }
+    if (params.get("page") === "privacy") { setView("privacy"); }
   }, []);
   const [mobileNav, setMobileNav] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -1118,6 +1121,10 @@ export default function App() {
         <ArchivesPage lang={lang} setView={setView} />
       )}
 
+      {view === "privacy" && (
+        <PrivacyPolicyPage lang={lang} setView={setView} brand={eventData.brand[lang]} />
+      )}
+
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between gap-3">
           <div>
@@ -1125,6 +1132,7 @@ export default function App() {
             <div>© {eventData.year || DEFAULT_EVENT.year} {eventData.brand[lang]}</div>
           </div>
           <div className="flex items-center gap-4">
+            <button onClick={() => setView("privacy")} className="underline hover:text-white">{t("privacy_policy_title", lang)}</button>
             <button onClick={() => setView("archives")} className="underline hover:text-white">{t("archives_title", lang)}</button>
             <button onClick={() => setView(view === "admin" ? "public" : "admin")} className="underline hover:text-white">
               {view === "admin" ? t("view_site", lang) : t("admin", lang)}
@@ -1132,6 +1140,69 @@ export default function App() {
           </div>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function PrivacyPolicyPage({ lang, setView, brand }) {
+  const content = {
+    fr: {
+      title: "Politique de confidentialité",
+      updated: "Dernière mise à jour : septembre 2026",
+      sections: [
+        { h: "1. Introduction", p: `La présente politique de confidentialité décrit comment ${brand} ("nous") collecte, utilise et protège les informations des personnes qui utilisent ce site web et l'application mobile associée (ensemble, la "Plateforme"), dans le cadre de l'organisation des réunions et assemblées du Système de la Carte Brune CEDEAO.` },
+        { h: "2. Données que nous collectons", p: "Lors de votre inscription à un événement, nous collectons : votre nom, prénom, organisation, type d'organisme, pays, adresse email, numéro de téléphone, ainsi que, si vous réservez un hôtel via la plateforme, vos dates et horaires d'arrivée/départ et numéros de vol. Aucune donnée de paiement n'est collectée ou traitée par la Plateforme." },
+        { h: "3. Utilisation des données", p: "Ces informations sont utilisées uniquement pour : traiter votre inscription, générer votre badge et numéro d'enregistrement, communiquer avec vous au sujet de l'événement (confirmation, rappels, modifications), et faciliter la coordination avec les hôtels partenaires pour les réservations." },
+        { h: "4. Partage des données", p: "Vos informations de réservation hôtelière (nom, dates de séjour) peuvent être partagées avec l'hôtel concerné, dans la seule mesure nécessaire à la gestion de votre séjour. Vos données ne sont ni vendues, ni louées, ni partagées à des fins commerciales avec des tiers." },
+        { h: "5. Conservation des données", p: "Les données des participants sont conservées le temps nécessaire à l'organisation de l'événement concerné, puis archivées à des fins statistiques et de continuité entre éditions du Conseil des Bureaux." },
+        { h: "6. Vos droits", p: "Vous pouvez à tout moment demander la consultation, la correction ou la suppression de vos données en nous contactant à l'adresse indiquée ci-dessous, ou via le lien de modification d'inscription envoyé par email lors de votre inscription." },
+        { h: "7. Sécurité", p: "Les données sont hébergées sur une infrastructure sécurisée (Supabase) avec accès restreint aux seules personnes autorisées dans le cadre de l'organisation de l'événement." },
+        { h: "8. Contact", p: "Pour toute question relative à cette politique ou à vos données personnelles, vous pouvez nous contacter via les coordonnées indiquées sur la page d'accueil de la Plateforme." },
+      ],
+    },
+    en: {
+      title: "Privacy Policy",
+      updated: "Last updated: September 2026",
+      sections: [
+        { h: "1. Introduction", p: `This privacy policy describes how ${brand} ("we") collects, uses and protects the information of people using this website and its associated mobile application (together, the "Platform"), in connection with organizing meetings and assemblies of the ECOWAS Brown Card Scheme.` },
+        { h: "2. Data we collect", p: "When you register for an event, we collect: your first and last name, organization, organization type, country, email address, phone number, and, if you book a hotel through the platform, your arrival/departure dates, times and flight numbers. No payment data is collected or processed by the Platform." },
+        { h: "3. How we use your data", p: "This information is used solely to: process your registration, generate your badge and registration number, communicate with you about the event (confirmation, reminders, changes), and coordinate with partner hotels for bookings." },
+        { h: "4. Data sharing", p: "Your hotel booking information (name, stay dates) may be shared with the relevant hotel, only to the extent necessary to manage your stay. Your data is never sold, rented, or shared with third parties for commercial purposes." },
+        { h: "5. Data retention", p: "Participant data is kept for as long as necessary to organize the relevant event, then archived for statistical purposes and continuity between editions of the Council of Bureaux." },
+        { h: "6. Your rights", p: "You may at any time request to view, correct, or delete your data by contacting us at the address below, or via the registration edit link sent by email upon registration." },
+        { h: "7. Security", p: "Data is hosted on secure infrastructure (Supabase) with access restricted to persons authorized in connection with organizing the event." },
+        { h: "8. Contact", p: "For any question regarding this policy or your personal data, please contact us using the details provided on the Platform's homepage." },
+      ],
+    },
+    pt: {
+      title: "Política de Privacidade",
+      updated: "Última atualização: setembro de 2026",
+      sections: [
+        { h: "1. Introdução", p: `Esta política de privacidade descreve como ${brand} ("nós") recolhe, utiliza e protege as informações das pessoas que utilizam este site e a aplicação móvel associada (em conjunto, a "Plataforma"), no âmbito da organização das reuniões e assembleias do Sistema do Cartão Castanho da CEDEAO.` },
+        { h: "2. Dados que recolhemos", p: "Ao inscrever-se num evento, recolhemos: nome, apelido, organização, tipo de organismo, país, endereço de email, número de telefone e, caso reserve um hotel através da plataforma, datas e horários de chegada/partida e números de voo. Nenhum dado de pagamento é recolhido ou processado pela Plataforma." },
+        { h: "3. Utilização dos dados", p: "Estas informações são utilizadas apenas para: processar a sua inscrição, gerar o seu crachá e número de registo, comunicar consigo sobre o evento (confirmação, lembretes, alterações) e coordenar com os hotéis parceiros as reservas." },
+        { h: "4. Partilha de dados", p: "As suas informações de reserva de hotel (nome, datas de estadia) podem ser partilhadas com o hotel em questão, apenas na medida necessária à gestão da sua estadia. Os seus dados nunca são vendidos, alugados ou partilhados com terceiros para fins comerciais." },
+        { h: "5. Conservação dos dados", p: "Os dados dos participantes são conservados pelo tempo necessário à organização do evento em questão, sendo depois arquivados para fins estatísticos e de continuidade entre edições do Conselho de Gabinetes." },
+        { h: "6. Os seus direitos", p: "Pode a qualquer momento solicitar a consulta, correção ou eliminação dos seus dados contactando-nos através do endereço abaixo, ou através do link de edição de inscrição enviado por email no momento da inscrição." },
+        { h: "7. Segurança", p: "Os dados são alojados numa infraestrutura segura (Supabase), com acesso restrito às pessoas autorizadas no âmbito da organização do evento." },
+        { h: "8. Contacto", p: "Para qualquer questão relativa a esta política ou aos seus dados pessoais, contacte-nos através dos contactos indicados na página inicial da Plataforma." },
+      ],
+    },
+  };
+  const c = content[lang] || content.fr;
+  return (
+    <div className="max-w-3xl mx-auto px-5 py-14">
+      <button onClick={() => setView("public")} className="text-sm underline mb-8 inline-block" style={{ color: "var(--vert-fonce)" }}>← {t("back_to_site", lang)}</button>
+      <h1 className="font-display font-semibold text-3xl mb-2" style={{ color: "var(--navy)" }}>{c.title}</h1>
+      <p className="text-sm text-black/50 mb-10">{c.updated}</p>
+      <div className="space-y-7">
+        {c.sections.map((s, i) => (
+          <div key={i}>
+            <h2 className="font-semibold text-lg mb-1.5" style={{ color: "var(--vert-fonce)" }}>{s.h}</h2>
+            <p className="text-sm leading-relaxed text-black/80">{s.p}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
