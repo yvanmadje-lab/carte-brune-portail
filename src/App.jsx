@@ -8,6 +8,7 @@ import QRCode from "qrcode";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
+import { SplashScreen } from "@capacitor/splash-screen";
 import { Browser } from "@capacitor/browser";
 
 // --- Téléchargement de fichiers : dans l'app mobile (Capacitor), le
@@ -624,6 +625,22 @@ export default function App() {
   const [hotelFilter, setHotelFilter] = useState("");
   const [arrivalFilter, setArrivalFilter] = useState("");
   const [departureFilter, setDepartureFilter] = useState("");
+  const [showBootSplash, setShowBootSplash] = useState(() => Capacitor.isNativePlatform());
+
+  // Message de bienvenue trilingue à l'ouverture de l'app mobile
+  // uniquement (invisible sur le site web classique) — indépendant
+  // de l'écran de démarrage natif d'Android/iOS, dont les règles
+  // (surtout depuis Android 12) empêchent d'afficher du texte.
+  useEffect(() => {
+    if (!showBootSplash) return;
+    // On garde l'écran natif visible jusqu'ici (évite un flash blanc
+    // pendant le chargement du site), puis on le masque au moment
+    // exact où notre message trilingue (déjà affiché à l'écran, en
+    // haut de cette même page) prend le relais de façon invisible.
+    SplashScreen.hide().catch(() => {});
+    const timer = setTimeout(() => setShowBootSplash(false), 2400);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Détecte un lien de modification (?edit=<jeton>), envoyé uniquement
   // par email — jamais saisi ni collé manuellement dans le navigateur.
@@ -1006,6 +1023,23 @@ export default function App() {
         .seal-ring{ position:absolute; inset:0; border-radius:50%; background: conic-gradient(var(--vert) 0deg 180deg, var(--brun) 180deg 360deg); }
         .neon-outline{ filter: drop-shadow(0 0 6px rgba(255,255,255,.55)); }
       `}</style>
+
+      {showBootSplash && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999, background: "var(--vert-fonce)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            padding: "2rem", textAlign: "center", transition: "opacity .5s ease",
+          }}
+        >
+          {logoUrl && (
+            <img src={logoUrl} alt="Logo" className="w-28 h-28 sm:w-36 sm:h-36 rounded-full object-cover mb-8" style={{ border: "3px solid rgba(255,255,255,.3)" }} />
+          )}
+          <p className="font-display font-semibold text-white text-lg sm:text-2xl mb-4 max-w-md">Bienvenue sur la plateforme événementielle de la Carte Brune CEDEAO</p>
+          <p className="text-white/80 text-sm sm:text-base mb-3 max-w-md">Welcome to the ECOWAS Brown Card event platform</p>
+          <p className="text-white/80 text-sm sm:text-base max-w-md">Bem-vindo à plataforma de eventos do Cartão Castanho da CEDEAO</p>
+        </div>
+      )}
 
       {/* HEADER */}
       <header style={{ background: "var(--navy)" }} className="text-white sticky top-0 z-40">
