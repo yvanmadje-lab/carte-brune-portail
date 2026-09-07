@@ -310,6 +310,13 @@ const T = {
   upload_pdf: { fr: "Choisir un PDF", en: "Choose PDF", pt: "Escolher PDF" },
   archives_title: { fr: "Archives des réunions", en: "Meeting archives", pt: "Arquivo de reuniões" },
   privacy_policy_title: { fr: "Politique de confidentialité", en: "Privacy Policy", pt: "Política de Privacidade" },
+  privacy_tab: { fr: "Politique de confidentialité", en: "Privacy Policy", pt: "Política de Privacidade" },
+  privacy_policy_help: { fr: "Ce contenu s'affiche sur la page publique « Politique de confidentialité » (lien en pied de page, et URL /?page=privacy à donner aux stores d'applications).", en: "This content is shown on the public \"Privacy Policy\" page (footer link, and the /?page=privacy URL to give to app stores).", pt: "Este conteúdo é exibido na página pública \"Política de Privacidade\" (link no rodapé, e o URL /?page=privacy a fornecer às lojas de aplicações)." },
+  privacy_policy_title_label: { fr: "Titre de la page", en: "Page title", pt: "Título da página" },
+  privacy_policy_updated_label: { fr: "Ligne « Dernière mise à jour »", en: "\"Last updated\" line", pt: "Linha \"Última atualização\"" },
+  privacy_policy_section_heading: { fr: "Titre de la section", en: "Section heading", pt: "Título da secção" },
+  privacy_policy_section_text: { fr: "Texte de la section", en: "Section text", pt: "Texto da secção" },
+  privacy_policy_add_section: { fr: "Ajouter une section", en: "Add section", pt: "Adicionar secção" },
   back_to_site: { fr: "Retour au site", en: "Back to site", pt: "Voltar ao site" },
   no_archived_events: { fr: "Aucun événement archivé pour le moment.", en: "No archived events yet.", pt: "Ainda sem eventos arquivados." },
   program_pdf_label: { fr: "Programme (document PDF, un par langue)", en: "Programme (PDF document, one per language)", pt: "Programa (documento PDF, um por idioma)" },
@@ -664,6 +671,7 @@ export default function App() {
   const [heroSlides, setHeroSlides] = useState([]);
   const [logoUrl, setLogoUrl] = useState("");
   const [footerText, setFooterText] = useState({ fr: "", en: "", pt: "" });
+  const [privacyPolicy, setPrivacyPolicy] = useState(null);
   const [speakers, setSpeakers] = useState(DEFAULT_SPEAKERS);
   const [eventData, setEventData] = useState(DEFAULT_EVENT);
   const [menu, setMenu] = useState(DEFAULT_MENU);
@@ -753,6 +761,11 @@ export default function App() {
       en: settings.footer_text_en || "",
       pt: settings.footer_text_pt || "",
     });
+    const parsePolicy = (raw) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } };
+    const ppFr = parsePolicy(settings.privacy_policy_fr);
+    const ppEn = parsePolicy(settings.privacy_policy_en);
+    const ppPt = parsePolicy(settings.privacy_policy_pt);
+    if (ppFr || ppEn || ppPt) setPrivacyPolicy({ fr: ppFr, en: ppEn, pt: ppPt });
     setEventData({
       ...activeEvent,
       brand: {
@@ -1114,7 +1127,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
       )}
 
       {view === "archives" && (
@@ -1122,7 +1135,7 @@ export default function App() {
       )}
 
       {view === "privacy" && (
-        <PrivacyPolicyPage lang={lang} setView={setView} brand={eventData.brand[lang]} />
+        <PrivacyPolicyPage lang={lang} setView={setView} brand={eventData.brand[lang]} override={privacyPolicy} />
       )}
 
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
@@ -1144,7 +1157,7 @@ export default function App() {
   );
 }
 
-function PrivacyPolicyPage({ lang, setView, brand }) {
+function PrivacyPolicyPage({ lang, setView, brand, override }) {
   const content = {
     fr: {
       title: "Politique de confidentialité",
@@ -1189,7 +1202,7 @@ function PrivacyPolicyPage({ lang, setView, brand }) {
       ],
     },
   };
-  const c = content[lang] || content.fr;
+  const c = (override && override[lang]) || content[lang] || content.fr;
   return (
     <div className="max-w-3xl mx-auto px-5 py-14">
       <button onClick={() => setView("public")} className="text-sm underline mb-8 inline-block" style={{ color: "var(--vert-fonce)" }}>← {t("back_to_site", lang)}</button>
@@ -1680,7 +1693,7 @@ function AdminLogin({ lang }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, needsMfa, mfaFactorId, onMfaVerified }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const [myHotels, setMyHotels] = useState([]);
@@ -1893,7 +1906,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       )}
 
       {tab === "events" && isSuperAdmin && <EventsManager lang={lang} activeEventId={eventData.id} onActiveEventChanged={onEventChange} eventData={eventData} />}
-      {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} eventData={eventData} onEventChange={onEventChange} canEdit={canEdit} footerText={footerText} onFooterChange={onFooterChange} />}
+      {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} eventData={eventData} onEventChange={onEventChange} canEdit={canEdit} footerText={footerText} onFooterChange={onFooterChange} privacyPolicy={privacyPolicy} />}
       {tab === "users" && isSuperAdmin && <UsersManager lang={lang} currentUserId={adminUser.id} eventId={eventData.id} />}
     </div>
   );
@@ -1978,7 +1991,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange, canEdit, footerText, onFooterChange }) {
+function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange, canEdit, footerText, onFooterChange, privacyPolicy }) {
   const [sub, setSub] = useState("logo");
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(eventData.id);
@@ -1991,6 +2004,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
   const subs = [
     ["logo", t("logo_tab", lang)],
     ["footer", t("footer_tab", lang)],
+    ["privacy", t("privacy_tab", lang)],
     ["carousel", t("hero_carousel_tab", lang)],
     ["menu", t("menu_tab", lang)],
     ["orgtypes", t("org_types_tab", lang)],
@@ -2023,6 +2037,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
       )}
       {sub === "logo" && <LogoManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} canEdit={canEdit} />}
       {sub === "footer" && <FooterManager lang={lang} footerText={footerText} onFooterChange={onFooterChange} canEdit={canEdit} />}
+      {sub === "privacy" && <PrivacyPolicyManager lang={lang} canEdit={canEdit} privacyPolicy={privacyPolicy} onPolicyChange={onEventChange} brand={eventData.brand[lang]} />}
       {sub === "carousel" && <HeroSlidesManager lang={lang} canEdit={canEdit} eventId={eventId} />}
       {sub === "menu" && <MenuManager lang={lang} canEdit={canEdit} />}
       {sub === "orgtypes" && <OrgTypesManager lang={lang} canEdit={canEdit} />}
@@ -3512,6 +3527,121 @@ function FooterManager({ lang, footerText, onFooterChange, canEdit }) {
     </div>
   );
 }
+
+function PrivacyPolicyManager({ lang, canEdit, privacyPolicy, onPolicyChange, brand }) {
+  const DEFAULTS = {
+    fr: { title: "Politique de confidentialité", updated: "Dernière mise à jour : septembre 2026", sections: [
+      { h: "1. Introduction", p: `La présente politique de confidentialité décrit comment ${brand} ("nous") collecte, utilise et protège les informations des personnes qui utilisent ce site web et l'application mobile associée (ensemble, la "Plateforme"), dans le cadre de l'organisation des réunions et assemblées du Système de la Carte Brune CEDEAO.` },
+      { h: "2. Données que nous collectons", p: "Lors de votre inscription à un événement, nous collectons : votre nom, prénom, organisation, type d'organisme, pays, adresse email, numéro de téléphone, ainsi que, si vous réservez un hôtel via la plateforme, vos dates et horaires d'arrivée/départ et numéros de vol. Aucune donnée de paiement n'est collectée ou traitée par la Plateforme." },
+      { h: "3. Utilisation des données", p: "Ces informations sont utilisées uniquement pour : traiter votre inscription, générer votre badge et numéro d'enregistrement, communiquer avec vous au sujet de l'événement (confirmation, rappels, modifications), et faciliter la coordination avec les hôtels partenaires pour les réservations." },
+      { h: "4. Partage des données", p: "Vos informations de réservation hôtelière (nom, dates de séjour) peuvent être partagées avec l'hôtel concerné, dans la seule mesure nécessaire à la gestion de votre séjour. Vos données ne sont ni vendues, ni louées, ni partagées à des fins commerciales avec des tiers." },
+      { h: "5. Conservation des données", p: "Les données des participants sont conservées le temps nécessaire à l'organisation de l'événement concerné, puis archivées à des fins statistiques et de continuité entre éditions du Conseil des Bureaux." },
+      { h: "6. Vos droits", p: "Vous pouvez à tout moment demander la consultation, la correction ou la suppression de vos données en nous contactant à l'adresse indiquée ci-dessous, ou via le lien de modification d'inscription envoyé par email lors de votre inscription." },
+      { h: "7. Sécurité", p: "Les données sont hébergées sur une infrastructure sécurisée (Supabase) avec accès restreint aux seules personnes autorisées dans le cadre de l'organisation de l'événement." },
+      { h: "8. Contact", p: "Pour toute question relative à cette politique ou à vos données personnelles, vous pouvez nous contacter via les coordonnées indiquées sur la page d'accueil de la Plateforme." },
+    ]},
+    en: { title: "Privacy Policy", updated: "Last updated: September 2026", sections: [
+      { h: "1. Introduction", p: `This privacy policy describes how ${brand} ("we") collects, uses and protects the information of people using this website and its associated mobile application (together, the "Platform"), in connection with organizing meetings and assemblies of the ECOWAS Brown Card Scheme.` },
+      { h: "2. Data we collect", p: "When you register for an event, we collect: your first and last name, organization, organization type, country, email address, phone number, and, if you book a hotel through the platform, your arrival/departure dates, times and flight numbers. No payment data is collected or processed by the Platform." },
+      { h: "3. How we use your data", p: "This information is used solely to: process your registration, generate your badge and registration number, communicate with you about the event (confirmation, reminders, changes), and coordinate with partner hotels for bookings." },
+      { h: "4. Data sharing", p: "Your hotel booking information (name, stay dates) may be shared with the relevant hotel, only to the extent necessary to manage your stay. Your data is never sold, rented, or shared with third parties for commercial purposes." },
+      { h: "5. Data retention", p: "Participant data is kept for as long as necessary to organize the relevant event, then archived for statistical purposes and continuity between editions of the Council of Bureaux." },
+      { h: "6. Your rights", p: "You may at any time request to view, correct, or delete your data by contacting us at the address below, or via the registration edit link sent by email upon registration." },
+      { h: "7. Security", p: "Data is hosted on secure infrastructure (Supabase) with access restricted to persons authorized in connection with organizing the event." },
+      { h: "8. Contact", p: "For any question regarding this policy or your personal data, please contact us using the details provided on the Platform's homepage." },
+    ]},
+    pt: { title: "Política de Privacidade", updated: "Última atualização: setembro de 2026", sections: [
+      { h: "1. Introdução", p: `Esta política de privacidade descreve como ${brand} ("nós") recolhe, utiliza e protege as informações das pessoas que utilizam este site e a aplicação móvel associada (em conjunto, a "Plataforma"), no âmbito da organização das reuniões e assembleias do Sistema do Cartão Castanho da CEDEAO.` },
+      { h: "2. Dados que recolhemos", p: "Ao inscrever-se num evento, recolhemos: nome, apelido, organização, tipo de organismo, país, endereço de email, número de telefone e, caso reserve um hotel através da plataforma, datas e horários de chegada/partida e números de voo. Nenhum dado de pagamento é recolhido ou processado pela Plataforma." },
+      { h: "3. Utilização dos dados", p: "Estas informações são utilizadas apenas para: processar a sua inscrição, gerar o seu crachá e número de registo, comunicar consigo sobre o evento (confirmação, lembretes, alterações) e coordenar com os hotéis parceiros as reservas." },
+      { h: "4. Partilha de dados", p: "As suas informações de reserva de hotel (nome, datas de estadia) podem ser partilhadas com o hotel em questão, apenas na medida necessária à gestão da sua estadia. Os seus dados nunca são vendidos, alugados ou partilhados com terceiros para fins comerciais." },
+      { h: "5. Conservação dos dados", p: "Os dados dos participantes são conservados pelo tempo necessário à organização do evento em questão, sendo depois arquivados para fins estatísticos e de continuidade entre edições do Conselho de Gabinetes." },
+      { h: "6. Os seus direitos", p: "Pode a qualquer momento solicitar a consulta, correção ou eliminação dos seus dados contactando-nos através do endereço abaixo, ou através do link de edição de inscrição enviado por email no momento da inscrição." },
+      { h: "7. Segurança", p: "Os dados são alojados numa infraestrutura segura (Supabase), com acesso restrito às pessoas autorizadas no âmbito da organização do evento." },
+      { h: "8. Contacto", p: "Para qualquer questão relativa a esta política ou aos seus dados pessoais, contacte-nos através dos contactos indicados na página inicial da Plataforma." },
+    ]},
+  };
+
+  const [draft, setDraft] = useState({
+    fr: (privacyPolicy && privacyPolicy.fr) || DEFAULTS.fr,
+    en: (privacyPolicy && privacyPolicy.en) || DEFAULTS.en,
+    pt: (privacyPolicy && privacyPolicy.pt) || DEFAULTS.pt,
+  });
+  const [activeLang, setActiveLang] = useState("fr");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  function updateField(field, value) {
+    setDraft(d => ({ ...d, [activeLang]: { ...d[activeLang], [field]: value } }));
+    setSaved(false);
+  }
+  function updateSection(idx, field, value) {
+    setDraft(d => {
+      const sections = d[activeLang].sections.map((s, i) => i === idx ? { ...s, [field]: value } : s);
+      return { ...d, [activeLang]: { ...d[activeLang], sections } };
+    });
+    setSaved(false);
+  }
+  function addSection() {
+    setDraft(d => ({ ...d, [activeLang]: { ...d[activeLang], sections: [...d[activeLang].sections, { h: "", p: "" }] } }));
+    setSaved(false);
+  }
+  function removeSection(idx) {
+    setDraft(d => ({ ...d, [activeLang]: { ...d[activeLang], sections: d[activeLang].sections.filter((_, i) => i !== idx) } }));
+    setSaved(false);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await Promise.all([
+        setSetting("privacy_policy_fr", JSON.stringify(draft.fr)),
+        setSetting("privacy_policy_en", JSON.stringify(draft.en)),
+        setSetting("privacy_policy_pt", JSON.stringify(draft.pt)),
+      ]);
+      await onPolicyChange();
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  const d = draft[activeLang];
+
+  return (
+    <div className="bg-white border p-5 max-w-3xl space-y-4" style={{ borderColor: "#CFC4A3" }}>
+      {!canEdit && <div className="text-xs px-3 py-2 mb-2 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
+      <p className="text-xs text-black/50">{t("privacy_policy_help", lang)}</p>
+      <div className="flex gap-2 mb-2">
+        {["fr","en","pt"].map(l => (
+          <button key={l} onClick={() => setActiveLang(l)} className="px-3 py-1 text-xs" style={{ background: activeLang === l ? "var(--vert-fonce)" : "#fff", color: activeLang === l ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{l.toUpperCase()}</button>
+        ))}
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label={t("privacy_policy_title_label", lang)}><input className="cb-input" disabled={!canEdit} value={d.title} onChange={e=>updateField("title", e.target.value)} /></Field>
+        <Field label={t("privacy_policy_updated_label", lang)}><input className="cb-input" disabled={!canEdit} value={d.updated} onChange={e=>updateField("updated", e.target.value)} /></Field>
+      </div>
+      <div className="space-y-3">
+        {d.sections.map((s, idx) => (
+          <div key={idx} className="p-3 space-y-2" style={{ background: "var(--sable-deep)" }}>
+            <div className="flex items-center gap-2">
+              <input className="cb-input flex-1" disabled={!canEdit} placeholder={t("privacy_policy_section_heading", lang)} value={s.h} onChange={e=>updateSection(idx, "h", e.target.value)} />
+              {canEdit && <button onClick={() => removeSection(idx)}><X size={16} color="#8A2A2A" /></button>}
+            </div>
+            <textarea className="cb-input" rows={3} disabled={!canEdit} placeholder={t("privacy_policy_section_text", lang)} value={s.p} onChange={e=>updateSection(idx, "p", e.target.value)} />
+          </div>
+        ))}
+      </div>
+      {canEdit && (
+        <div className="flex gap-2 items-center flex-wrap">
+          <button onClick={addSection} className="cb-btn-outline text-xs py-1.5 px-3"><Plus size={13} /> {t("privacy_policy_add_section", lang)}</button>
+          <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+          {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function WhatsAppTemplateManager({ lang, canEdit }) {
   const [draft, setDraft] = useState(null);
