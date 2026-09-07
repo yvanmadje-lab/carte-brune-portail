@@ -638,7 +638,7 @@ export default function App() {
     // exact où notre message trilingue (déjà affiché à l'écran, en
     // haut de cette même page) prend le relais de façon invisible.
     SplashScreen.hide().catch(() => {});
-    const timer = setTimeout(() => setShowBootSplash(false), 2400);
+    const timer = setTimeout(() => setShowBootSplash(false), 5000);
     return () => clearTimeout(timer);
   }, []);
 
