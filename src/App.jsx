@@ -5,6 +5,51 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import QRCode from "qrcode";
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
+import { Browser } from "@capacitor/browser";
+
+// --- Téléchargement de fichiers : dans l'app mobile (Capacitor), le
+// mécanisme web classique (lien <a download>, doc.save() de jsPDF)
+// ne fonctionne pas — la WebView native l'ignore silencieusement,
+// d'où les boutons "PDF"/"Excel" qui semblaient ne rien faire.
+// On écrit alors le fichier sur l'appareil puis on ouvre la feuille
+// de partage native (qui permet d'enregistrer dans Fichiers/Drive,
+// envoyer par WhatsApp/email, etc.). Sur le site web classique,
+// rien ne change : on garde le téléchargement navigateur habituel.
+async function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function saveOrShareBlob(blob, filename) {
+  if (Capacitor.isNativePlatform()) {
+    const base64 = await blobToBase64(blob);
+    const written = await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Cache });
+    await Share.share({ title: filename, url: written.uri, dialogTitle: filename });
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+}
+
+// Ouverture de liens externes (PDF programme, site web d'un hôtel,
+// groupe WhatsApp) : window.open ne fonctionne pas non plus dans la
+// WebView native, on utilise le plugin Browser à la place.
+async function openExternal(url) {
+  if (Capacitor.isNativePlatform()) {
+    await Browser.open({ url });
+  } else {
+    window.open(url, "_blank");
+  }
+}
 
 /* ---------------------------------------------------------
    TOKENS — alignés sur l'identité officielle Carte Brune CEDEAO
@@ -449,13 +494,10 @@ async function downloadExcel(rows, filename, titleText, lang) {
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
+  await saveOrShareBlob(blob, filename);
 }
 
-function downloadPDF(rows, filename, titleText, lang) {
+async function downloadPDF(rows, filename, titleText, lang) {
   const cols = exportHeaders(lang);
   const body = exportRows(rows);
   const doc = new jsPDF({ orientation: "landscape" });
@@ -467,7 +509,7 @@ function downloadPDF(rows, filename, titleText, lang) {
     headStyles: { fillColor: [20, 83, 45], fontSize: 7.5, fontStyle: "bold" },
     columnStyles: { 0: { cellWidth: 45 }, 3: { cellWidth: 45 } },
   });
-  doc.save(filename);
+  await saveOrShareBlob(doc.output("blob"), filename);
 }
 
 // --- Badges participants avec QR code ---
@@ -563,7 +605,7 @@ async function downloadBadges(participants, eventData, lang, filename) {
     if (i > 0) doc.addPage([BADGE_W, BADGE_H]);
     await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang);
   }
-  doc.save(filename);
+  await saveOrShareBlob(doc.output("blob"), filename);
 }
 
 const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: DEFAULT_ORG_TYPES[0].label.fr, orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: DEFAULT_HOTELS[0].id, roomId: DEFAULT_HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", arrivalTime: "", departureDate: "", departureTime: "", departureFlightNumber: "" };
@@ -732,10 +774,10 @@ export default function App() {
     const norm = (target || "").trim().toLowerCase();
     if (!norm || norm === "top") { setView("public"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     if (norm === "programme" || norm === "program") {
-      window.open(`/api/program?lang=${lang}`, "_blank");
+      openExternal(`${window.location.origin}/api/program?lang=${lang}`);
       return;
     }
-    if (norm.startsWith("http")) { window.open(target.trim(), "_blank"); return; }
+    if (norm.startsWith("http")) { openExternal(target.trim()); return; }
     setView("public");
     setTimeout(() => document.getElementById(norm)?.scrollIntoView({ behavior: "smooth" }), 50);
   }
