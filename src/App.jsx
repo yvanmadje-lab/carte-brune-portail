@@ -145,6 +145,8 @@ const T = {
   company_name_label: { fr: "Nom de la compagnie", en: "Company name", pt: "Nome da companhia" },
   address_label: { fr: "Adresse", en: "Address", pt: "Endereço" },
   phone_label: { fr: "Téléphone", en: "Phone", pt: "Telefone" },
+  company_email_label: { fr: "Email", en: "Email", pt: "Email" },
+  company_website_label: { fr: "Site web", en: "Website", pt: "Site web" },
   companies_tab: { fr: "Compagnies membres", en: "Member companies", pt: "Companhias membros" },
   speakers_title: { fr: "Comité d'organisation", en: "Organizing committee", pt: "Comité organizador" },
   hotels_title: { fr: "Hébergement recommandé", en: "Recommended accommodation", pt: "Alojamento recomendado" },
@@ -739,6 +741,8 @@ export default function App() {
       dgName: r.dg_name,
       address: r.address,
       phone: r.phone,
+      email: r.email,
+      website: r.website,
     })));
     if (h.length) setHotels(h.map(r => {
       const extraRooms = Array.isArray(r.rooms) ? r.rooms : [];
@@ -1342,6 +1346,10 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
                   {c.dgName && <div className="text-xs text-black/60 mb-2 break-words">{t("dg_label", lang)} : {c.dgName}</div>}
                   {c.address && <div className="text-xs text-black/50 break-words">{c.address}</div>}
                   {c.phone && <div className="text-xs text-black/50 break-words">{c.phone}</div>}
+                  {c.email && <div className="text-xs text-black/50 break-words">{c.email}</div>}
+                  {c.website && (
+                    <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-xs mt-1 break-words" style={{ color: "var(--vert-fonce)", textDecoration: "underline" }}>{t("company_website_label", lang)}</a>
+                  )}
                 </div>
               ))}
             </div>
@@ -2326,6 +2334,8 @@ function MemberCompaniesManager({ lang, canEdit, eventId }) {
             {it.dg_name && <div className="text-xs text-black/60 mb-1">{t("dg_label", lang)} : {it.dg_name}</div>}
             {it.address && <div className="text-xs text-black/50">{it.address}</div>}
             {it.phone && <div className="text-xs text-black/50 mb-2">{it.phone}</div>}
+            {it.email && <div className="text-xs text-black/50">{it.email}</div>}
+            {it.website && <div className="text-xs text-black/50 mb-2 truncate max-w-full">{it.website}</div>}
             <div className="flex items-center justify-between w-full mt-2">
               <StatusBadge status={it.status} />
               <div className="flex gap-2">
@@ -2345,6 +2355,8 @@ function MemberCompaniesManager({ lang, canEdit, eventId }) {
           <Field label={t("dg_label", lang)}><input className="cb-input" value={editing.dg_name || ""} onChange={e=>setEditing(x=>({ ...x, dg_name: e.target.value }))} /></Field>
           <Field label={t("address_label", lang)}><input className="cb-input" value={editing.address || ""} onChange={e=>setEditing(x=>({ ...x, address: e.target.value }))} /></Field>
           <Field label={t("phone_label", lang)}><input className="cb-input" value={editing.phone || ""} onChange={e=>setEditing(x=>({ ...x, phone: e.target.value }))} /></Field>
+          <Field label={t("company_email_label", lang)}><input type="email" className="cb-input" value={editing.email || ""} onChange={e=>setEditing(x=>({ ...x, email: e.target.value }))} /></Field>
+          <Field label={t("company_website_label", lang)}><input type="url" className="cb-input" value={editing.website || ""} onChange={e=>setEditing(x=>({ ...x, website: e.target.value }))} placeholder="https://..." /></Field>
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
             <div>
@@ -2361,7 +2373,7 @@ function MemberCompaniesManager({ lang, canEdit, eventId }) {
           </div>
         </div>
       ) : (
-        canEdit && <button onClick={() => setEditing({ name: "", logo_url: "", dg_name: "", address: "", phone: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name: "", logo_url: "", dg_name: "", address: "", phone: "", email: "", website: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
