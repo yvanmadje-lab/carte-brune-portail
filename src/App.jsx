@@ -140,6 +140,12 @@ const T = {
   council: { fr: "Conseil des Bureaux — Système d'Assurance Carte Brune CEDEAO", en: "Council of Bureaux — ECOWAS Brown Card Insurance Scheme", pt: "Conselho de Bureaux — Sistema de Seguro Cartão Castanho da CEDEAO" },
   hero_cta: { fr: "S'inscrire à la réunion", en: "Register for the meeting", pt: "Inscrever-se na reunião" },
   tourism_title: { fr: "Découvrir Dakar", en: "Discover Dakar", pt: "Descobrir Dakar" },
+  member_companies_title: { fr: "Compagnies membres", en: "Member companies", pt: "Companhias membros" },
+  dg_label: { fr: "Directeur Général", en: "CEO", pt: "Diretor Geral" },
+  company_name_label: { fr: "Nom de la compagnie", en: "Company name", pt: "Nome da companhia" },
+  address_label: { fr: "Adresse", en: "Address", pt: "Endereço" },
+  phone_label: { fr: "Téléphone", en: "Phone", pt: "Telefone" },
+  companies_tab: { fr: "Compagnies membres", en: "Member companies", pt: "Companhias membros" },
   speakers_title: { fr: "Comité d'organisation", en: "Organizing committee", pt: "Comité organizador" },
   hotels_title: { fr: "Hébergement recommandé", en: "Recommended accommodation", pt: "Alojamento recomendado" },
   per_night: { fr: "/ nuit", en: "/ night", pt: "/ noite" },
@@ -668,6 +674,7 @@ export default function App() {
   const [participantsLoading, setParticipantsLoading] = useState(false);
   const [hotels, setHotels] = useState(DEFAULT_HOTELS);
   const [tourism, setTourism] = useState(DEFAULT_TOURISM);
+  const [memberCompanies, setMemberCompanies] = useState([]);
   const [heroSlides, setHeroSlides] = useState([]);
   const [logoUrl, setLogoUrl] = useState("");
   const [footerText, setFooterText] = useState({ fr: "", en: "", pt: "" });
@@ -707,7 +714,7 @@ export default function App() {
     const activeEvent = activeEventRow ? mapEventRow(activeEventRow) : { ...DEFAULT_EVENT, id: null };
     const eventId = activeEvent.id;
 
-    const [t, h, s, settings, sp, mn, ot, ff] = await Promise.all([
+    const [t, h, s, settings, sp, mn, ot, ff, mc] = await Promise.all([
       fetchPublishedForEvent("tourist_sites", eventId),
       fetchPublishedForEvent("cms_hotels", eventId),
       fetchPublishedForEvent("hero_slides", eventId),
@@ -716,6 +723,7 @@ export default function App() {
       fetchPublished("cms_menu_items"),
       fetchPublished("cms_org_types"),
       fetchPublished("cms_form_fields"),
+      fetchPublishedForEvent("member_companies", eventId),
     ]);
     if (t.length) setTourism(t.map(r => ({
       id: r.id,
@@ -723,6 +731,14 @@ export default function App() {
       desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
       image: r.image_url,
       gallery: Array.isArray(r.gallery) ? r.gallery : [],
+    })));
+    setMemberCompanies(mc.map(r => ({
+      id: r.id,
+      name: r.name,
+      logo: r.logo_url,
+      dgName: r.dg_name,
+      address: r.address,
+      phone: r.phone,
     })));
     if (h.length) setHotels(h.map(r => {
       const extraRooms = Array.isArray(r.rooms) ? r.rooms : [];
@@ -1096,11 +1112,14 @@ export default function App() {
               )}
             </div>
             <button onClick={() => setView("register")} className="cb-btn hidden sm:inline-flex text-sm py-2 px-4">{t("register", lang)}</button>
-            <button className="md:hidden flex-shrink-0" onClick={() => setMobileNav(v => !v)} aria-label="Menu"><Menu size={22} /></button>
+            <button className="md:hidden flex-shrink-0" onClick={() => setMobileNav(v => !v)} aria-label="Menu">{mobileNav ? <X size={22} /> : <Menu size={22} />}</button>
           </div>
         </div>
         {mobileNav && (
           <div className="md:hidden flex flex-col gap-3 px-5 pb-4 text-sm">
+            <div className="flex justify-end">
+              <button onClick={() => setMobileNav(false)} aria-label="Fermer" className="p-1"><X size={20} /></button>
+            </div>
             {menu.map(item => (
               <button key={item.id} onClick={() => { goToMenuTarget(item.target); setMobileNav(false); }} className="text-left">{item.label[lang]}</button>
             ))}
@@ -1111,7 +1130,7 @@ export default function App() {
       <div className="weave" />
 
       {view === "public" && (
-        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} logoUrl={logoUrl} speakers={speakers} event={eventData} />
+        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} logoUrl={logoUrl} speakers={speakers} event={eventData} memberCompanies={memberCompanies} />
       )}
 
       {view === "register" && step < 6 && (
@@ -1238,7 +1257,7 @@ function HeroCarousel({ images }) {
   );
 }
 
-function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speakers, event }) {
+function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speakers, event, memberCompanies }) {
   const hasTheme = event.theme && (event.theme.fr || event.theme.en || event.theme.pt);
   const [galleryItem, setGalleryItem] = useState(null);
   return (
@@ -1379,6 +1398,29 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
           );})}
         </div>
       </section>
+
+      {memberCompanies && memberCompanies.length > 0 && (
+        <section id="companies-section" className="px-2 sm:px-5 py-14" style={{ background: "var(--sable-deep)" }}>
+          <div className="max-w-6xl mx-auto">
+            <h2 className="font-display font-semibold text-2xl mb-8 px-3 sm:px-0" style={{ color: "var(--navy)" }}>{t("member_companies_title", lang)}</h2>
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {memberCompanies.map(c => (
+                <div key={c.id} className="bg-white p-3 flex flex-col items-center text-center" style={{ border: "1px solid #CFC4A3" }}>
+                  {c.logo ? (
+                    <img src={c.logo} alt={c.name} className="w-24 h-24 object-contain mb-3" />
+                  ) : (
+                    <div className="w-24 h-24 mb-3 flex items-center justify-center" style={{ background: "var(--sable)" }}><Building2 size={32} color="var(--vert-fonce)" /></div>
+                  )}
+                  <div className="font-semibold text-sm mb-1">{c.name}</div>
+                  {c.dgName && <div className="text-xs text-black/60 mb-2 break-words">{t("dg_label", lang)} : {c.dgName}</div>}
+                  {c.address && <div className="text-xs text-black/50 break-words">{c.address}</div>}
+                  {c.phone && <div className="text-xs text-black/50 break-words">{c.phone}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {galleryItem && (
         <GalleryModal title={galleryItem.title} images={galleryItem.images} onClose={() => setGalleryItem(null)} />
@@ -2000,7 +2042,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
   useEffect(() => { setSelectedEventId(eventData.id); }, [eventData.id]);
 
   const eventId = selectedEventId;
-  const contentSubs = ["carousel", "tourism", "hotels", "speakers"];
+  const contentSubs = ["carousel", "tourism", "hotels", "speakers", "companies"];
   const subs = [
     ["logo", t("logo_tab", lang)],
     ["footer", t("footer_tab", lang)],
@@ -2013,6 +2055,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
     ["whatsapp", t("whatsapp_tab", lang)],
     ["tourism", t("tourism_tab", lang)],
     ["hotels", t("hotels_tab", lang)],
+    ["companies", t("companies_tab", lang)],
     ["speakers", t("speakers_tab", lang)],
   ];
   return (
@@ -2046,6 +2089,7 @@ function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange,
       {sub === "whatsapp" && <WhatsAppTemplateManager lang={lang} canEdit={canEdit} />}
       {sub === "tourism" && <TourismManager lang={lang} canEdit={canEdit} eventId={eventId} />}
       {sub === "hotels" && <HotelsManager lang={lang} canEdit={canEdit} eventId={eventId} />}
+      {sub === "companies" && <MemberCompaniesManager lang={lang} canEdit={canEdit} eventId={eventId} />}
       {sub === "speakers" && <SpeakersManager lang={lang} canEdit={canEdit} eventId={eventId} />}
     </div>
   );
@@ -2243,6 +2287,81 @@ function TourismManager({ lang , canEdit, eventId }) {
         </div>
       ) : (
         canEdit && <button onClick={() => setEditing({ name_fr: "", name_en: "", name_pt: "", desc_fr: "", desc_en: "", desc_pt: "", image_url: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function MemberCompaniesManager({ lang, canEdit, eventId }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAllForEvent("member_companies", eventId)); setLoading(false); }
+  useEffect(() => { load(); }, [eventId]);
+
+  async function save() {
+    if (!editing.name) return;
+    await upsertRow("member_companies", { ...editing, event_id: eventId });
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("member_companies", id);
+    load();
+  }
+
+  return (
+    <div>
+      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="bg-white border p-4 flex flex-col items-center text-center" style={{ borderColor: "#CFC4A3" }}>
+            {it.logo_url ? (
+              <img src={it.logo_url} alt={it.name} className="w-20 h-20 object-contain mb-2" />
+            ) : (
+              <div className="w-20 h-20 mb-2 flex items-center justify-center" style={{ background: "var(--sable-deep)" }}><Building2 size={26} color="var(--vert-fonce)" /></div>
+            )}
+            <div className="text-sm font-semibold mb-1">{it.name}</div>
+            {it.dg_name && <div className="text-xs text-black/60 mb-1">{t("dg_label", lang)} : {it.dg_name}</div>}
+            {it.address && <div className="text-xs text-black/50">{it.address}</div>}
+            {it.phone && <div className="text-xs text-black/50 mb-2">{it.phone}</div>}
+            <div className="flex items-center justify-between w-full mt-2">
+              <StatusBadge status={it.status} />
+              <div className="flex gap-2">
+                {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <ImageUploader lang={lang} value={editing.logo_url} onChange={url => setEditing(e => ({ ...e, logo_url: url }))} folder="companies" />
+          <Field label={t("company_name_label", lang)}><input className="cb-input" value={editing.name || ""} onChange={e=>setEditing(x=>({ ...x, name: e.target.value }))} /></Field>
+          <Field label={t("dg_label", lang)}><input className="cb-input" value={editing.dg_name || ""} onChange={e=>setEditing(x=>({ ...x, dg_name: e.target.value }))} /></Field>
+          <Field label={t("address_label", lang)}><input className="cb-input" value={editing.address || ""} onChange={e=>setEditing(x=>({ ...x, address: e.target.value }))} /></Field>
+          <Field label={t("phone_label", lang)}><input className="cb-input" value={editing.phone || ""} onChange={e=>setEditing(x=>({ ...x, phone: e.target.value }))} /></Field>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        canEdit && <button onClick={() => setEditing({ name: "", logo_url: "", dg_name: "", address: "", phone: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
