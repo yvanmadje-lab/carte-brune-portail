@@ -182,7 +182,7 @@ const T = {
   confirmed_title: { fr: "Inscription enregistrée avec succès", en: "Registration successfully recorded", pt: "Inscrição registada com sucesso" },
   reg_number: { fr: "Numéro d'inscription", en: "Registration number", pt: "Número de inscrição" },
   back_home: { fr: "Retour à l'accueil", en: "Back to home", pt: "Voltar ao início" },
-  email_sent_notice: { fr: "Un email de confirmation vient de vous être envoyé, avec un lien pour consulter ou modifier vos informations à tout moment. Utilisez ce lien depuis votre boîte mail.", en: "A confirmation email has just been sent to you, with a link to view or update your information at any time. Use that link from your inbox.", pt: "Acabou de lhe ser enviado um email de confirmação, com um link para consultar ou atualizar os seus dados a qualquer momento. Utilize esse link a partir da sua caixa de correio." },
+  email_sent_notice: { fr: "Un email de confirmation vient de vous être envoyé, avec un lien pour consulter ou modifier vos informations à tout moment. Utilisez ce lien depuis votre boîte mail. Si vous ne le voyez pas dans votre boîte de réception, pensez à vérifier votre dossier Spam/Courrier indésirable.", en: "A confirmation email has just been sent to you, with a link to view or update your information at any time. Use that link from your inbox. If you don't see it in your inbox, please check your Spam/Junk folder.", pt: "Acabou de lhe ser enviado um email de confirmação, com um link para consultar ou atualizar os seus dados a qualquer momento. Utilize esse link a partir da sua caixa de correio. Se não o encontrar na caixa de entrada, verifique a pasta de Spam/Lixo eletrónico." },
   update_title: { fr: "Mettre à jour mon inscription", en: "Update my registration", pt: "Atualizar a minha inscrição" },
   update_intro: { fr: "Modifiez vos informations ci-dessous puis enregistrez.", en: "Edit your information below, then save.", pt: "Edite as suas informações abaixo e depois guarde." },
   update_save: { fr: "Enregistrer les modifications", en: "Save changes", pt: "Guardar alterações" },
@@ -1075,8 +1075,8 @@ export default function App() {
 
       {/* HEADER */}
       <header style={{ background: "var(--navy)" }} className="text-white sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5 sm:py-3">
-          <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-2 sm:gap-3 text-left min-w-0 flex-1">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 px-2 sm:px-4 py-2.5 sm:py-3">
+          <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-2 sm:gap-3 text-left min-w-0">
             {logoUrl ? (
               <img src={logoUrl} alt="Logo" className="w-10 h-10 sm:w-20 sm:h-20 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
             ) : (
@@ -1089,11 +1089,11 @@ export default function App() {
               </div>
             )}
             <div className="min-w-0">
-              <div className="font-display font-semibold leading-tight truncate text-sm sm:text-xl">{eventData.brand[lang]}</div>
+              <div className="font-display font-semibold leading-tight text-sm sm:text-xl whitespace-nowrap">{eventData.brand[lang]}</div>
               <div className="text-[11px] opacity-75 leading-tight hidden sm:block truncate">{t("council", lang)}</div>
             </div>
           </button>
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium flex-shrink-0">
+          <nav className="hidden md:flex items-center gap-3 lg:gap-5 text-[13px] lg:text-sm font-medium flex-shrink-0">
             {menu.map(item => (
               <button key={item.id} onClick={() => goToMenuTarget(item.target)} className="hover:opacity-80 whitespace-nowrap">{item.label[lang]}</button>
             ))}
