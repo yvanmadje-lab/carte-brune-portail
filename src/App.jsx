@@ -1076,7 +1076,7 @@ export default function App() {
       {/* HEADER */}
       <header style={{ background: "var(--navy)" }} className="text-white sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 px-2 sm:px-4 py-2.5 sm:py-3">
-          <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-2 sm:gap-3 text-left min-w-0">
+          <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-2 sm:gap-3 text-left min-w-0 flex-1 md:flex-none">
             {logoUrl ? (
               <img src={logoUrl} alt="Logo" className="w-10 h-10 sm:w-20 sm:h-20 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
             ) : (
@@ -1089,7 +1089,7 @@ export default function App() {
               </div>
             )}
             <div className="min-w-0">
-              <div className="font-display font-semibold leading-tight text-sm sm:text-xl whitespace-nowrap">{eventData.brand[lang]}</div>
+              <div className="font-display font-semibold leading-tight text-sm sm:text-xl truncate">{eventData.brand[lang]}</div>
               <div className="text-[11px] opacity-75 leading-tight hidden sm:block truncate">{t("council", lang)}</div>
             </div>
           </button>
