@@ -1326,32 +1326,28 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
         </div>
       </section>
 
-      {/* TOURISM CAROUSEL */}
-      <section id="tourism-section" className="px-5 py-14" style={{ background: "var(--sable-deep)" }}>
-        <div className="max-w-6xl mx-auto">
-          <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("tourism_title", lang)}</h2>
-          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5">
-            {tourism.map((site, i) => {
-              const siteGallery = [site.image, ...(site.gallery || [])].filter(Boolean);
-              return (
-              <div key={site.id || i} className="bg-white">
-                {site.image ? (
-                  <button onClick={() => siteGallery.length && setGalleryItem({ title: site.name[lang], images: siteGallery })} className="w-full text-left" style={{ height: "280px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center", cursor: siteGallery.length ? "pointer" : "default" }} />
-                ) : (
-                  <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "280px" }} />
-                )}
-                <div className="p-4">
-                  <div className="font-semibold text-sm mb-1">{site.name[lang]}</div>
-                  <div className="text-xs text-black/60 leading-relaxed mb-2">{site.desc[lang]}</div>
-                  {siteGallery.length > 1 && (
-                    <button onClick={() => setGalleryItem({ title: site.name[lang], images: siteGallery })} className="cb-btn-outline text-xs py-1 px-2"><ImageIcon size={12} /> {t("view_photos", lang)}</button>
+      {memberCompanies && memberCompanies.length > 0 && (
+        <section id="companies-section" className="px-2 sm:px-5 py-14" style={{ background: "var(--sable-deep)" }}>
+          <div className="max-w-6xl mx-auto">
+            <h2 className="font-display font-semibold text-2xl mb-8 px-3 sm:px-0" style={{ color: "var(--navy)" }}>{t("member_companies_title", lang)}</h2>
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {memberCompanies.map(c => (
+                <div key={c.id} className="bg-white p-3 flex flex-col items-center text-center" style={{ border: "1px solid #CFC4A3" }}>
+                  {c.logo ? (
+                    <img src={c.logo} alt={c.name} className="w-24 h-24 object-contain mb-3" />
+                  ) : (
+                    <div className="w-24 h-24 mb-3 flex items-center justify-center" style={{ background: "var(--sable)" }}><Building2 size={32} color="var(--vert-fonce)" /></div>
                   )}
+                  <div className="font-semibold text-sm mb-1">{c.name}</div>
+                  {c.dgName && <div className="text-xs text-black/60 mb-2 break-words">{t("dg_label", lang)} : {c.dgName}</div>}
+                  {c.address && <div className="text-xs text-black/50 break-words">{c.address}</div>}
+                  {c.phone && <div className="text-xs text-black/50 break-words">{c.phone}</div>}
                 </div>
-              </div>
-            );})}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* HOTELS */}
       <section id="hotels-section" className="max-w-6xl mx-auto px-5 py-14">
@@ -1399,28 +1395,32 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
         </div>
       </section>
 
-      {memberCompanies && memberCompanies.length > 0 && (
-        <section id="companies-section" className="px-2 sm:px-5 py-14" style={{ background: "var(--sable-deep)" }}>
-          <div className="max-w-6xl mx-auto">
-            <h2 className="font-display font-semibold text-2xl mb-8 px-3 sm:px-0" style={{ color: "var(--navy)" }}>{t("member_companies_title", lang)}</h2>
-            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {memberCompanies.map(c => (
-                <div key={c.id} className="bg-white p-3 flex flex-col items-center text-center" style={{ border: "1px solid #CFC4A3" }}>
-                  {c.logo ? (
-                    <img src={c.logo} alt={c.name} className="w-24 h-24 object-contain mb-3" />
-                  ) : (
-                    <div className="w-24 h-24 mb-3 flex items-center justify-center" style={{ background: "var(--sable)" }}><Building2 size={32} color="var(--vert-fonce)" /></div>
+      {/* TOURISM CAROUSEL */}
+      <section id="tourism-section" className="px-5 py-14" style={{ background: "var(--sable-deep)" }}>
+        <div className="max-w-6xl mx-auto">
+          <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("tourism_title", lang)}</h2>
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5">
+            {tourism.map((site, i) => {
+              const siteGallery = [site.image, ...(site.gallery || [])].filter(Boolean);
+              return (
+              <div key={site.id || i} className="bg-white">
+                {site.image ? (
+                  <button onClick={() => siteGallery.length && setGalleryItem({ title: site.name[lang], images: siteGallery })} className="w-full text-left" style={{ height: "280px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center", cursor: siteGallery.length ? "pointer" : "default" }} />
+                ) : (
+                  <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "280px" }} />
+                )}
+                <div className="p-4">
+                  <div className="font-semibold text-sm mb-1">{site.name[lang]}</div>
+                  <div className="text-xs text-black/60 leading-relaxed mb-2">{site.desc[lang]}</div>
+                  {siteGallery.length > 1 && (
+                    <button onClick={() => setGalleryItem({ title: site.name[lang], images: siteGallery })} className="cb-btn-outline text-xs py-1 px-2"><ImageIcon size={12} /> {t("view_photos", lang)}</button>
                   )}
-                  <div className="font-semibold text-sm mb-1">{c.name}</div>
-                  {c.dgName && <div className="text-xs text-black/60 mb-2 break-words">{t("dg_label", lang)} : {c.dgName}</div>}
-                  {c.address && <div className="text-xs text-black/50 break-words">{c.address}</div>}
-                  {c.phone && <div className="text-xs text-black/50 break-words">{c.phone}</div>}
                 </div>
-              ))}
-            </div>
+              </div>
+            );})}
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {galleryItem && (
         <GalleryModal title={galleryItem.title} images={galleryItem.images} onClose={() => setGalleryItem(null)} />
