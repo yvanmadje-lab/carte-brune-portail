@@ -444,6 +444,16 @@ const T = {
 };
 const t = (k, lang) => (T[k] ? T[k][lang] : k);
 
+// Normalise une URL saisie par un admin (ex: "www.axa.sn" ou "axa.sn")
+// en ajoutant automatiquement https:// si absent — sinon le navigateur
+// traite l'adresse comme un chemin relatif du site (ex:
+// browncard-event.org/www.axa.sn au lieu d'ouvrir le vrai site externe).
+function normalizeUrl(url) {
+  const trimmed = (url || "").trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 function regNumber(seq) {
   return `CB-${DEFAULT_EVENT.year}-${DEFAULT_EVENT.code}-${String(seq).padStart(6, "0")}`;
 }
@@ -1348,7 +1358,7 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
                   {c.phone && <div className="text-xs text-black/50 break-words">{c.phone}</div>}
                   {c.email && <div className="text-xs text-black/50 break-words">{c.email}</div>}
                   {c.website && (
-                    <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-xs mt-1 break-words" style={{ color: "var(--vert-fonce)", textDecoration: "underline" }}>{t("company_website_label", lang)}</a>
+                    <a href={normalizeUrl(c.website)} target="_blank" rel="noopener noreferrer" className="text-xs mt-1 break-words" style={{ color: "var(--vert-fonce)", textDecoration: "underline" }}>{t("company_website_label", lang)}</a>
                   )}
                 </div>
               ))}
@@ -1394,7 +1404,7 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
                     <button onClick={() => setGalleryItem({ title: hName, images: gallery })} className="cb-btn-outline text-xs py-1.5 px-3"><ImageIcon size={13} /> {t("view_photos", lang)}</button>
                   )}
                   {h.website && (
-                    <a href={h.website} target="_blank" rel="noopener noreferrer" className="cb-btn-outline text-xs py-1.5 px-3" style={{ textDecoration: "none" }}><Globe2 size={13} /> {t("visit_website", lang)}</a>
+                    <a href={normalizeUrl(h.website)} target="_blank" rel="noopener noreferrer" className="cb-btn-outline text-xs py-1.5 px-3" style={{ textDecoration: "none" }}><Globe2 size={13} /> {t("visit_website", lang)}</a>
                   )}
                 </div>
               </div>
