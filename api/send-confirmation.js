@@ -85,7 +85,7 @@ export default async function handler(req, res) {
     };
 
     const subject = fillTemplate(map[`email_subject_${safeLang}`] || "Confirmation d'inscription", vars);
-    const text = fillTemplate(map[`email_body_${safeLang}`] || `Votre lien : ${editLink}`, vars);
+    const text = fillTemplate(map[`email_body_${safeLang}`] || `Votre lien : ${editLink}\n\nSi vous ne voyez pas cet email dans votre boîte de réception, pensez à vérifier votre dossier Spam/Courrier indésirable.`, vars);
     let html = text.replace(/\n/g, "<br/>").replace(editLink, `<a href="${editLink}">${editLink}</a>`);
     if (vars.whatsappGroupLink) {
       html = html.replace(vars.whatsappGroupLink, `<a href="${vars.whatsappGroupLink}">${vars.whatsappGroupLink}</a>`);
