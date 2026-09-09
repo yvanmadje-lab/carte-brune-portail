@@ -1351,8 +1351,8 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
               {memberCompanies.map(c => (
                 <div key={c.id} className="bg-white p-3 flex flex-col items-center text-center" style={{ border: "1px solid #CFC4A3" }}>
                   {c.logo ? (
-                    <div className="w-24 h-24 mb-3 overflow-hidden flex items-center justify-center">
-                      <img src={c.logo} alt={c.name} className="w-full h-full object-contain" style={{ transform: `scale(${(c.logoScale || 100) / 100})` }} />
+                    <div className="mb-3 flex items-center justify-center" style={{ width: "96px", height: "96px" }}>
+                      <img src={c.logo} alt={c.name} className="object-contain max-w-none" style={{ width: `${96 * ((c.logoScale || 100) / 100)}px`, height: `${96 * ((c.logoScale || 100) / 100)}px` }} />
                     </div>
                   ) : (
                     <div className="w-24 h-24 mb-3 flex items-center justify-center" style={{ background: "var(--sable)" }}><Building2 size={32} color="var(--vert-fonce)" /></div>
@@ -2341,8 +2341,8 @@ function MemberCompaniesManager({ lang, canEdit, eventId }) {
         {items.map(it => (
           <div key={it.id} className="bg-white border p-4 flex flex-col items-center text-center" style={{ borderColor: "#CFC4A3" }}>
             {it.logo_url ? (
-              <div className="w-20 h-20 mb-2 overflow-hidden flex items-center justify-center" style={{ background: "var(--sable-deep)" }}>
-                <img src={it.logo_url} alt={it.name} className="w-full h-full object-contain" style={{ transform: `scale(${(it.logo_scale || 100) / 100})` }} />
+              <div className="mb-2 flex items-center justify-center" style={{ width: "80px", height: "80px" }}>
+                <img src={it.logo_url} alt={it.name} className="object-contain max-w-none" style={{ width: `${80 * ((it.logo_scale || 100) / 100)}px`, height: `${80 * ((it.logo_scale || 100) / 100)}px` }} />
               </div>
             ) : (
               <div className="w-20 h-20 mb-2 flex items-center justify-center" style={{ background: "var(--sable-deep)" }}><Building2 size={26} color="var(--vert-fonce)" /></div>
@@ -2373,8 +2373,8 @@ function MemberCompaniesManager({ lang, canEdit, eventId }) {
               <label className="cb-label">{t("logo_zoom_label", lang)} — {editing.logo_scale || 100}%</label>
               <div className="flex items-center gap-3">
                 <input type="range" min="50" max="300" step="5" value={editing.logo_scale || 100} onChange={e=>setEditing(x=>({ ...x, logo_scale: Number(e.target.value) }))} className="flex-1" />
-                <div className="w-16 h-16 flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ background: "var(--sable-deep)", border: "1px solid #CFC4A3" }}>
-                  <img src={editing.logo_url} alt="" className="w-full h-full object-contain" style={{ transform: `scale(${(editing.logo_scale || 100) / 100})` }} />
+                <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center overflow-visible" style={{ background: "var(--sable-deep)", border: "1px solid #CFC4A3" }}>
+                  <img src={editing.logo_url} alt="" className="object-contain max-w-none" style={{ width: `${64 * ((editing.logo_scale || 100) / 100)}px`, height: `${64 * ((editing.logo_scale || 100) / 100)}px` }} />
                 </div>
               </div>
               <p className="text-xs text-black/50 mt-1">{t("logo_zoom_help", lang)}</p>
