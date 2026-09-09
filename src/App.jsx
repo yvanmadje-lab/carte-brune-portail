@@ -1277,10 +1277,10 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
   return (
     <>
       {/* HERO — fond noir + trame de points, dans l'esprit du bandeau vidéo */}
-      <section id="event-section" style={{ background: "var(--noir)" }} className="relative text-white px-4 sm:px-5 py-12 sm:py-20 overflow-hidden">
+      <section style={{ background: "var(--noir)" }} className="relative text-white px-4 sm:px-5 py-12 sm:py-20 overflow-hidden">
         <HeroCarousel images={heroSlides} />
         <div className="dots absolute inset-0 pointer-events-none" style={{ maskImage: "radial-gradient(ellipse at bottom left, black, transparent 70%)" }} />
-        <div className="max-w-6xl mx-auto relative">
+        <div id="event-section" className="max-w-6xl mx-auto relative scroll-mt-20 sm:scroll-mt-28">
           <div className="flex items-start gap-2 sm:gap-3 mb-4 sm:mb-6" style={{ textShadow: "0 2px 10px rgba(0,0,0,.55)" }}>
             <span className="font-display font-bold leading-none" style={{ fontSize: "clamp(2.6rem, 14vw, 5rem)", color: "var(--vert)" }}>{event.edition}</span>
             <span className="font-display" style={{ fontSize: "clamp(1rem, 4vw, 1.6rem)", color: "var(--brun-clair)", marginTop: "0.6rem" }}>{event.ordinal[lang]}</span>
@@ -1321,8 +1321,8 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
       )}
 
       {/* PARTENAIRES & INTERVENANTS */}
-      <section id="speakers-section" className="max-w-6xl mx-auto px-5 py-14">
-        <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--vert-fonce)" }}>{t("speakers_title", lang)}</h2>
+      <section className="max-w-6xl mx-auto px-5 py-14">
+        <h2 id="speakers-section" className="font-display font-semibold text-2xl mb-8 scroll-mt-20 sm:scroll-mt-28" style={{ color: "var(--vert-fonce)" }}>{t("speakers_title", lang)}</h2>
         <div className="grid sm:grid-cols-2 gap-5">
           {speakers.map((s, i) => (
             <div key={s.id || i} className="flex items-start gap-4 bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
@@ -1341,9 +1341,9 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
       </section>
 
       {memberCompanies && memberCompanies.length > 0 && (
-        <section id="companies-section" className="px-2 sm:px-5 py-14" style={{ background: "var(--sable-deep)" }}>
+        <section className="px-2 sm:px-5 py-14" style={{ background: "var(--sable-deep)" }}>
           <div className="max-w-6xl mx-auto">
-            <h2 className="font-display font-semibold text-2xl mb-8 px-3 sm:px-0" style={{ color: "var(--navy)" }}>{t("member_companies_title", lang)}</h2>
+            <h2 id="companies-section" className="font-display font-semibold text-2xl mb-8 px-3 sm:px-0 scroll-mt-20 sm:scroll-mt-28" style={{ color: "var(--navy)" }}>{t("member_companies_title", lang)}</h2>
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
               {memberCompanies.map(c => (
                 <div key={c.id} className="bg-white p-3 flex flex-col items-center text-center" style={{ border: "1px solid #CFC4A3" }}>
@@ -1368,8 +1368,8 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
       )}
 
       {/* HOTELS */}
-      <section id="hotels-section" className="max-w-6xl mx-auto px-5 py-14">
-        <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("hotels_title", lang)}</h2>
+      <section className="max-w-6xl mx-auto px-5 py-14">
+        <h2 id="hotels-section" className="font-display font-semibold text-2xl mb-8 scroll-mt-20 sm:scroll-mt-28" style={{ color: "var(--navy)" }}>{t("hotels_title", lang)}</h2>
         <div className="grid md:grid-cols-3 gap-6">
           {hotels.map(h => {
             const gallery = [h.image, ...(h.gallery || [])].filter(Boolean);
@@ -1414,9 +1414,9 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
       </section>
 
       {/* TOURISM CAROUSEL */}
-      <section id="tourism-section" className="px-5 py-14" style={{ background: "var(--sable-deep)" }}>
+      <section className="px-5 py-14" style={{ background: "var(--sable-deep)" }}>
         <div className="max-w-6xl mx-auto">
-          <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("tourism_title", lang)}</h2>
+          <h2 id="tourism-section" className="font-display font-semibold text-2xl mb-8 scroll-mt-20 sm:scroll-mt-28" style={{ color: "var(--navy)" }}>{t("tourism_title", lang)}</h2>
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5">
             {tourism.map((site, i) => {
               const siteGallery = [site.image, ...(site.gallery || [])].filter(Boolean);
