@@ -1,6 +1,56 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff } from "lucide-react";
-import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia } from "./lib/supabaseClient";
+import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff, QrCode } from "lucide-react";
+import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile, fetchPublishedForEvent, fetchAllForEvent, getActiveEvent, listAllEvents, setActiveEvent, duplicateEvent, listArchivedEvents, listHotelManagerLinks, addHotelManager, removeHotelManager, listMyManagedHotels, listCountryManagerLinks, addCountryManager, removeCountryManager, listMyManagedCountries, clearParticipantsForActiveEvent } from "./lib/supabaseClient";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import ExcelJS from "exceljs";
+import QRCode from "qrcode";
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
+import { SplashScreen } from "@capacitor/splash-screen";
+import { Browser } from "@capacitor/browser";
+
+// --- Téléchargement de fichiers : dans l'app mobile (Capacitor), le
+// mécanisme web classique (lien <a download>, doc.save() de jsPDF)
+// ne fonctionne pas — la WebView native l'ignore silencieusement,
+// d'où les boutons "PDF"/"Excel" qui semblaient ne rien faire.
+// On écrit alors le fichier sur l'appareil puis on ouvre la feuille
+// de partage native (qui permet d'enregistrer dans Fichiers/Drive,
+// envoyer par WhatsApp/email, etc.). Sur le site web classique,
+// rien ne change : on garde le téléchargement navigateur habituel.
+async function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function saveOrShareBlob(blob, filename) {
+  if (Capacitor.isNativePlatform()) {
+    const base64 = await blobToBase64(blob);
+    const written = await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Cache });
+    await Share.share({ title: filename, url: written.uri, dialogTitle: filename });
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+}
+
+// Ouverture de liens externes (PDF programme, site web d'un hôtel,
+// groupe WhatsApp) : window.open ne fonctionne pas non plus dans la
+// WebView native, on utilise le plugin Browser à la place.
+async function openExternal(url) {
+  if (Capacitor.isNativePlatform()) {
+    await Browser.open({ url });
+  } else {
+    window.open(url, "_blank");
+  }
+}
 
 /* ---------------------------------------------------------
    TOKENS — alignés sur l'identité officielle Carte Brune CEDEAO
@@ -16,9 +66,9 @@ import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia }
 const COUNTRIES = ["Bénin","Cabo Verde","Côte d'Ivoire","Gambie","Ghana","Guinée","Guinée-Bissau","Liberia","Nigeria","Sénégal","Sierra Leone","Togo"];
 
 const DEFAULT_HOTELS = [
-  { id: "h1", name: "Hôtel Pullman Dakar", distance: "Lieu officiel de l'Assemblée Générale", desc: { fr: "Hôtel hôte de la 42ᵉ Assemblée Générale, en front de mer sur la Corniche.", en: "Host hotel of the 42nd General Assembly, on the seafront Corniche.", pt: "Hotel anfitrião da 42ª Assembleia Geral, à beira-mar na Corniche." }, amenities: ["Wi‑Fi", "Piscine", "Salles de conférence", "Restaurant"], rooms: [ { id: "h1r1", type: "Standard", price: 85000, cur: "FCFA" }, { id: "h1r2", type: "Deluxe", price: 120000, cur: "FCFA" } ] },
-  { id: "h2", name: "Radisson Blu Dakar Sea Plaza", distance: "2,1 km du lieu de réunion", desc: { fr: "Établissement moderne surplombant la baie de Dakar.", en: "Modern property overlooking Dakar bay.", pt: "Estabelecimento moderno com vista para a baía de Dakar." }, amenities: ["Wi‑Fi", "Salle de sport", "Climatisation", "Parking"], rooms: [ { id: "h2r1", type: "Standard", price: 75000, cur: "FCFA" }, { id: "h2r2", type: "Suite", price: 140000, cur: "FCFA" } ] },
-  { id: "h3", name: "Novotel Dakar", distance: "3,4 km du lieu de réunion", desc: { fr: "Option confortable au centre-ville, proche du Plateau.", en: "Comfortable downtown option, near Le Plateau.", pt: "Opção confortável no centro, perto do Plateau." }, amenities: ["Wi‑Fi", "Petit-déjeuner", "Climatisation"], rooms: [ { id: "h3r1", type: "Standard", price: 55000, cur: "FCFA" } ] },
+  { id: "h1", name: { fr: "Hôtel Pullman Dakar", en: "Pullman Dakar Hotel", pt: "Hotel Pullman Dakar" }, distance: { fr: "Lieu officiel de l'Assemblée Générale", en: "Official venue of the General Assembly", pt: "Local oficial da Assembleia Geral" }, desc: { fr: "Hôtel hôte de la 42ᵉ Assemblée Générale, en front de mer sur la Corniche.", en: "Host hotel of the 42nd General Assembly, on the seafront Corniche.", pt: "Hotel anfitrião da 42ª Assembleia Geral, à beira-mar na Corniche." }, amenities: { fr: ["Wi‑Fi", "Piscine", "Salles de conférence", "Restaurant"], en: ["Wi‑Fi", "Pool", "Conference rooms", "Restaurant"], pt: ["Wi‑Fi", "Piscina", "Salas de conferência", "Restaurante"] }, rooms: [ { id: "h1r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 85000, cur: "FCFA" }, { id: "h1r2", type: { fr: "Deluxe", en: "Deluxe", pt: "Deluxe" }, price: 120000, cur: "FCFA" } ] },
+  { id: "h2", name: { fr: "Radisson Blu Dakar Sea Plaza", en: "Radisson Blu Dakar Sea Plaza", pt: "Radisson Blu Dakar Sea Plaza" }, distance: { fr: "2,1 km du lieu de réunion", en: "2.1 km from the meeting venue", pt: "2,1 km do local da reunião" }, desc: { fr: "Établissement moderne surplombant la baie de Dakar.", en: "Modern property overlooking Dakar bay.", pt: "Estabelecimento moderno com vista para a baía de Dakar." }, amenities: { fr: ["Wi‑Fi", "Salle de sport", "Climatisation", "Parking"], en: ["Wi‑Fi", "Gym", "Air conditioning", "Parking"], pt: ["Wi‑Fi", "Ginásio", "Ar condicionado", "Estacionamento"] }, rooms: [ { id: "h2r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 75000, cur: "FCFA" }, { id: "h2r2", type: { fr: "Suite", en: "Suite", pt: "Suite" }, price: 140000, cur: "FCFA" } ] },
+  { id: "h3", name: { fr: "Novotel Dakar", en: "Novotel Dakar", pt: "Novotel Dakar" }, distance: { fr: "3,4 km du lieu de réunion", en: "3.4 km from the meeting venue", pt: "3,4 km do local da reunião" }, desc: { fr: "Option confortable au centre-ville, proche du Plateau.", en: "Comfortable downtown option, near Le Plateau.", pt: "Opção confortável no centro, perto do Plateau." }, amenities: { fr: ["Wi‑Fi", "Petit-déjeuner", "Climatisation"], en: ["Wi‑Fi", "Breakfast", "Air conditioning"], pt: ["Wi‑Fi", "Pequeno-almoço", "Ar condicionado"] }, rooms: [ { id: "h3r1", type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 55000, cur: "FCFA" } ] },
 ];
 
 const DEFAULT_TOURISM = [
@@ -28,16 +78,55 @@ const DEFAULT_TOURISM = [
   { name: { fr: "Plage de N'Gor", en: "N'Gor Beach", pt: "Praia de N'Gor" }, desc: { fr: "Plage animée face à l'île de N'Gor, surf et couchers de soleil.", en: "Lively beach facing N'Gor island, surf spots and sunsets.", pt: "Praia animada em frente à ilha de N'Gor, surf e pôr do sol." } },
 ];
 
-const EVENT = {
-  code: "AG42", year: 2026, edition: "42ᵉ",
-  title: { fr: "42ᵉ Assemblée Générale", en: "42nd General Assembly", pt: "42ª Assembleia Geral" },
-  theme: { fr: "Assemblée Générale annuelle du Conseil des Bureaux du Système d'Assurance Carte Brune CEDEAO", en: "Annual General Assembly of the Council of Bureaux of the ECOWAS Brown Card Insurance Scheme", pt: "Assembleia Geral anual do Conselho de Bureaux do Sistema de Seguro Cartão Castanho da CEDEAO" },
-  dates: "19 – 22 octobre 2026", dateShort: "DU 19 AU 22", monthYear: "OCTOBRE 2026",
-  city: "Dakar", country: "Sénégal", venue: "Hôtel Pullman Dakar",
+const DEFAULT_EVENT = {
+  code: "AG42", year: 2026, edition: "42",
+  ordinal: { fr: "e", en: "nd", pt: "ª" },
+  brand: { fr: "Carte Brune CEDEAO", en: "ECOWAS Brown Card", pt: "Cartão Castanho CEDEAO" },
+  title: { fr: "Assemblée Générale", en: "General Assembly", pt: "Assembleia Geral" },
+  theme: { fr: "", en: "", pt: "" },
+  dateShort: { fr: "DU 19 AU 22", en: "FROM 19 TO 22", pt: "DE 19 A 22" },
+  monthYear: { fr: "OCTOBRE 2026", en: "OCTOBER 2026", pt: "OUTUBRO 2026" },
+  venue: { fr: "Hôtel Pullman Dakar", en: "Hôtel Pullman Dakar", pt: "Hôtel Pullman Dakar" },
+  city: "Dakar", country: "Sénégal",
   desc: { fr: "Le Conseil des Bureaux du Système d'Assurance Carte Brune CEDEAO réunit à Dakar les Bureaux Nationaux, régulateurs et partenaires techniques pour sa 42ᵉ Assemblée Générale annuelle, en collaboration avec la Fédération Sénégalaise des Sociétés d'Assurances (FSSA).", en: "The Council of Bureaux of the ECOWAS Brown Card Insurance Scheme convenes National Bureaux, regulators and technical partners in Dakar for its 42nd annual General Assembly, in partnership with the Senegalese Federation of Insurance Companies (FSSA).", pt: "O Conselho de Bureaux do Sistema de Seguro Cartão Castanho da CEDEAO reúne em Dakar os Bureaux Nacionais, reguladores e parceiros técnicos para a sua 42ª Assembleia Geral anual, em parceria com a Federação Senegalesa das Sociedades de Seguros (FSSA)." },
 };
 
-const SPEAKERS = [
+const DEFAULT_ORG_TYPES = [
+  { id: "bureau", label: { fr: "Bureau National", en: "National Bureau", pt: "Bureau Nacional" }, isOther: false },
+  { id: "insurer", label: { fr: "Compagnie d'assurance", en: "Insurance company", pt: "Companhia de seguros" }, isOther: false },
+  { id: "regulator", label: { fr: "Direction des Assurances", en: "Insurance Directorate", pt: "Direção de Seguros" }, isOther: false },
+  { id: "other", label: { fr: "Autre", en: "Other", pt: "Outro" }, isOther: true },
+];
+
+// Champs "simples" du formulaire d'inscription, gérables depuis l'admin
+// (les champs structurants — pays, type d'organisme, choix hôtel/chambre,
+// transfert — restent fixes car ils pilotent une logique dépendante).
+const DEFAULT_FORM_FIELDS = [
+  { id: "lastName", field_key: "lastName", step: 1, label: { fr: "Nom", en: "Last name", pt: "Apelido" }, field_type: "text", required: false, display_order: 1 },
+  { id: "firstName", field_key: "firstName", step: 1, label: { fr: "Prénom", en: "First name", pt: "Nome próprio" }, field_type: "text", required: false, display_order: 2 },
+  { id: "position", field_key: "position", step: 1, label: { fr: "Fonction", en: "Position", pt: "Função" }, field_type: "text", required: false, display_order: 3 },
+  { id: "organization", field_key: "organization", step: 1, label: { fr: "Organisme", en: "Organization", pt: "Organização" }, field_type: "text", required: false, display_order: 4 },
+  { id: "city", field_key: "city", step: 2, label: { fr: "Ville", en: "City", pt: "Cidade" }, field_type: "text", required: false, display_order: 1 },
+  { id: "phone", field_key: "phone", step: 2, label: { fr: "Numéro WhatsApp (avec indicatif, ex: +225 07 12 34 56 78)", en: "WhatsApp number (with country code, e.g. +225 07 12 34 56 78)", pt: "Número WhatsApp (com indicativo, ex: +225 07 12 34 56 78)" }, field_type: "tel", required: true, display_order: 2 },
+  { id: "email", field_key: "email", step: 2, label: { fr: "Email", en: "Email", pt: "Email" }, field_type: "email", required: false, display_order: 3 },
+  { id: "address", field_key: "address", step: 2, label: { fr: "Adresse", en: "Address", pt: "Endereço" }, field_type: "text", required: false, display_order: 4 },
+  { id: "flightNumber", field_key: "flightNumber", step: 4, label: { fr: "Numéro de vol (arrivée)", en: "Flight number (arrival)", pt: "Número do voo (chegada)" }, field_type: "text", required: false, display_order: 1 },
+  { id: "airline", field_key: "airline", step: 4, label: { fr: "Compagnie aérienne", en: "Airline", pt: "Companhia aérea" }, field_type: "text", required: false, display_order: 2 },
+  { id: "arrivalDate", field_key: "arrivalDate", step: 4, label: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" }, field_type: "date", required: false, display_order: 3 },
+  { id: "arrivalTime", field_key: "arrivalTime", step: 4, label: { fr: "Heure d'arrivée", en: "Arrival time", pt: "Hora de chegada" }, field_type: "time", required: false, display_order: 4 },
+  { id: "departureDate", field_key: "departureDate", step: 4, label: { fr: "Date de départ", en: "Departure date", pt: "Data de partida" }, field_type: "date", required: false, display_order: 5 },
+  { id: "departureTime", field_key: "departureTime", step: 4, label: { fr: "Heure de départ", en: "Departure time", pt: "Hora de partida" }, field_type: "time", required: false, display_order: 6 },
+  { id: "departureFlightNumber", field_key: "departureFlightNumber", step: 4, label: { fr: "Numéro de vol (départ)", en: "Flight number (departure)", pt: "Número do voo (partida)" }, field_type: "text", required: false, display_order: 7 },
+];
+
+const DEFAULT_MENU = [
+  { id: "m1", label: { fr: "Accueil", en: "Home", pt: "Início" }, target: "top" },
+  { id: "m2", label: { fr: "Événements", en: "Events", pt: "Eventos" }, target: "event-section" },
+  { id: "m3", label: { fr: "Hôtels", en: "Hotels", pt: "Hotéis" }, target: "hotels-section" },
+  { id: "m4", label: { fr: "Tourisme", en: "Tourism", pt: "Turismo" }, target: "tourism-section" },
+];
+
+const DEFAULT_SPEAKERS = [
   { name: "Mme Audrey Tiam", role: { fr: "Secrétaire Exécutive, Bureau National Sénégalais de la Carte Brune CEDEAO", en: "Executive Secretary, Senegalese National Bureau of the ECOWAS Brown Card", pt: "Secretária Executiva, Bureau Nacional Senegalês do Cartão Castanho da CEDEAO" } },
   { name: "FSSA", role: { fr: "Fédération Sénégalaise des Sociétés d'Assurances — partenaire hôte", en: "Senegalese Federation of Insurance Companies — host partner", pt: "Federação Senegalesa das Sociedades de Seguros — parceiro anfitrião" } },
 ];
@@ -51,7 +140,15 @@ const T = {
   council: { fr: "Conseil des Bureaux — Système d'Assurance Carte Brune CEDEAO", en: "Council of Bureaux — ECOWAS Brown Card Insurance Scheme", pt: "Conselho de Bureaux — Sistema de Seguro Cartão Castanho da CEDEAO" },
   hero_cta: { fr: "S'inscrire à la réunion", en: "Register for the meeting", pt: "Inscrever-se na reunião" },
   tourism_title: { fr: "Découvrir Dakar", en: "Discover Dakar", pt: "Descobrir Dakar" },
-  speakers_title: { fr: "Ils portent l'événement", en: "Event partners & speakers", pt: "Parceiros e intervenientes" },
+  member_companies_title: { fr: "Compagnies membres du Bureau National Carte Brune CEDEAO du Sénégal", en: "Member companies of the ECOWAS Brown Card National Bureau of Senegal", pt: "Companhias membros do Departamento Nacional do Cartão Castanho da CEDEAO do Senegal" },
+  dg_label: { fr: "Directeur Général", en: "CEO", pt: "Diretor Geral" },
+  company_name_label: { fr: "Nom de la compagnie", en: "Company name", pt: "Nome da companhia" },
+  address_label: { fr: "Adresse", en: "Address", pt: "Endereço" },
+  phone_label: { fr: "Téléphone", en: "Phone", pt: "Telefone" },
+  company_email_label: { fr: "Email", en: "Email", pt: "Email" },
+  company_website_label: { fr: "Site web", en: "Website", pt: "Site web" },
+  companies_tab: { fr: "Compagnies membres", en: "Member companies", pt: "Companhias membros" },
+  speakers_title: { fr: "Comité d'organisation", en: "Organizing committee", pt: "Comité organizador" },
   hotels_title: { fr: "Hébergement recommandé", en: "Recommended accommodation", pt: "Alojamento recomendado" },
   per_night: { fr: "/ nuit", en: "/ night", pt: "/ noite" },
   step1_title: { fr: "Informations du participant", en: "Participant information", pt: "Informações do participante" },
@@ -59,6 +156,8 @@ const T = {
   step3_title: { fr: "Hébergement", en: "Accommodation", pt: "Alojamento" },
   step4_title: { fr: "Voyage", en: "Travel", pt: "Viagem" },
   step5_title: { fr: "Récapitulatif", en: "Summary", pt: "Resumo" },
+  review_help: { fr: "Vérifiez attentivement vos informations avant de valider — vous pourrez encore les modifier ensuite via le lien reçu par email.", en: "Please review your information carefully before submitting — you can still update it afterwards via the link you'll receive by email.", pt: "Reveja atentamente as suas informações antes de confirmar — poderá ainda atualizá-las depois através do link recebido por email." },
+  captcha_label: { fr: "Vérification anti-robot : complétez le calcul", en: "Anti-bot check: complete the calculation", pt: "Verificação anti-robô: complete o cálculo" },
   last_name: { fr: "Nom", en: "Last name", pt: "Apelido" },
   first_name: { fr: "Prénom", en: "First name", pt: "Nome próprio" },
   position: { fr: "Fonction", en: "Position", pt: "Função" },
@@ -85,13 +184,38 @@ const T = {
   confirmed_title: { fr: "Inscription enregistrée avec succès", en: "Registration successfully recorded", pt: "Inscrição registada com sucesso" },
   reg_number: { fr: "Numéro d'inscription", en: "Registration number", pt: "Número de inscrição" },
   back_home: { fr: "Retour à l'accueil", en: "Back to home", pt: "Voltar ao início" },
+  email_sent_notice: { fr: "Un email de confirmation vient de vous être envoyé, avec un lien pour consulter ou modifier vos informations à tout moment. Utilisez ce lien depuis votre boîte mail. Si vous ne le voyez pas dans votre boîte de réception, pensez à vérifier votre dossier Spam/Courrier indésirable.", en: "A confirmation email has just been sent to you, with a link to view or update your information at any time. Use that link from your inbox. If you don't see it in your inbox, please check your Spam/Junk folder.", pt: "Acabou de lhe ser enviado um email de confirmação, com um link para consultar ou atualizar os seus dados a qualquer momento. Utilize esse link a partir da sua caixa de correio. Se não o encontrar na caixa de entrada, verifique a pasta de Spam/Lixo eletrónico." },
+  update_title: { fr: "Mettre à jour mon inscription", en: "Update my registration", pt: "Atualizar a minha inscrição" },
+  update_intro: { fr: "Modifiez vos informations ci-dessous puis enregistrez.", en: "Edit your information below, then save.", pt: "Edite as suas informações abaixo e depois guarde." },
+  update_save: { fr: "Enregistrer les modifications", en: "Save changes", pt: "Guardar alterações" },
+  update_saved: { fr: "Vos informations ont été mises à jour avec succès.", en: "Your information has been successfully updated.", pt: "As suas informações foram atualizadas com sucesso." },
+  update_link_invalid: { fr: "Ce lien de modification est invalide ou a expiré.", en: "This update link is invalid or has expired.", pt: "Este link de atualização é inválido ou expirou." },
+  update_link_expired: { fr: "Ce lien de modification a expiré. Contactez le Secrétariat pour toute modification.", en: "This update link has expired. Please contact the Secretariat for any changes.", pt: "Este link de atualização expirou. Contacte o Secretariado para qualquer alteração." },
+  edit_link_expiry_label: { fr: "Durée de validité du lien de modification (en jours après l'inscription)", en: "Update link validity period (days after registration)", pt: "Duração de validade do link de atualização (dias após a inscrição)" },
+  edit_link_security_note: { fr: "Ce lien est personnel : seul le participant qui le reçoit par email doit l'utiliser pour modifier ses propres données. Il n'est jamais affiché sur le site.", en: "This link is personal: only the participant who receives it by email should use it to update their own data. It is never shown on the site.", pt: "Este link é pessoal: apenas o participante que o recebe por email deve utilizá-lo para atualizar os seus dados. Nunca é apresentado no site." },
+  whatsapp_tab: { fr: "WhatsApp", en: "WhatsApp", pt: "WhatsApp" },
+  whatsapp_body_label: { fr: "Message WhatsApp de confirmation", en: "WhatsApp confirmation message", pt: "Mensagem de confirmação no WhatsApp" },
+  whatsapp_body_active: { fr: "✓ Utilisé actuellement — aucun modèle approuvé n'est configuré pour cette langue.", en: "✓ Currently used — no approved template is configured for this language.", pt: "✓ Utilizado atualmente — nenhum modelo aprovado está configurado para este idioma." },
+  whatsapp_body_ignored: { fr: "Ignoré — un modèle approuvé est configuré pour cette langue et sera utilisé à la place.", en: "Ignored — an approved template is configured for this language and will be used instead.", pt: "Ignorado — um modelo aprovado está configurado para este idioma e será utilizado em vez disso." },
+  whatsapp_group_link_label: { fr: "Lien d'invitation du groupe WhatsApp \"Browncard Event\"", en: "Invite link for the \"Browncard Event\" WhatsApp group", pt: "Link de convite do grupo WhatsApp \"Browncard Event\"" },
+  whatsapp_group_help: { fr: "Créez d'abord ce groupe manuellement dans WhatsApp (WhatsApp n'autorise aucune création de groupe par un logiciel externe), puis collez ici son lien d'invitation (Infos du groupe → Inviter via un lien). Il sera automatiquement inclus dans le message envoyé à chaque participant. Variable disponible : {{whatsappGroupLink}}", en: "First create this group manually in WhatsApp (WhatsApp does not allow group creation via external software), then paste its invite link here (Group info → Invite via link). It will be automatically included in the message sent to each participant. Available variable: {{whatsappGroupLink}}", pt: "Crie primeiro este grupo manualmente no WhatsApp (o WhatsApp não permite a criação de grupos por software externo), depois cole aqui o link de convite (Informações do grupo → Convidar através de link). Será incluído automaticamente na mensagem enviada a cada participante. Variável disponível: {{whatsappGroupLink}}" },
+  whatsapp_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{eventTitle}} {{whatsappGroupLink}}" },
+  whatsapp_template_id_label: { fr: "Identifiants des modèles WhatsApp approuvés (un par langue, Zavu)", en: "Approved WhatsApp template IDs (one per language, Zavu)", pt: "IDs dos modelos WhatsApp aprovados (um por idioma, Zavu)" },
+  whatsapp_template_help: { fr: "Laissez un champ vide pour envoyer en texte libre dans cette langue si aucun modèle n'y est encore configuré (peut échouer, WhatsApp l'exige rarement en dehors d'une conversation déjà commencée par le participant). Un modèle approuvé par Meta a un texte figé dans UNE seule langue — il faut donc créer et faire approuver un modèle séparé pour le français, l'anglais et le portugais, puis coller chaque identifiant dans le champ correspondant. Le site choisit automatiquement le bon modèle selon la langue du participant au moment de l'inscription.\n\nLors de la création de chaque modèle dans Zavu, utilisez impérativement 5 variables DANS CET ORDRE : 1) Prénom, 2) Nom, 3) Nom de l'événement, 4) Numéro d'inscription, 5) Lien du groupe WhatsApp — seul le texte fixe autour de ces variables change d'une langue à l'autre.", en: "Leave a field empty to send as free text in that language if no template is configured yet for it (may fail — WhatsApp rarely allows this outside a conversation the participant already started). A template approved by Meta has fixed text in ONE language only — so you need to create and get approved a separate template for French, English, and Portuguese, then paste each ID in the matching field. The site automatically picks the right template based on the participant's language at registration.\n\nWhen creating each template in Zavu, use exactly 5 variables IN THIS ORDER: 1) First name, 2) Last name, 3) Event name, 4) Registration number, 5) WhatsApp group link — only the fixed text around these variables changes between languages.", pt: "Deixe um campo vazio para enviar como texto livre nesse idioma se ainda não houver modelo configurado (pode falhar — o WhatsApp raramente permite isto fora de uma conversa já iniciada pelo participante). Um modelo aprovado pela Meta tem texto fixo em APENAS um idioma — é preciso criar e obter aprovação de um modelo separado para francês, inglês e português, depois colar cada ID no campo correspondente. O site escolhe automaticamente o modelo certo consoante o idioma do participante no momento da inscrição.\n\nAo criar cada modelo no Zavu, utilize exatamente 5 variáveis NESTA ORDEM: 1) Nome próprio, 2) Apelido, 3) Nome do evento, 4) Número de inscrição, 5) Link do grupo WhatsApp — apenas o texto fixo à volta destas variáveis muda entre idiomas." },
+  email_tab: { fr: "Email de confirmation", en: "Confirmation email", pt: "Email de confirmação" },
+  email_subject_label: { fr: "Objet de l'email", en: "Email subject", pt: "Assunto do email" },
+  email_body_label: { fr: "Corps de l'email", en: "Email body", pt: "Corpo do email" },
+  email_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}" },
+  download_badge: { fr: "Télécharger le badge", en: "Download badge", pt: "Descarregar crachá" },
+  download_all_badges: { fr: "Télécharger les badges", en: "Download badges", pt: "Descarregar crachás" },
+  generating_badges: { fr: "Génération en cours…", en: "Generating…", pt: "A gerar…" },
   admin: { fr: "Administration", en: "Admin", pt: "Administração" },
   dashboard: { fr: "Tableau de bord", en: "Dashboard", pt: "Painel" },
   participants: { fr: "Participants", en: "Participants", pt: "Participantes" },
   total_reg: { fr: "Inscriptions", en: "Registrations", pt: "Inscrições" },
   by_country: { fr: "Par pays", en: "By country", pt: "Por país" },
   by_org: { fr: "Par type d'organisme", en: "By organization type", pt: "Por tipo de organização" },
-  export_csv: { fr: "Exporter CSV", en: "Export CSV", pt: "Exportar CSV" },
+  export_excel: { fr: "Exporter Excel", en: "Export Excel", pt: "Exportar Excel" },
   search_ph: { fr: "Rechercher nom, email, organisme…", en: "Search name, email, organization…", pt: "Pesquisar nome, email, organização…" },
   all_countries: { fr: "Tous les pays", en: "All countries", pt: "Todos os países" },
   no_participants: { fr: "Aucune inscription pour le moment.", en: "No registrations yet.", pt: "Ainda sem inscrições." },
@@ -120,7 +244,21 @@ const T = {
   upload_image: { fr: "Choisir une image", en: "Choose image", pt: "Escolher imagem" },
   uploading: { fr: "Envoi de l'image…", en: "Uploading image…", pt: "A enviar imagem…" },
   display_order: { fr: "Ordre d'affichage", en: "Display order", pt: "Ordem de exibição" },
-  amenities_help: { fr: "Commodités, séparées par des virgules", en: "Amenities, comma-separated", pt: "Comodidades, separadas por vírgulas" },
+  amenities_help: { fr: "Séparées par des virgules, ex: Wi-Fi, Piscine, Parking", en: "Comma-separated, e.g. Wi-Fi, Pool, Parking", pt: "Separadas por vírgulas, ex: Wi-Fi, Piscina, Estacionamento" },
+  amenities_fr_label: { fr: "Commodités (Français)", en: "Amenities (French)", pt: "Comodidades (Francês)" },
+  amenities_en_label: { fr: "Commodités (Anglais)", en: "Amenities (English)", pt: "Comodidades (Inglês)" },
+  amenities_pt_label: { fr: "Commodités (Portugais)", en: "Amenities (Portuguese)", pt: "Comodidades (Português)" },
+  amenities_title: { fr: "Commodités", en: "Amenities", pt: "Comodidades" },
+  distance_fr: { fr: "Distance / lieu (Français)", en: "Distance / venue (French)", pt: "Distância / local (Francês)" },
+  distance_en: { fr: "Distance / lieu (Anglais)", en: "Distance / venue (English)", pt: "Distância / local (Inglês)" },
+  distance_pt: { fr: "Distance / lieu (Portugais)", en: "Distance / venue (Portuguese)", pt: "Distância / local (Português)" },
+  room_categories_label: { fr: "Types de chambre proposés (affichés sur la carte de l'hôtel)", en: "Room categories offered (shown on the hotel card)", pt: "Categorias de quarto oferecidas (exibidas no cartão do hotel)" },
+  add_room_category: { fr: "Ajouter un type de chambre", en: "Add room category", pt: "Adicionar categoria de quarto" },
+  room_order_label: { fr: "Ordre", en: "Order", pt: "Ordem" },
+  room_type_fr: { fr: "Type (Français)", en: "Type (French)", pt: "Tipo (Francês)" },
+  room_type_en: { fr: "Type (Anglais)", en: "Type (English)", pt: "Tipo (Inglês)" },
+  room_type_pt: { fr: "Type (Portugais)", en: "Type (Portuguese)", pt: "Tipo (Português)" },
+  hotel_order_label: { fr: "Ordre d'affichage de l'hôtel", en: "Hotel display order", pt: "Ordem de exibição do hotel" },
   price: { fr: "Prix / nuit", en: "Price / night", pt: "Preço / noite" },
   currency: { fr: "Devise", en: "Currency", pt: "Moeda" },
   room_type: { fr: "Type de chambre", en: "Room type", pt: "Tipo de quarto" },
@@ -131,8 +269,172 @@ const T = {
   desc_en: { fr: "Description (Anglais)", en: "Description (English)", pt: "Descrição (Inglês)" },
   desc_pt: { fr: "Description (Portugais)", en: "Description (Portuguese)", pt: "Descrição (Português)" },
   confirm_delete: { fr: "Supprimer cet élément ?", en: "Delete this item?", pt: "Eliminar este item?" },
+  confirm_delete_participant: { fr: "Supprimer définitivement cette inscription (utile en cas de doublon) ?", en: "Permanently delete this registration (useful for duplicates)?", pt: "Eliminar definitivamente esta inscrição (útil em caso de duplicado)?" },
+  visit_website: { fr: "Visiter le site", en: "Visit website", pt: "Visitar site" },
+  gallery_label: { fr: "Galerie photos de l'hôtel", en: "Hotel photo gallery", pt: "Galeria de fotos do hotel" },
+  website_label: { fr: "Site Internet de l'hôtel", en: "Hotel website", pt: "Site do hotel" },
+  view_photos: { fr: "Voir les photos", en: "View photos", pt: "Ver fotos" },
+  add_photo: { fr: "Ajouter une photo", en: "Add photo", pt: "Adicionar foto" },
   no_items: { fr: "Aucun élément pour le moment.", en: "No items yet.", pt: "Ainda sem itens." },
   hero_carousel_help: { fr: "Ces images défilent en arrière-plan du bandeau d'accueil. Sans image ajoutée, le fond reste uni.", en: "These images rotate behind the homepage hero banner. With none added, the background stays plain.", pt: "Estas imagens alternam no fundo do banner inicial. Sem imagens, o fundo permanece liso." },
+  logo_tab: { fr: "Logo", en: "Logo", pt: "Logótipo" },
+  logo_help: { fr: "Ce logo remplace le sceau par défaut dans l'en-tête et le bandeau d'accueil du site.", en: "This logo replaces the default seal in the header and homepage banner.", pt: "Este logótipo substitui o selo padrão no cabeçalho e no banner inicial." },
+  speakers_tab: { fr: "Comité d'organisation", en: "Organizing committee", pt: "Comité organizador" },
+  role_fr: { fr: "Titre / rôle (Français)", en: "Title / role (French)", pt: "Título / função (Francês)" },
+  role_en: { fr: "Titre / rôle (Anglais)", en: "Title / role (English)", pt: "Título / função (Inglês)" },
+  role_pt: { fr: "Titre / rôle (Portugais)", en: "Title / role (Portuguese)", pt: "Título / função (Português)" },
+  full_name: { fr: "Nom complet", en: "Full name", pt: "Nome completo" },
+  theme_label: { fr: "Thème de la réunion", en: "Meeting theme", pt: "Tema da reunião" },
+  hero_content_tab: { fr: "Contenu du bandeau", en: "Hero content", pt: "Conteúdo do banner" },
+  footer_tab: { fr: "Pied de page", en: "Footer", pt: "Rodapé" },
+  footer_text_label: { fr: "Texte du pied de page", en: "Footer text", pt: "Texto do rodapé" },
+  footer_help: { fr: "Affiché en bas de toutes les pages du site (adresse, contact, mention légale...). Laissez vide pour ne rien afficher au-delà du copyright.", en: "Shown at the bottom of every page (address, contact, legal notice...). Leave empty to show nothing beyond the copyright line.", pt: "Mostrado no fundo de todas as páginas (morada, contacto, aviso legal...). Deixe vazio para não mostrar nada além da linha de copyright." },
+  content_scope_help: { fr: "Ce contenu (carrousel, tourisme, hôtels, comité) est propre à l'événement actuellement actif — changez d'événement actif dans l'onglet \"Événements\" pour gérer le contenu d'un autre.", en: "This content (carousel, tourism, hotels, committee) belongs to the currently active event — switch the active event in the \"Events\" tab to manage another one's content.", pt: "Este conteúdo (carrossel, turismo, hotéis, comité) pertence ao evento atualmente ativo — mude o evento ativo no separador \"Eventos\" para gerir o conteúdo de outro." },
+  editing_content_for: { fr: "Modifier le contenu de l'événement", en: "Editing content for event", pt: "A editar o conteúdo do evento" },
+  events_tab: { fr: "Événements", en: "Events", pt: "Eventos" },
+  event_type_label: { fr: "Type de réunion", en: "Meeting type", pt: "Tipo de reunião" },
+  event_type_ag: { fr: "Assemblée Générale", en: "General Assembly", pt: "Assembleia Geral" },
+  event_type_zone1: { fr: "Première Réunion de Zone", en: "First Zonal Meeting", pt: "Primeira Reunião Zonal" },
+  event_type_zone2: { fr: "Deuxième Réunion de Zone", en: "Second Zonal Meeting", pt: "Segunda Reunião Zonal" },
+  event_type_other: { fr: "Autre", en: "Other", pt: "Outro" },
+  event_year_label: { fr: "Année", en: "Year", pt: "Ano" },
+  event_code_label: { fr: "Code (préfixe des numéros d'inscription)", en: "Code (registration number prefix)", pt: "Código (prefixo dos números de inscrição)" },
+  event_status_label: { fr: "Statut", en: "Status", pt: "Estado" },
+  status_draft: { fr: "Brouillon", en: "Draft", pt: "Rascunho" },
+  status_open: { fr: "Ouvert aux inscriptions", en: "Open for registration", pt: "Aberto a inscrições" },
+  status_closed: { fr: "Inscriptions fermées", en: "Registration closed", pt: "Inscrições fechadas" },
+  status_archived: { fr: "Archivé", en: "Archived", pt: "Arquivado" },
+  set_active_event: { fr: "Définir comme actif", en: "Set as active", pt: "Definir como ativo" },
+  currently_active: { fr: "Actif actuellement", en: "Currently active", pt: "Atualmente ativo" },
+  duplicate_event_btn: { fr: "Dupliquer pour l'année suivante", en: "Duplicate for next year", pt: "Duplicar para o próximo ano" },
+  duplicate_event_prompt_year: { fr: "Année du nouvel événement :", en: "Year of the new event:", pt: "Ano do novo evento:" },
+  duplicate_event_prompt_code: { fr: "Code du nouvel événement (ex: AG43) :", en: "Code of the new event (e.g. AG43):", pt: "Código do novo evento (ex: AG43):" },
+  duplicate_event_success: { fr: "Événement dupliqué avec succès (en brouillon) — retrouvez-le dans la liste pour l'éditer.", en: "Event duplicated successfully (as draft) — find it in the list to edit it.", pt: "Evento duplicado com sucesso (como rascunho) — encontre-o na lista para editar." },
+  badge_header_tab: { fr: "Images du badge (en-tête / corps / pied de page)", en: "Badge images (header / body / footer)", pt: "Imagens do crachá (cabeçalho / corpo / rodapé)" },
+  badge_header_image_label: { fr: "Image d'en-tête", en: "Header image", pt: "Imagem do cabeçalho" },
+  badge_body_image_label: { fr: "Image du corps (le Nom, Prénom et Pays s'affichent par-dessus)", en: "Body image (Name and Country are shown on top)", pt: "Imagem do corpo (Nome e País são exibidos por cima)" },
+  badge_footer_image_label: { fr: "Image du pied de page (le QR code s'affiche en bas à droite)", en: "Footer image (the QR code appears bottom-right)", pt: "Imagem do rodapé (o QR code aparece em baixo à direita)" },
+  badge_pdf_label: { fr: "Document PDF (le QR code du badge y renverra)", en: "PDF document (the badge QR code will link to it)", pt: "Documento PDF (o QR code do crachá remeterá para ele)" },
+  upload_pdf: { fr: "Choisir un PDF", en: "Choose PDF", pt: "Escolher PDF" },
+  archives_title: { fr: "Archives des réunions", en: "Meeting archives", pt: "Arquivo de reuniões" },
+  privacy_policy_title: { fr: "Politique de confidentialité", en: "Privacy Policy", pt: "Política de Privacidade" },
+  privacy_tab: { fr: "Politique de confidentialité", en: "Privacy Policy", pt: "Política de Privacidade" },
+  privacy_policy_help: { fr: "Ce contenu s'affiche sur la page publique « Politique de confidentialité » (lien en pied de page, et URL /?page=privacy à donner aux stores d'applications).", en: "This content is shown on the public \"Privacy Policy\" page (footer link, and the /?page=privacy URL to give to app stores).", pt: "Este conteúdo é exibido na página pública \"Política de Privacidade\" (link no rodapé, e o URL /?page=privacy a fornecer às lojas de aplicações)." },
+  privacy_policy_title_label: { fr: "Titre de la page", en: "Page title", pt: "Título da página" },
+  privacy_policy_updated_label: { fr: "Ligne « Dernière mise à jour »", en: "\"Last updated\" line", pt: "Linha \"Última atualização\"" },
+  privacy_policy_section_heading: { fr: "Titre de la section", en: "Section heading", pt: "Título da secção" },
+  privacy_policy_section_text: { fr: "Texte de la section", en: "Section text", pt: "Texto da secção" },
+  privacy_policy_add_section: { fr: "Ajouter une section", en: "Add section", pt: "Adicionar secção" },
+  back_to_site: { fr: "Retour au site", en: "Back to site", pt: "Voltar ao site" },
+  no_archived_events: { fr: "Aucun événement archivé pour le moment.", en: "No archived events yet.", pt: "Ainda sem eventos arquivados." },
+  program_pdf_label: { fr: "Programme (document PDF, un par langue)", en: "Programme (PDF document, one per language)", pt: "Programa (documento PDF, um por idioma)" },
+  program_pdf_help: { fr: "Pour l'afficher dans le menu, créez un lien dans l'onglet \"Menu\" avec comme cible : programme", en: "To show it in the menu, create a link in the \"Menu\" tab with target: programme", pt: "Para o mostrar no menu, crie um link no separador \"Menu\" com o destino: programme" },
+  no_program_pdf: { fr: "Aucun document Programme n'a encore été chargé pour cet événement.", en: "No Programme document has been uploaded yet for this event.", pt: "Ainda não foi carregado nenhum documento de Programa para este evento." },
+  menu_tab: { fr: "Menu", en: "Menu", pt: "Menu" },
+  edition_number: { fr: "Numéro d'édition (ex: 42)", en: "Edition number (e.g. 42)", pt: "Número da edição (ex: 42)" },
+  title_fr: { fr: "Titre (Français)", en: "Title (French)", pt: "Título (Francês)" },
+  title_en: { fr: "Titre (Anglais)", en: "Title (English)", pt: "Título (Inglês)" },
+  title_pt: { fr: "Titre (Portugais)", en: "Title (Portuguese)", pt: "Título (Português)" },
+  subtitle_fr: { fr: "Sous-titre / description (Français)", en: "Subtitle / description (French)", pt: "Subtítulo / descrição (Francês)" },
+  subtitle_en: { fr: "Sous-titre / description (Anglais)", en: "Subtitle / description (English)", pt: "Subtítulo / descrição (Inglês)" },
+  subtitle_pt: { fr: "Sous-titre / description (Portugais)", en: "Subtitle / description (Portuguese)", pt: "Subtítulo / descrição (Português)" },
+  theme_fr: { fr: "Thème de la réunion (Français)", en: "Meeting theme (French)", pt: "Tema da reunião (Francês)" },
+  theme_en: { fr: "Thème de la réunion (Anglais)", en: "Meeting theme (English)", pt: "Tema da reunião (Inglês)" },
+  theme_pt: { fr: "Thème de la réunion (Portugais)", en: "Meeting theme (Portuguese)", pt: "Tema da reunião (Português)" },
+  date_short_label: { fr: "Dates (format court, ex: DU 19 AU 22)", en: "Dates (short format, e.g. FROM 19 TO 22)", pt: "Datas (formato curto)" },
+  month_year_label: { fr: "Mois et année (ex: OCTOBRE 2026)", en: "Month and year (e.g. OCTOBER 2026)", pt: "Mês e ano" },
+  venue_label: { fr: "Lieu (nom de l'hôtel/salle)", en: "Venue name", pt: "Nome do local" },
+  participation_fee_label: { fr: "Frais de participation", en: "Participation fee", pt: "Taxa de participação" },
+  participation_fee_help: { fr: "Affiché juste à côté du lieu dans le bandeau d'accueil. Laissez vide pour ne rien afficher.", en: "Shown right next to the venue in the homepage banner. Leave empty to show nothing.", pt: "Exibido mesmo ao lado do local no banner da página inicial. Deixe vazio para não mostrar nada." },
+  participation_fee_chip_label: { fr: "Frais de participation :", en: "Participation fee:", pt: "Taxa de participação:" },
+  city_label: { fr: "Ville", en: "City", pt: "Cidade" },
+  country_label: { fr: "Pays", en: "Country", pt: "País" },
+  hero_theme_help: { fr: "Si rempli, un bandeau \"Thème de la réunion\" apparaît sur la page d'accueil. Laissez vide pour le masquer.", en: "If filled, a \"Meeting theme\" banner appears on the homepage. Leave empty to hide it.", pt: "Se preenchido, um banner \"Tema da reunião\" aparece na página inicial. Deixe vazio para ocultar." },
+  menu_target_help: { fr: "Où mène ce lien : event-section (haut de page), hotels-section, tourism-section, speakers-section (comité d'organisation), programme (ouvre le PDF du programme dans la langue du visiteur), top (accueil), ou une URL complète (https://...)", en: "Where this link goes: event-section (top), hotels-section, tourism-section, speakers-section (organizing committee), programme (opens the programme PDF in the visitor's language), top (home), or a full URL (https://...)", pt: "Para onde este link vai: event-section, hotels-section, tourism-section, speakers-section (comité organizador), programme (abre o PDF do programa no idioma do visitante), top, ou um URL completo" },
+  menu_target: { fr: "Cible du lien", en: "Link target", pt: "Destino do link" },
+  ordinal_label: { fr: "Lettre en exposant (ex: e, nd, ª)", en: "Superscript suffix (e.g. e, nd, ª)", pt: "Sufixo sobrescrito" },
+  brand_help: { fr: "Nom affiché dans l'en-tête et le bandeau d'accueil, dans chaque langue.", en: "Name shown in the header and homepage banner, in each language.", pt: "Nome exibido no cabeçalho e no banner inicial, em cada idioma." },
+  org_types_tab: { fr: "Types d'organisme", en: "Organization types", pt: "Tipos de organização" },
+  is_other_label: { fr: "Déclenche le champ \"précisez\" (option \"Autre\")", en: "Triggers the \"please specify\" field (the \"Other\" option)", pt: "Ativa o campo \"especifique\" (opção \"Outro\")" },
+  required_fields_error: { fr: "Merci de compléter les champs obligatoires :", en: "Please complete the required fields:", pt: "Preencha os campos obrigatórios:" },
+  phone_format_error: { fr: "Merci d'indiquer l'indicatif pays (commençant par +) pour :", en: "Please include the country code (starting with +) for:", pt: "Indique o indicativo do país (começando por +) para:" },
+  form_fields_tab: { fr: "Champs du formulaire", en: "Form fields", pt: "Campos do formulário" },
+  field_key_label: { fr: "Clé technique (unique, sans espace)", en: "Technical key (unique, no spaces)", pt: "Chave técnica (única, sem espaços)" },
+  field_type_label: { fr: "Type de champ", en: "Field type", pt: "Tipo de campo" },
+  field_step_label: { fr: "Étape du formulaire", en: "Form step", pt: "Etapa do formulário" },
+  required_label: { fr: "Champ obligatoire", en: "Required field", pt: "Campo obrigatório" },
+  field_type_text: { fr: "Texte court", en: "Short text", pt: "Texto curto" },
+  field_type_textarea: { fr: "Texte long", en: "Long text", pt: "Texto longo" },
+  field_type_email: { fr: "Email", en: "Email", pt: "Email" },
+  field_type_tel: { fr: "Téléphone", en: "Phone", pt: "Telefone" },
+  field_type_date: { fr: "Date", en: "Date", pt: "Data" },
+  field_type_number: { fr: "Nombre", en: "Number", pt: "Número" },
+  field_type_time: { fr: "Heure", en: "Time", pt: "Hora" },
+  arrival_time: { fr: "Heure d'arrivée", en: "Arrival time", pt: "Hora de chegada" },
+  flight_arrival: { fr: "Vol arrivée", en: "Arrival flight", pt: "Voo de chegada" },
+  departure_date: { fr: "Date de départ", en: "Departure date", pt: "Data de partida" },
+  departure_time: { fr: "Heure de départ", en: "Departure time", pt: "Hora de partida" },
+  flight_departure: { fr: "Vol départ", en: "Departure flight", pt: "Voo de partida" },
+  org_type_col: { fr: "Type d'organisme", en: "Organization type", pt: "Tipo de organização" },
+  name_col: { fr: "Nom & Prénom", en: "Name", pt: "Nome" },
+  hotel_room_col: { fr: "Hôtel & Chambre", en: "Hotel & Room", pt: "Hotel & Quarto" },
+  export_pdf: { fr: "Exporter PDF", en: "Export PDF", pt: "Exportar PDF" },
+  hotel_label: { fr: "Hôtel", en: "Hotel", pt: "Hotel" },
+  search_label: { fr: "Recherche", en: "Search", pt: "Pesquisa" },
+  participants_list_title: { fr: "Liste des participants", en: "Participants list", pt: "Lista de participantes" },
+  users_tab: { fr: "Utilisateurs", en: "Users", pt: "Utilizadores" },
+  role_viewer: { fr: "Lecture seule", en: "Read-only", pt: "Apenas leitura" },
+  role_super_admin: { fr: "Super administrateur", en: "Super admin", pt: "Super administrador" },
+  role_manager: { fr: "Gestionnaire", en: "Manager", pt: "Gestor" },
+  role_hotel: { fr: "Accès hôtel", en: "Hotel access", pt: "Acesso hotel" },
+  role_country: { fr: "Accès pays", en: "Country access", pt: "Acesso país" },
+  role_label: { fr: "Rôle", en: "Role", pt: "Função" },
+  you_label: { fr: "Vous", en: "You", pt: "Você" },
+  users_help: { fr: "Pour donner accès à l'admin à quelqu'un, créez d'abord son compte dans Supabase (Authentication → Users → Add user). Il apparaîtra automatiquement ici en \"Lecture seule\" — changez ensuite son rôle.", en: "To give someone admin access, first create their account in Supabase (Authentication → Users → Add user). They'll appear here automatically as \"Read-only\" — then change their role.", pt: "Para dar acesso de administrador a alguém, crie primeiro a conta no Supabase (Authentication → Users → Add user). Aparecerá aqui automaticamente como \"Apenas leitura\" — depois altere a função." },
+  mfa_setup_title: { fr: "Authentification à deux facteurs (2FA)", en: "Two-factor authentication (2FA)", pt: "Autenticação de dois fatores (2FA)" },
+  mfa_setup_help: { fr: "Protège votre propre compte admin avec un code à usage unique généré par une application comme Google Authenticator, en plus de votre mot de passe.", en: "Protects your own admin account with a one-time code generated by an app like Google Authenticator, in addition to your password.", pt: "Protege a sua própria conta de administrador com um código de utilização única gerado por uma aplicação como o Google Authenticator, além da sua palavra-passe." },
+  mfa_enable_button: { fr: "Activer la 2FA", en: "Enable 2FA", pt: "Ativar 2FA" },
+  mfa_disable_button: { fr: "Désactiver", en: "Disable", pt: "Desativar" },
+  mfa_enabled_status: { fr: "2FA activée sur ce compte", en: "2FA enabled on this account", pt: "2FA ativada nesta conta" },
+  mfa_scan_help: { fr: "Scannez ce QR code avec Google Authenticator (ou une application compatible TOTP), puis saisissez le code à 6 chiffres affiché pour confirmer.", en: "Scan this QR code with Google Authenticator (or any TOTP-compatible app), then enter the 6-digit code shown to confirm.", pt: "Digitalize este código QR com o Google Authenticator (ou outra aplicação compatível com TOTP), depois introduza o código de 6 dígitos apresentado para confirmar." },
+  mfa_manual_key: { fr: "Ou saisissez cette clé manuellement :", en: "Or enter this key manually:", pt: "Ou introduza esta chave manualmente:" },
+  mfa_code_label: { fr: "Code à 6 chiffres", en: "6-digit code", pt: "Código de 6 dígitos" },
+  mfa_verify_button: { fr: "Vérifier", en: "Verify", pt: "Verificar" },
+  mfa_confirm_remove: { fr: "Désactiver la 2FA sur ce compte ?", en: "Disable 2FA on this account?", pt: "Desativar a 2FA nesta conta?" },
+  mfa_challenge_title: { fr: "Vérification en deux étapes", en: "Two-step verification", pt: "Verificação em duas etapas" },
+  mfa_challenge_help: { fr: "Saisissez le code à 6 chiffres généré par votre application d'authentification.", en: "Enter the 6-digit code generated by your authenticator app.", pt: "Introduza o código de 6 dígitos gerado pela sua aplicação de autenticação." },
+  mfa_invalid_code: { fr: "Code incorrect ou expiré. Réessayez.", en: "Incorrect or expired code. Please try again.", pt: "Código incorreto ou expirado. Tente novamente." },
+  mfa_no_factor_error: { fr: "Aucun facteur 2FA trouvé pour ce compte.", en: "No 2FA factor found for this account.", pt: "Nenhum fator de 2FA encontrado para esta conta." },
+  no_users: { fr: "Aucun utilisateur pour le moment.", en: "No users yet.", pt: "Ainda sem utilizadores." },
+  remove_access: { fr: "Retirer l'accès admin", en: "Remove admin access", pt: "Remover acesso de administrador" },
+  confirm_remove_user: { fr: "Retirer l'accès admin de cette personne ? Son compte Supabase ne sera pas supprimé.", en: "Remove this person's admin access? Their Supabase account will not be deleted.", pt: "Remover o acesso de administrador desta pessoa? A conta Supabase não será eliminada." },
+  cannot_remove_self: { fr: "Vous ne pouvez pas retirer votre propre accès.", en: "You can't remove your own access.", pt: "Não pode remover o seu próprio acesso." },
+  role_manager_help: { fr: "Gestionnaire : accès complet aux participants et au contenu du site.", en: "Manager: full access to participants and site content.", pt: "Gestor: acesso total aos participantes e ao conteúdo do site." },
+  role_viewer_help: { fr: "Lecture seule : consultation des participants uniquement, pas de modification.", en: "Read-only: can view participants only, no changes.", pt: "Apenas leitura: pode ver os participantes, sem alterações." },
+  role_super_admin_help: { fr: "Super administrateur : accès complet, y compris la gestion des utilisateurs.", en: "Super admin: full access, including user management.", pt: "Super administrador: acesso total, incluindo gestão de utilizadores." },
+  role_hotel_help: { fr: "Accès hôtel : voit uniquement les participants ayant réservé dans le(s) hôtel(s) qui lui sont assignés ci-dessous, lecture seule.", en: "Hotel access: only sees participants who booked at the hotel(s) assigned below, read-only.", pt: "Acesso hotel: vê apenas os participantes que reservaram no(s) hotel(s) atribuídos abaixo, apenas leitura." },
+  role_country_help: { fr: "Accès pays : voit uniquement les participants du (des) pays qui lui sont assignés ci-dessous, lecture seule.", en: "Country access: only sees participants from the country/countries assigned below, read-only.", pt: "Acesso país: vê apenas os participantes do(s) país(es) atribuído(s) abaixo, apenas leitura." },
+  assign_hotels_label: { fr: "Hôtel(s) assigné(s)", en: "Assigned hotel(s)", pt: "Hotel(éis) atribuído(s)" },
+  assign_hotels_help: { fr: "Cochez un ou plusieurs hôtels : ce compte ne verra que les participants de ces hôtels-là.", en: "Check one or more hotels: this account will only see participants from those hotels.", pt: "Marque um ou vários hotéis: esta conta só verá os participantes desses hotéis." },
+  assign_countries_label: { fr: "Pays assigné(s)", en: "Assigned country/countries", pt: "País(es) atribuído(s)" },
+  assign_countries_help: { fr: "Cochez un ou plusieurs pays : ce compte ne verra que les participants de ces pays-là.", en: "Check one or more countries: this account will only see participants from those countries.", pt: "Marque um ou vários países: esta conta só verá os participantes desses países." },
+  my_hotels_banner: { fr: "Hôtel(s) consulté(s)", en: "Hotel(s) shown", pt: "Hotel(éis) exibido(s)" },
+  my_countries_banner: { fr: "Pays consulté(s)", en: "Country/countries shown", pt: "País(es) exibido(s)" },
+  clear_participants_btn: { fr: "Vider la liste des participants", en: "Clear participant list", pt: "Limpar lista de participantes" },
+  clear_participants_confirm_title: { fr: "Action irréversible", en: "Irreversible action", pt: "Ação irreversível" },
+  clear_participants_confirm_text: { fr: "Ceci va supprimer DÉFINITIVEMENT tous les participants déjà inscrits pour l'événement actif (à utiliser juste avant le passage en live). Les autres événements/archives ne sont pas touchés. Tapez SUPPRIMER pour confirmer.", en: "This will PERMANENTLY delete all participants already registered for the active event (use just before going live). Other events/archives are not affected. Type DELETE to confirm.", pt: "Isto irá apagar DEFINITIVAMENTE todos os participantes já inscritos no evento ativo (usar mesmo antes de entrar em direto). Outros eventos/arquivos não são afetados. Digite APAGAR para confirmar." },
+  clear_participants_confirm_word: { fr: "SUPPRIMER", en: "DELETE", pt: "APAGAR" },
+  clear_participants_wrong_word: { fr: "Texte de confirmation incorrect — rien n'a été supprimé.", en: "Confirmation text incorrect — nothing was deleted.", pt: "Texto de confirmação incorreto — nada foi apagado." },
+  clear_participants_success: { fr: "participant(s) supprimé(s). La liste est maintenant vide.", en: "participant(s) deleted. The list is now empty.", pt: "participante(s) apagado(s). A lista está agora vazia." },
+  email_sent_ok: { fr: "Email de confirmation envoyé", en: "Confirmation email sent", pt: "Email de confirmação enviado" },
+  email_sent_fail: { fr: "Échec de l'envoi de l'email de confirmation", en: "Confirmation email failed to send", pt: "Falha ao enviar o email de confirmação" },
+  resend_email_btn: { fr: "Renvoyer", en: "Resend", pt: "Reenviar" },
+  resend_failed: { fr: "Échec du renvoi", en: "Resend failed", pt: "Falha ao reenviar" },
+  read_only_notice: { fr: "Vous êtes en lecture seule : consultation uniquement, aucune modification possible.", en: "You are in read-only mode: viewing only, no changes possible.", pt: "Está em modo de apenas leitura: apenas consulta, sem alterações possíveis." },
+  filter_hotel: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
+  filter_arrival: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
+  filter_departure: { fr: "Date de départ", en: "Departure date", pt: "Data de saída" },
+  reset_filters: { fr: "Réinitialiser les filtres", en: "Reset filters", pt: "Repor filtros" },
   view_site: { fr: "Voir le site public", en: "View public site", pt: "Ver site público" },
   hotel_none: { fr: "Hébergement personnel", en: "Own accommodation", pt: "Alojamento próprio" },
   bureau: { fr: "Bureau National", en: "National Bureau", pt: "Bureau Nacional" },
@@ -142,34 +444,204 @@ const T = {
 };
 const t = (k, lang) => (T[k] ? T[k][lang] : k);
 
-const ORG_TYPES = ["bureau", "insurer", "regulator", "other"];
+// Normalise une URL saisie par un admin (ex: "www.axa.sn" ou "axa.sn")
+// en ajoutant automatiquement https:// si absent — sinon le navigateur
+// traite l'adresse comme un chemin relatif du site (ex:
+// browncard-event.org/www.axa.sn au lieu d'ouvrir le vrai site externe).
+function normalizeUrl(url) {
+  const trimmed = (url || "").trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
 
 function regNumber(seq) {
-  return `CB-${EVENT.year}-${EVENT.code}-${String(seq).padStart(6, "0")}`;
+  return `CB-${DEFAULT_EVENT.year}-${DEFAULT_EVENT.code}-${String(seq).padStart(6, "0")}`;
 }
 
-function toCSV(rows) {
-  const headers = ["Numéro", "Nom", "Prénom", "Fonction", "Organisme", "Pays", "Email", "Téléphone", "Hôtel", "Arrivée", "Départ"];
-  const lines = [headers.join(",")];
-  rows.forEach(r => {
-    lines.push([r.regNumber, r.lastName, r.firstName, r.position, r.organization, r.country, r.email, r.phone, r.hotelName || "", r.checkIn || "", r.checkOut || ""].map(v => `"${(v || "").toString().replace(/"/g, '""')}"`).join(","));
+function exportHeaders(lang) {
+  return [t("name_col",lang), t("org_type_col",lang), t("country",lang), t("hotel_room_col",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)];
+}
+
+function exportRows(rows) {
+  return rows.map(r => [
+    `${r.lastName || ""} ${r.firstName || ""}`.trim(),
+    r.orgType || "",
+    r.country,
+    [r.hotelName, r.roomType].filter(Boolean).join(" - "),
+    r.arrivalDate || "",
+    r.arrivalTime || "",
+    r.flightNumber || "",
+    r.departureDate || "",
+    r.departureTime || "",
+    r.departureFlightNumber || "",
+  ]);
+}
+
+// Construit un titre du type "LISTE DES PARTICIPANTS - DATE D'ARRIVÉE : 2026-10-19"
+// à partir des filtres actuellement actifs, pour l'en-tête des exports.
+function buildExportTitle(lang, filters) {
+  const parts = [];
+  if (filters.countryFilter) parts.push(`${t("country", lang)} : ${filters.countryFilter}`);
+  if (filters.hotelFilter) parts.push(`${t("hotel_label", lang)} : ${filters.hotelFilter}`);
+  if (filters.arrivalFilter) parts.push(`${t("arrival_date", lang)} : ${filters.arrivalFilter}`);
+  if (filters.departureFilter) parts.push(`${t("departure_date", lang)} : ${filters.departureFilter}`);
+  if (filters.search) parts.push(`${t("search_label", lang)} : ${filters.search}`);
+  const base = t("participants_list_title", lang);
+  const title = parts.length ? `${base} - ${parts.join(" - ")}` : base;
+  return title.toUpperCase();
+}
+
+async function downloadExcel(rows, filename, titleText, lang) {
+  const headers = exportHeaders(lang);
+  const body = exportRows(rows);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Participants");
+
+  ws.mergeCells(1, 1, 1, headers.length);
+  const titleCell = ws.getCell(1, 1);
+  titleCell.value = titleText;
+  titleCell.font = { size: 16, bold: true, color: { argb: "FF14532D" } };
+  titleCell.alignment = { vertical: "middle" };
+  ws.getRow(1).height = 28;
+
+  const headerRow = ws.addRow(headers);
+  headerRow.eachCell(c => {
+    c.font = { size: 13, bold: true, color: { argb: "FFFFFFFF" } };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF14532D" } };
+    c.alignment = { vertical: "middle" };
   });
-  return lines.join("\n");
+  headerRow.height = 22;
+
+  body.forEach(r => {
+    const row = ws.addRow(r);
+    row.font = { size: 12 };
+    row.height = 20;
+  });
+
+  ws.columns.forEach(col => { col.width = 20; });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  await saveOrShareBlob(blob, filename);
 }
 
-function downloadCSV(csv, filename) {
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
+async function downloadPDF(rows, filename, titleText, lang) {
+  const cols = exportHeaders(lang);
+  const body = exportRows(rows);
+  const doc = new jsPDF({ orientation: "landscape" });
+  doc.setFontSize(11);
+  doc.text(titleText, 14, 12);
+  autoTable(doc, {
+    head: [cols], body, startY: 17,
+    styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: [20, 83, 45], fontSize: 7.5, fontStyle: "bold" },
+    columnStyles: { 0: { cellWidth: 45 }, 3: { cellWidth: 45 } },
+  });
+  await saveOrShareBlob(doc.output("blob"), filename);
 }
 
-const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: "bureau", orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: DEFAULT_HOTELS[0].id, roomId: DEFAULT_HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", transfer: "yes" };
+// --- Badges participants avec QR code ---
+
+async function loadImageAsDataURL(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+function imgFormat(dataUrl) {
+  return dataUrl && dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+}
+
+function pickBadgePdfLink(event, lang) {
+  const pdf = event.badgePdf || {};
+  return pdf[lang] || pdf.fr || pdf.en || pdf.pt || "";
+}
+
+const BADGE_W = 90, BADGE_H = 130;
+const BADGE_HEADER_H = 24, BADGE_FOOTER_H = 22;
+const BADGE_BODY_H = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H;
+
+// Badge composé de 3 images fournies par l'admin (en-tête, corps,
+// pied de page). Les seules variables affichées par-dessus sont le
+// Nom & Prénom et le Pays du participant, plus le QR code (en bas à
+// droite du pied de page, petit format).
+async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, lang) {
+  if (headerImg) {
+    try { doc.addImage(headerImg, imgFormat(headerImg), 0, 0, BADGE_W, BADGE_HEADER_H); } catch (e) { /* skip */ }
+  } else {
+    doc.setFillColor(20, 83, 45);
+    doc.rect(0, 0, BADGE_W, BADGE_HEADER_H, "F");
+  }
+
+  if (bodyImg) {
+    try { doc.addImage(bodyImg, imgFormat(bodyImg), 0, BADGE_HEADER_H, BADGE_W, BADGE_BODY_H); } catch (e) { /* skip */ }
+  }
+
+  if (footerImg) {
+    try { doc.addImage(footerImg, imgFormat(footerImg), 0, BADGE_HEADER_H + BADGE_BODY_H, BADGE_W, BADGE_FOOTER_H); } catch (e) { /* skip */ }
+  } else {
+    doc.setFillColor(245, 242, 234);
+    doc.rect(0, BADGE_HEADER_H + BADGE_BODY_H, BADGE_W, BADGE_FOOTER_H, "F");
+  }
+
+  // Panneau translucide + Nom/Prénom + Pays, centrés sur le corps.
+  const panelY = BADGE_HEADER_H + BADGE_BODY_H / 2 - 15;
+  doc.saveGraphicsState();
+  doc.setGState(new doc.GState({ opacity: 0.82 }));
+  doc.setFillColor(255, 255, 255);
+  doc.rect(5, panelY, BADGE_W - 10, 30, "F");
+  doc.restoreGraphicsState();
+
+  doc.setTextColor(26, 23, 18);
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(15);
+  const fullName = `${p.firstName || ""} ${p.lastName || ""}`.trim();
+  doc.text(fullName, BADGE_W / 2, panelY + 13, { align: "center", maxWidth: BADGE_W - 16 });
+  doc.setFont(undefined, "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(70, 70, 70);
+  doc.text(p.country || "", BADGE_W / 2, panelY + 22, { align: "center" });
+
+  // QR code : petit format, en bas à droite du pied de page — renvoie
+  // vers le document PDF configuré pour la langue courante.
+  const pdfLink = pickBadgePdfLink(eventData, lang);
+  const qrValue = pdfLink || p.regNumber || p.id || "";
+  const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 160 });
+  const qrSize = 15;
+  const qrY = BADGE_HEADER_H + BADGE_BODY_H + (BADGE_FOOTER_H - qrSize) / 2;
+  doc.addImage(qrDataUrl, "PNG", BADGE_W - qrSize - 4, qrY, qrSize, qrSize);
+}
+
+async function downloadBadges(participants, eventData, lang, filename) {
+  const [headerImg, bodyImg, footerImg] = await Promise.all([
+    loadImageAsDataURL(eventData.badgeHeaderImage),
+    loadImageAsDataURL(eventData.badgeBodyImage),
+    loadImageAsDataURL(eventData.badgeFooterImage),
+  ]);
+  const doc = new jsPDF({ unit: "mm", format: [BADGE_W, BADGE_H] });
+  for (let i = 0; i < participants.length; i++) {
+    if (i > 0) doc.addPage([BADGE_W, BADGE_H]);
+    await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang);
+  }
+  await saveOrShareBlob(doc.output("blob"), filename);
+}
+
+const emptyForm = { lastName: "", firstName: "", position: "", organization: "", orgType: DEFAULT_ORG_TYPES[0].label.fr, orgOther: "", country: COUNTRIES[11], city: "", phone: "", email: "", address: "", wantsHotel: "yes", hotelId: DEFAULT_HOTELS[0].id, roomId: DEFAULT_HOTELS[0].rooms[0].id, checkIn: "", checkOut: "", flightNumber: "", airline: "", arrivalDate: "", arrivalTime: "", departureDate: "", departureTime: "", departureFlightNumber: "" };
 
 export default function App() {
   const [lang, setLang] = useState("fr");
   const [view, setView] = useState("public");
+  const [editToken, setEditToken] = useState(null);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(emptyForm);
   const [participants, setParticipants] = useState([]);
@@ -177,54 +649,236 @@ export default function App() {
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
+  const [hotelFilter, setHotelFilter] = useState("");
+  const [arrivalFilter, setArrivalFilter] = useState("");
+  const [departureFilter, setDepartureFilter] = useState("");
+  const [showBootSplash, setShowBootSplash] = useState(() => Capacitor.isNativePlatform());
+
+  // Message de bienvenue trilingue à l'ouverture de l'app mobile
+  // uniquement (invisible sur le site web classique) — indépendant
+  // de l'écran de démarrage natif d'Android/iOS, dont les règles
+  // (surtout depuis Android 12) empêchent d'afficher du texte.
+  useEffect(() => {
+    if (!showBootSplash) return;
+    // On garde l'écran natif visible jusqu'ici (évite un flash blanc
+    // pendant le chargement du site), puis on le masque au moment
+    // exact où notre message trilingue (déjà affiché à l'écran, en
+    // haut de cette même page) prend le relais de façon invisible.
+    SplashScreen.hide().catch(() => {});
+    const timer = setTimeout(() => setShowBootSplash(false), 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Détecte un lien de modification (?edit=<jeton>), envoyé uniquement
+  // par email — jamais saisi ni collé manuellement dans le navigateur.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("edit");
+    if (token) { setEditToken(token); setView("update"); }
+    if (params.get("page") === "privacy") { setView("privacy"); }
+  }, []);
   const [mobileNav, setMobileNav] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [adminUser, setAdminUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [myRole, setMyRole] = useState(null);
   const [participantsLoading, setParticipantsLoading] = useState(false);
   const [hotels, setHotels] = useState(DEFAULT_HOTELS);
   const [tourism, setTourism] = useState(DEFAULT_TOURISM);
+  const [memberCompanies, setMemberCompanies] = useState([]);
   const [heroSlides, setHeroSlides] = useState([]);
+  const [logoUrl, setLogoUrl] = useState("");
+  const [footerText, setFooterText] = useState({ fr: "", en: "", pt: "" });
+  const [privacyPolicy, setPrivacyPolicy] = useState(null);
+  const [speakers, setSpeakers] = useState(DEFAULT_SPEAKERS);
+  const [eventData, setEventData] = useState(DEFAULT_EVENT);
+  const [menu, setMenu] = useState(DEFAULT_MENU);
+  const [orgTypes, setOrgTypes] = useState(DEFAULT_ORG_TYPES);
+  const [formFields, setFormFields] = useState(DEFAULT_FORM_FIELDS);
 
-  // Contenu public (tourisme, hôtels, carrousel) — visible sans connexion.
+  function mapEventRow(r) {
+    return {
+      id: r.id,
+      code: r.code, year: r.year, type: r.type, status: r.status,
+      edition: r.edition || "",
+      ordinal: r.ordinal || DEFAULT_EVENT.ordinal,
+      title: r.title || DEFAULT_EVENT.title,
+      theme: r.theme || DEFAULT_EVENT.theme,
+      desc: r.subtitle || DEFAULT_EVENT.desc,
+      dateShort: r.date_short || DEFAULT_EVENT.dateShort,
+      monthYear: r.month_year || DEFAULT_EVENT.monthYear,
+      venue: r.venue || DEFAULT_EVENT.venue,
+      city: r.city || DEFAULT_EVENT.city,
+      country: r.country || DEFAULT_EVENT.country,
+      badgeHeaderImage: r.badge_header_image || "",
+      badgeBodyImage: r.badge_body_image || "",
+      badgeFooterImage: r.badge_footer_image || "",
+      badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
+      programPdf: r.program_pdf || { fr: "", en: "", pt: "" },
+      participationFee: r.participation_fee || { fr: "", en: "", pt: "" },
+    };
+  }
+
+  // Contenu public (tourisme, hôtels, carrousel, logo, intervenants, bandeau, menu) — visible sans connexion.
   async function loadPublicContent() {
-    const [t, h, s] = await Promise.all([
-      fetchPublished("tourist_sites"),
-      fetchPublished("cms_hotels"),
-      fetchPublished("hero_slides"),
+    const activeEventRow = await getActiveEvent();
+    const activeEvent = activeEventRow ? mapEventRow(activeEventRow) : { ...DEFAULT_EVENT, id: null };
+    const eventId = activeEvent.id;
+
+    const [t, h, s, settings, sp, mn, ot, ff, mc] = await Promise.all([
+      fetchPublishedForEvent("tourist_sites", eventId),
+      fetchPublishedForEvent("cms_hotels", eventId),
+      fetchPublishedForEvent("hero_slides", eventId),
+      getAllSettings(),
+      fetchPublishedForEvent("cms_speakers", eventId),
+      fetchPublished("cms_menu_items"),
+      fetchPublished("cms_org_types"),
+      fetchPublished("cms_form_fields"),
+      fetchPublishedForEvent("member_companies", eventId),
     ]);
     if (t.length) setTourism(t.map(r => ({
       id: r.id,
       name: { fr: r.name_fr, en: r.name_en, pt: r.name_pt },
       desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
       image: r.image_url,
+      gallery: Array.isArray(r.gallery) ? r.gallery : [],
     })));
-    if (h.length) setHotels(h.map(r => ({
+    setMemberCompanies(mc.map(r => ({
       id: r.id,
       name: r.name,
-      distance: r.distance,
-      desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
-      amenities: (r.amenities || "").split(",").map(a => a.trim()).filter(Boolean),
-      image: r.image_url,
-      rooms: [{ id: r.id + "-r1", type: r.room_type || "Standard", price: Number(r.price) || 0, cur: r.currency || "FCFA" }],
+      logo: r.logo_url,
+      dgName: r.dg_name,
+      address: r.address,
+      phone: r.phone,
+      email: r.email,
+      website: r.website,
     })));
+    if (h.length) setHotels(h.map(r => {
+      const extraRooms = Array.isArray(r.rooms) ? r.rooms : [];
+      const normType = (type) => typeof type === "object" && type !== null
+        ? { fr: type.fr || "", en: type.en || type.fr || "", pt: type.pt || type.fr || "" }
+        : { fr: type || "Standard", en: type || "Standard", pt: type || "Standard" };
+      const rooms = extraRooms.length
+        ? extraRooms
+            .slice()
+            .sort((a, b) => (a.order || 0) - (b.order || 0))
+            .map((room, i) => ({ id: `${r.id}-r${i}`, type: normType(room.type), price: Number(room.price) || 0, cur: room.currency || "FCFA" }))
+        : [{ id: r.id + "-r1", type: normType(r.room_type), price: Number(r.price) || 0, cur: r.currency || "FCFA" }];
+      const splitAmenities = (txt) => (txt || "").split(",").map(a => a.trim()).filter(Boolean);
+      const nameFr = r.name_fr || r.name || "";
+      const distFr = r.distance_fr || r.distance || "";
+      return {
+        id: r.id,
+        name: { fr: nameFr, en: r.name_en || nameFr, pt: r.name_pt || nameFr },
+        distance: { fr: distFr, en: r.distance_en || distFr, pt: r.distance_pt || distFr },
+        desc: { fr: r.desc_fr, en: r.desc_en, pt: r.desc_pt },
+        amenities: {
+          fr: splitAmenities(r.amenities_fr || r.amenities),
+          en: splitAmenities(r.amenities_en) .length ? splitAmenities(r.amenities_en) : splitAmenities(r.amenities_fr || r.amenities),
+          pt: splitAmenities(r.amenities_pt).length ? splitAmenities(r.amenities_pt) : splitAmenities(r.amenities_fr || r.amenities),
+        },
+        image: r.image_url,
+        gallery: Array.isArray(r.gallery) ? r.gallery : [],
+        website: r.website || "",
+        rooms,
+      };
+    }));
     if (s.length) setHeroSlides(s.map(r => r.image_url));
+    if (settings.event_logo) setLogoUrl(settings.event_logo);
+    setFooterText({
+      fr: settings.footer_text_fr || "",
+      en: settings.footer_text_en || "",
+      pt: settings.footer_text_pt || "",
+    });
+    const parsePolicy = (raw) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } };
+    const ppFr = parsePolicy(settings.privacy_policy_fr);
+    const ppEn = parsePolicy(settings.privacy_policy_en);
+    const ppPt = parsePolicy(settings.privacy_policy_pt);
+    if (ppFr || ppEn || ppPt) setPrivacyPolicy({ fr: ppFr, en: ppEn, pt: ppPt });
+    setEventData({
+      ...activeEvent,
+      brand: {
+        fr: settings.event_brand_fr || DEFAULT_EVENT.brand.fr,
+        en: settings.event_brand_en || DEFAULT_EVENT.brand.en,
+        pt: settings.event_brand_pt || DEFAULT_EVENT.brand.pt,
+      },
+    });
+    if (sp.length) setSpeakers(sp.map(r => ({
+      id: r.id,
+      name: r.name,
+      role: { fr: r.role_fr, en: r.role_en, pt: r.role_pt },
+      image: r.image_url,
+    })));
+    if (mn.length) setMenu(mn.map(r => ({
+      id: r.id,
+      label: { fr: r.label_fr, en: r.label_en, pt: r.label_pt },
+      target: r.target,
+    })));
+    if (ot.length) setOrgTypes(ot.map(r => ({
+      id: r.id,
+      label: { fr: r.label_fr, en: r.label_en, pt: r.label_pt },
+      isOther: !!r.is_other,
+    })));
+    if (ff.length) setFormFields(ff.map(r => ({
+      id: r.id,
+      field_key: r.field_key,
+      step: r.step,
+      label: { fr: r.label_fr, en: r.label_en, pt: r.label_pt },
+      field_type: r.field_type || "text",
+      required: !!r.required,
+      display_order: r.display_order,
+    })));
   }
 
   useEffect(() => { loadPublicContent(); }, []);
 
+  function goToMenuTarget(target) {
+    const norm = (target || "").trim().toLowerCase();
+    if (!norm || norm === "top") { setView("public"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (norm === "programme" || norm === "program") {
+      openExternal(`${window.location.origin}/api/program?lang=${lang}`);
+      return;
+    }
+    if (norm.startsWith("http")) { openExternal(target.trim()); return; }
+    setView("public");
+    setTimeout(() => document.getElementById(norm)?.scrollIntoView({ behavior: "smooth" }), 50);
+  }
+
   // Session admin : suit l'état de connexion Supabase Auth.
+  const [needsMfa, setNeedsMfa] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState(null);
+
+  async function checkMfaStatus() {
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (data && data.nextLevel === "aal2" && data.currentLevel !== "aal2") {
+      const { data: factorsData } = await supabase.auth.mfa.listFactors();
+      const totp = factorsData?.totp?.find(f => f.status === "verified");
+      setMfaFactorId(totp?.id || null);
+      setNeedsMfa(true);
+    } else {
+      setNeedsMfa(false);
+      setMfaFactorId(null);
+    }
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setAdminUser(data.session?.user || null);
       setAuthChecked(true);
+      if (data.session?.user) checkMfaStatus();
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setAdminUser(session?.user || null);
+      if (!session?.user) { setMyRole(null); setNeedsMfa(false); }
+      else checkMfaStatus();
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (adminUser) getMyProfile().then(p => setMyRole(p?.role || "viewer"));
+  }, [adminUser]);
 
   function mapRow(row) {
     return {
@@ -239,8 +893,18 @@ export default function App() {
       email: row.email,
       phone: row.phone,
       hotelName: row.hotel_name,
+      roomType: row.room_type,
       checkIn: row.check_in,
       checkOut: row.check_out,
+      arrivalDate: row.arrival_date,
+      arrivalTime: row.arrival_time,
+      flightNumber: row.flight_number,
+      departureDate: row.departure_date,
+      departureTime: row.departure_time,
+      departureFlightNumber: row.departure_flight_number,
+      editToken: row.edit_token,
+      confirmationEmailSent: row.confirmation_email_sent,
+      confirmationEmailError: row.confirmation_email_error,
     };
   }
 
@@ -252,6 +916,34 @@ export default function App() {
       .order("created_at", { ascending: false });
     if (!error && data) setParticipants(data.map(mapRow));
     setParticipantsLoading(false);
+  }
+
+  async function deleteParticipant(id) {
+    if (!window.confirm(t("confirm_delete_participant", lang))) return;
+    try {
+      await deleteRow("participants", id);
+      setParticipants(list => list.filter(p => p.id !== id));
+    } catch (e) { /* best effort */ }
+  }
+
+  async function resendConfirmationEmail(p) {
+    if (!p.email || !p.editToken) return;
+    setParticipants(list => list.map(x => x.id === p.id ? { ...x, confirmationEmailSent: null } : x));
+    const editLink = `${window.location.origin}${window.location.pathname}?edit=${p.editToken}`;
+    try {
+      const res = await fetch("/api/send-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: p.email, lang, firstName: p.firstName, lastName: p.lastName,
+          regNumber: p.regNumber, editLink, eventTitle: eventData.title[lang],
+        }),
+      });
+      const ok = res.ok;
+      setParticipants(list => list.map(x => x.id === p.id ? { ...x, confirmationEmailSent: ok, confirmationEmailError: ok ? null : t("resend_failed", lang) } : x));
+    } catch (e) {
+      setParticipants(list => list.map(x => x.id === p.id ? { ...x, confirmationEmailSent: false, confirmationEmailError: String(e.message || e) } : x));
+    }
   }
 
   useEffect(() => {
@@ -266,19 +958,59 @@ export default function App() {
   async function submitRegistration() {
     setSubmitting(true);
     setSubmitError("");
+    const isOtherSelected = orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther;
+    const finalOrgType = isOtherSelected && form.orgOther.trim() ? form.orgOther.trim() : form.orgType;
     const payload = {
       ...form,
-      hotelName: form.wantsHotel === "yes" ? selectedHotel.name : "",
-      roomType: form.wantsHotel === "yes" ? selectedRoom.type : "",
+      orgType: finalOrgType,
+      hotelName: form.wantsHotel === "yes" ? (selectedHotel.name[lang] || selectedHotel.name.fr) : "",
+      roomType: form.wantsHotel === "yes" ? (selectedRoom.type[lang] || selectedRoom.type.fr) : "",
     };
     const { data, error } = await supabase.rpc("register_participant", { payload });
     setSubmitting(false);
-    if (error) {
+    if (error || !data) {
       setSubmitError(t("submit_error", lang));
       return;
     }
-    setConfirmed({ ...form, regNumber: data });
+    const regNumber = data.regNumber;
+    const editToken = data.editToken;
+    setConfirmed({ ...form, orgType: finalOrgType, regNumber });
     setStep(6);
+
+    // Envoi de l'email de confirmation — au mieux, n'empêche jamais
+    // la confirmation de s'afficher si l'envoi échoue.
+    // keepalive: true est essentiel ici — sans lui, si le visiteur
+    // quitte ou referme la page juste après l'inscription (fréquent
+    // sur mobile, l'écran de confirmation étant déjà affiché), le
+    // navigateur annule cette requête en plein vol et l'email ne
+    // part jamais, sans aucune erreur visible nulle part.
+    if (form.email && editToken) {
+      const editLink = `${window.location.origin}${window.location.pathname}?edit=${editToken}`;
+      fetch("/api/send-confirmation", {
+        method: "POST",
+        keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email, lang, firstName: form.firstName, lastName: form.lastName,
+          regNumber, editLink, eventTitle: eventData.title[lang],
+        }),
+      }).catch(() => { /* best effort — le serveur retente 3 fois et journalise l'échec dans confirmation_email_error, visible/renvoyable depuis l'admin */ });
+    }
+
+    // Envoi du message WhatsApp de confirmation (avec le lien du
+    // groupe "Browncard Event") — également au mieux. keepalive
+    // pour la même raison que ci-dessus (voir commentaire email).
+    if (form.phone) {
+      fetch("/api/send-whatsapp", {
+        method: "POST",
+        keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: form.phone, lang, firstName: form.firstName, lastName: form.lastName,
+          regNumber, eventTitle: eventData.title[lang],
+        }),
+      }).catch(() => { /* best effort */ });
+    }
   }
 
   function startOver() {
@@ -295,13 +1027,19 @@ export default function App() {
   }, [participants]);
 
   const filtered = useMemo(() => {
+    const norm = (v) => (v ? String(v).slice(0, 10) : "");
     return participants.filter(p => {
       const s = search.toLowerCase();
       const matchesSearch = !s || `${p.lastName} ${p.firstName} ${p.email} ${p.organization}`.toLowerCase().includes(s);
       const matchesCountry = !countryFilter || p.country === countryFilter;
-      return matchesSearch && matchesCountry;
+      const matchesHotel = !hotelFilter || p.hotelName === hotelFilter;
+      const matchesArrival = !arrivalFilter || norm(p.arrivalDate) === arrivalFilter;
+      const matchesDeparture = !departureFilter || norm(p.departureDate) === departureFilter;
+      return matchesSearch && matchesCountry && matchesHotel && matchesArrival && matchesDeparture;
     });
-  }, [participants, search, countryFilter]);
+  }, [participants, search, countryFilter, hotelFilter, arrivalFilter, departureFilter]);
+
+  const hotelOptions = useMemo(() => Array.from(new Set(participants.map(p => p.hotelName).filter(Boolean))), [participants]);
 
   return (
     <div style={{ background: "var(--sable)", color: "var(--encre)", minHeight: "100%", fontFamily: "'IBM Plex Sans', sans-serif" }}>
@@ -332,31 +1070,52 @@ export default function App() {
         .neon-outline{ filter: drop-shadow(0 0 6px rgba(255,255,255,.55)); }
       `}</style>
 
+      {showBootSplash && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999, background: "var(--vert-fonce)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            padding: "2rem", textAlign: "center", transition: "opacity .5s ease",
+          }}
+        >
+          {logoUrl && (
+            <img src={logoUrl} alt="Logo" className="w-28 h-28 sm:w-36 sm:h-36 rounded-full object-cover mb-8" style={{ border: "3px solid rgba(255,255,255,.3)" }} />
+          )}
+          <p className="font-display font-semibold text-white text-lg sm:text-2xl mb-4 max-w-md">Bienvenue sur la plateforme événementielle de la Carte Brune CEDEAO</p>
+          <p className="text-white/80 text-sm sm:text-base mb-3 max-w-md">Welcome to the ECOWAS Brown Card event platform</p>
+          <p className="text-white/80 text-sm sm:text-base max-w-md">Bem-vindo à plataforma de eventos do Cartão Castanho da CEDEAO</p>
+        </div>
+      )}
+
       {/* HEADER */}
       <header style={{ background: "var(--navy)" }} className="text-white sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto flex items-center justify-between px-5 py-3">
-          <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-3 text-left">
-            <div className="seal w-9 h-9 flex-shrink-0">
-              <div className="seal-ring" />
-              <div style={{ position: "absolute", inset: 3, background: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <ShieldCheck size={14} color="var(--vert-fonce)" />
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 px-2 sm:px-4 py-2.5 sm:py-3">
+          <button onClick={() => { setView("public"); setStep(1); }} className="flex items-center gap-2 sm:gap-3 text-left min-w-0 flex-1 md:flex-none">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="w-10 h-10 sm:w-20 sm:h-20 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
+            ) : (
+              <div className="seal w-10 h-10 sm:w-20 sm:h-20 flex-shrink-0">
+                <div className="seal-ring" />
+                <div style={{ position: "absolute", inset: 3, background: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ShieldCheck size={14} className="sm:hidden" color="var(--vert-fonce)" />
+                  <ShieldCheck size={22} className="hidden sm:block" color="var(--vert-fonce)" />
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="font-display font-semibold leading-tight" style={{ fontSize: "1.05rem" }}>Carte Brune CEDEAO</div>
-              <div className="text-[11px] opacity-75 leading-tight hidden sm:block">{t("council", lang)}</div>
+            )}
+            <div className="min-w-0">
+              <div className="font-display font-semibold leading-tight text-sm sm:text-xl truncate">{eventData.brand[lang]}</div>
+              <div className="text-[11px] opacity-75 leading-tight hidden sm:block truncate">{t("council", lang)}</div>
             </div>
           </button>
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-            <button onClick={() => setView("public")} className="hover:opacity-80">{t("nav_home", lang)}</button>
-            <button onClick={() => { setView("public"); document.getElementById("event-section")?.scrollIntoView({behavior:"smooth"}); }} className="hover:opacity-80">{t("nav_events", lang)}</button>
-            <button onClick={() => { setView("public"); document.getElementById("hotels-section")?.scrollIntoView({behavior:"smooth"}); }} className="hover:opacity-80">{t("nav_hotels", lang)}</button>
-            <button onClick={() => { setView("public"); document.getElementById("tourism-section")?.scrollIntoView({behavior:"smooth"}); }} className="hover:opacity-80">{t("nav_tourism", lang)}</button>
+          <nav className="hidden md:flex items-center gap-3 lg:gap-5 text-[13px] lg:text-sm font-medium flex-shrink-0">
+            {menu.map(item => (
+              <button key={item.id} onClick={() => goToMenuTarget(item.target)} className="hover:opacity-80 whitespace-nowrap">{item.label[lang]}</button>
+            ))}
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
             <div className="relative">
-              <button onClick={() => setLangMenuOpen(v => !v)} className="flex items-center gap-1 text-sm border border-white/30 px-2.5 py-1.5">
-                <Globe2 size={14} /> {lang.toUpperCase()}
+              <button onClick={() => setLangMenuOpen(v => !v)} className="flex items-center gap-1 text-xs sm:text-sm border border-white/30 px-2 sm:px-2.5 py-1 sm:py-1.5">
+                <Globe2 size={13} /> {lang.toUpperCase()}
               </button>
               {langMenuOpen && (
                 <div className="absolute right-0 mt-1 bg-white text-[var(--navy)] shadow-lg text-sm w-32 z-50">
@@ -367,12 +1126,17 @@ export default function App() {
               )}
             </div>
             <button onClick={() => setView("register")} className="cb-btn hidden sm:inline-flex text-sm py-2 px-4">{t("register", lang)}</button>
-            <button className="md:hidden" onClick={() => setMobileNav(v => !v)}><Menu size={20} /></button>
+            <button className="md:hidden flex-shrink-0" onClick={() => setMobileNav(v => !v)} aria-label="Menu">{mobileNav ? <X size={22} /> : <Menu size={22} />}</button>
           </div>
         </div>
         {mobileNav && (
           <div className="md:hidden flex flex-col gap-3 px-5 pb-4 text-sm">
-            <button onClick={() => { setView("public"); setMobileNav(false); }} className="text-left">{t("nav_home", lang)}</button>
+            <div className="flex justify-end">
+              <button onClick={() => setMobileNav(false)} aria-label="Fermer" className="p-1"><X size={20} /></button>
+            </div>
+            {menu.map(item => (
+              <button key={item.id} onClick={() => { goToMenuTarget(item.target); setMobileNav(false); }} className="text-left">{item.label[lang]}</button>
+            ))}
             <button onClick={() => setView("register")} className="cb-btn text-sm justify-center">{t("register", lang)}</button>
           </div>
         )}
@@ -380,29 +1144,111 @@ export default function App() {
       <div className="weave" />
 
       {view === "public" && (
-        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} />
+        <PublicSite lang={lang} setView={setView} hotels={hotels} tourism={tourism} heroSlides={heroSlides} logoUrl={logoUrl} speakers={speakers} event={eventData} memberCompanies={memberCompanies} />
       )}
 
       {view === "register" && step < 6 && (
-        <RegistrationWizard lang={lang} step={step} setStep={setStep} form={form} update={update} selectedHotel={selectedHotel} selectedRoom={selectedRoom} onSubmit={submitRegistration} setView={setView} submitting={submitting} submitError={submitError} hotels={hotels} />
+        <RegistrationWizard lang={lang} step={step} setStep={setStep} form={form} update={update} selectedHotel={selectedHotel} selectedRoom={selectedRoom} onSubmit={submitRegistration} setView={setView} submitting={submitting} submitError={submitError} hotels={hotels} orgTypes={orgTypes} formFields={formFields} />
       )}
 
       {view === "register" && step === 6 && confirmed && (
-        <Confirmation lang={lang} record={confirmed} onDone={startOver} />
+        <Confirmation lang={lang} record={confirmed} onDone={startOver} eventData={eventData} />
+      )}
+
+      {view === "update" && (
+        <UpdateRegistration lang={lang} token={editToken} hotels={hotels} orgTypes={orgTypes} formFields={formFields} setView={setView} />
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
+      )}
+
+      {view === "archives" && (
+        <ArchivesPage lang={lang} setView={setView} />
+      )}
+
+      {view === "privacy" && (
+        <PrivacyPolicyPage lang={lang} setView={setView} brand={eventData.brand[lang]} override={privacyPolicy} />
       )}
 
       <footer style={{ background: "var(--navy)" }} className="text-white/70 text-xs mt-16 py-8 px-5">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between gap-3">
-          <div>© {EVENT.year} Système d'Assurance Carte Brune CEDEAO</div>
-          <button onClick={() => setView(view === "admin" ? "public" : "admin")} className="underline hover:text-white">
-            {view === "admin" ? t("view_site", lang) : t("admin", lang)}
-          </button>
+          <div>
+            {footerText[lang] && <div className="mb-1 whitespace-pre-line">{footerText[lang]}</div>}
+            <div>© {eventData.year || DEFAULT_EVENT.year} {eventData.brand[lang]}</div>
+          </div>
+          <div className="flex items-center gap-4">
+            <button onClick={() => setView("privacy")} className="underline hover:text-white">{t("privacy_policy_title", lang)}</button>
+            <button onClick={() => setView("archives")} className="underline hover:text-white">{t("archives_title", lang)}</button>
+            <button onClick={() => setView(view === "admin" ? "public" : "admin")} className="underline hover:text-white">
+              {view === "admin" ? t("view_site", lang) : t("admin", lang)}
+            </button>
+          </div>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function PrivacyPolicyPage({ lang, setView, brand, override }) {
+  const content = {
+    fr: {
+      title: "Politique de confidentialité",
+      updated: "Dernière mise à jour : septembre 2026",
+      sections: [
+        { h: "1. Introduction", p: `La présente politique de confidentialité décrit comment ${brand} ("nous") collecte, utilise et protège les informations des personnes qui utilisent ce site web et l'application mobile associée (ensemble, la "Plateforme"), dans le cadre de l'organisation des réunions et assemblées du Système de la Carte Brune CEDEAO.` },
+        { h: "2. Données que nous collectons", p: "Lors de votre inscription à un événement, nous collectons : votre nom, prénom, organisation, type d'organisme, pays, adresse email, numéro de téléphone, ainsi que, si vous réservez un hôtel via la plateforme, vos dates et horaires d'arrivée/départ et numéros de vol. Aucune donnée de paiement n'est collectée ou traitée par la Plateforme." },
+        { h: "3. Utilisation des données", p: "Ces informations sont utilisées uniquement pour : traiter votre inscription, générer votre badge et numéro d'enregistrement, communiquer avec vous au sujet de l'événement (confirmation, rappels, modifications), et faciliter la coordination avec les hôtels partenaires pour les réservations." },
+        { h: "4. Partage des données", p: "Vos informations de réservation hôtelière (nom, dates de séjour) peuvent être partagées avec l'hôtel concerné, dans la seule mesure nécessaire à la gestion de votre séjour. Vos données ne sont ni vendues, ni louées, ni partagées à des fins commerciales avec des tiers." },
+        { h: "5. Conservation des données", p: "Les données des participants sont conservées le temps nécessaire à l'organisation de l'événement concerné, puis archivées à des fins statistiques et de continuité entre éditions du Conseil des Bureaux." },
+        { h: "6. Vos droits", p: "Vous pouvez à tout moment demander la consultation, la correction ou la suppression de vos données en nous contactant à l'adresse indiquée ci-dessous, ou via le lien de modification d'inscription envoyé par email lors de votre inscription." },
+        { h: "7. Sécurité", p: "Les données sont hébergées sur une infrastructure sécurisée (Supabase) avec accès restreint aux seules personnes autorisées dans le cadre de l'organisation de l'événement." },
+        { h: "8. Contact", p: "Pour toute question relative à cette politique ou à vos données personnelles, vous pouvez nous contacter via les coordonnées indiquées sur la page d'accueil de la Plateforme." },
+      ],
+    },
+    en: {
+      title: "Privacy Policy",
+      updated: "Last updated: September 2026",
+      sections: [
+        { h: "1. Introduction", p: `This privacy policy describes how ${brand} ("we") collects, uses and protects the information of people using this website and its associated mobile application (together, the "Platform"), in connection with organizing meetings and assemblies of the ECOWAS Brown Card Scheme.` },
+        { h: "2. Data we collect", p: "When you register for an event, we collect: your first and last name, organization, organization type, country, email address, phone number, and, if you book a hotel through the platform, your arrival/departure dates, times and flight numbers. No payment data is collected or processed by the Platform." },
+        { h: "3. How we use your data", p: "This information is used solely to: process your registration, generate your badge and registration number, communicate with you about the event (confirmation, reminders, changes), and coordinate with partner hotels for bookings." },
+        { h: "4. Data sharing", p: "Your hotel booking information (name, stay dates) may be shared with the relevant hotel, only to the extent necessary to manage your stay. Your data is never sold, rented, or shared with third parties for commercial purposes." },
+        { h: "5. Data retention", p: "Participant data is kept for as long as necessary to organize the relevant event, then archived for statistical purposes and continuity between editions of the Council of Bureaux." },
+        { h: "6. Your rights", p: "You may at any time request to view, correct, or delete your data by contacting us at the address below, or via the registration edit link sent by email upon registration." },
+        { h: "7. Security", p: "Data is hosted on secure infrastructure (Supabase) with access restricted to persons authorized in connection with organizing the event." },
+        { h: "8. Contact", p: "For any question regarding this policy or your personal data, please contact us using the details provided on the Platform's homepage." },
+      ],
+    },
+    pt: {
+      title: "Política de Privacidade",
+      updated: "Última atualização: setembro de 2026",
+      sections: [
+        { h: "1. Introdução", p: `Esta política de privacidade descreve como ${brand} ("nós") recolhe, utiliza e protege as informações das pessoas que utilizam este site e a aplicação móvel associada (em conjunto, a "Plataforma"), no âmbito da organização das reuniões e assembleias do Sistema do Cartão Castanho da CEDEAO.` },
+        { h: "2. Dados que recolhemos", p: "Ao inscrever-se num evento, recolhemos: nome, apelido, organização, tipo de organismo, país, endereço de email, número de telefone e, caso reserve um hotel através da plataforma, datas e horários de chegada/partida e números de voo. Nenhum dado de pagamento é recolhido ou processado pela Plataforma." },
+        { h: "3. Utilização dos dados", p: "Estas informações são utilizadas apenas para: processar a sua inscrição, gerar o seu crachá e número de registo, comunicar consigo sobre o evento (confirmação, lembretes, alterações) e coordenar com os hotéis parceiros as reservas." },
+        { h: "4. Partilha de dados", p: "As suas informações de reserva de hotel (nome, datas de estadia) podem ser partilhadas com o hotel em questão, apenas na medida necessária à gestão da sua estadia. Os seus dados nunca são vendidos, alugados ou partilhados com terceiros para fins comerciais." },
+        { h: "5. Conservação dos dados", p: "Os dados dos participantes são conservados pelo tempo necessário à organização do evento em questão, sendo depois arquivados para fins estatísticos e de continuidade entre edições do Conselho de Gabinetes." },
+        { h: "6. Os seus direitos", p: "Pode a qualquer momento solicitar a consulta, correção ou eliminação dos seus dados contactando-nos através do endereço abaixo, ou através do link de edição de inscrição enviado por email no momento da inscrição." },
+        { h: "7. Segurança", p: "Os dados são alojados numa infraestrutura segura (Supabase), com acesso restrito às pessoas autorizadas no âmbito da organização do evento." },
+        { h: "8. Contacto", p: "Para qualquer questão relativa a esta política ou aos seus dados pessoais, contacte-nos através dos contactos indicados na página inicial da Plataforma." },
+      ],
+    },
+  };
+  const c = (override && override[lang]) || content[lang] || content.fr;
+  return (
+    <div className="max-w-3xl mx-auto px-5 py-14">
+      <button onClick={() => setView("public")} className="text-sm underline mb-8 inline-block" style={{ color: "var(--vert-fonce)" }}>← {t("back_to_site", lang)}</button>
+      <h1 className="font-display font-semibold text-3xl mb-2" style={{ color: "var(--navy)" }}>{c.title}</h1>
+      <p className="text-sm text-black/50 mb-10">{c.updated}</p>
+      <div className="space-y-7">
+        {c.sections.map((s, i) => (
+          <div key={i}>
+            <h2 className="font-semibold text-lg mb-1.5" style={{ color: "var(--vert-fonce)" }}>{s.h}</h2>
+            <p className="text-sm leading-relaxed text-black/80">{s.p}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -420,56 +1266,71 @@ function HeroCarousel({ images }) {
       {images.map((src, idx) => (
         <div key={idx} className="absolute inset-0 transition-opacity duration-[1500ms]" style={{ opacity: idx === i ? 1 : 0, backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center" }} />
       ))}
-      <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(11,13,12,.55), rgba(11,13,12,.9))" }} />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(11,13,12,.18), rgba(11,13,12,.55))" }} />
     </div>
   );
 }
 
-function PublicSite({ lang, setView, hotels, tourism, heroSlides }) {
+function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speakers, event, memberCompanies }) {
+  const hasTheme = event.theme && (event.theme.fr || event.theme.en || event.theme.pt);
+  const [galleryItem, setGalleryItem] = useState(null);
   return (
     <>
       {/* HERO — fond noir + trame de points, dans l'esprit du bandeau vidéo */}
-      <section id="event-section" style={{ background: "var(--noir)" }} className="relative text-white px-5 py-20 overflow-hidden">
+      <section id="event-section" style={{ background: "var(--noir)" }} className="relative text-white px-4 sm:px-5 py-12 sm:py-20 overflow-hidden">
         <HeroCarousel images={heroSlides} />
         <div className="dots absolute inset-0 pointer-events-none" style={{ maskImage: "radial-gradient(ellipse at bottom left, black, transparent 70%)" }} />
         <div className="max-w-6xl mx-auto relative">
-          <div className="flex items-start gap-3 mb-6">
-            <span className="font-display font-bold leading-none" style={{ fontSize: "5rem", color: "var(--vert)" }}>{EVENT.edition.replace("ᵉ","")}</span>
-            <span className="font-display" style={{ fontSize: "1.6rem", color: "var(--brun-clair)", marginTop: "0.6rem" }}>e</span>
+          <div className="flex items-start gap-2 sm:gap-3 mb-4 sm:mb-6" style={{ textShadow: "0 2px 10px rgba(0,0,0,.55)" }}>
+            <span className="font-display font-bold leading-none" style={{ fontSize: "clamp(2.6rem, 14vw, 5rem)", color: "var(--vert)" }}>{event.edition}</span>
+            <span className="font-display" style={{ fontSize: "clamp(1rem, 4vw, 1.6rem)", color: "var(--brun-clair)", marginTop: "0.6rem" }}>{event.ordinal[lang]}</span>
           </div>
-          <h1 className="font-display font-semibold leading-tight -mt-10 mb-6" style={{ fontSize: "2.4rem" }}>
-            {lang === "fr" ? "Assemblée Générale" : lang === "en" ? "General Assembly" : "Assembleia Geral"}
+          <h1 className="font-display font-semibold leading-tight -mt-6 sm:-mt-10 mb-4 sm:mb-6" style={{ fontSize: "clamp(1.6rem, 6vw, 2.4rem)", textShadow: "0 2px 10px rgba(0,0,0,.55)" }}>
+            {event.title[lang]}
           </h1>
-          <p className="text-white/80 max-w-xl leading-relaxed mb-8">{EVENT.desc[lang]}</p>
+          <p className="text-white/90 max-w-xl leading-relaxed mb-6 sm:mb-8 text-sm sm:text-base" style={{ textShadow: "0 1px 6px rgba(0,0,0,.5)" }}>{event.desc[lang]}</p>
 
-          <div className="inline-flex flex-wrap items-stretch gap-0 mb-8" style={{ background: "var(--vert-fonce)" }}>
-            <div className="flex items-center gap-3 px-5 py-3">
-              <div className="seal w-8 h-8 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:2, background:"#fff", borderRadius:"50%" }} /></div>
-              <div className="text-sm leading-tight">
-                <div className="font-semibold">{t("council", lang).split("—")[0]}</div>
+          <div className="flex flex-wrap items-stretch gap-0 mb-6 sm:mb-8" style={{ background: "var(--vert-fonce)" }}>
+            <div className="ribbon flex items-center px-4 sm:px-5 py-2.5 sm:py-3" style={{ background: "var(--brun)" }}>
+              <span className="font-display font-bold text-base sm:text-lg tracking-wide">{event.dateShort[lang]}</span>
+            </div>
+            <div className="flex items-center px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm">{event.monthYear[lang]}</div>
+            <div className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm border-l border-white/10">
+              <MapPin size={14} color="var(--vert)" /> <span className="font-semibold">{event.venue[lang]}</span>&nbsp;{event.city}
+            </div>
+            {event.participationFee && event.participationFee[lang] && (
+              <div className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm border-l border-white/10">
+                <span className="opacity-70">{t("participation_fee_chip_label", lang)}</span>
+                <span className="font-semibold">{event.participationFee[lang]}</span>
               </div>
-            </div>
-            <div className="ribbon flex items-center px-5 py-3" style={{ background: "var(--brun)" }}>
-              <span className="font-display font-bold text-lg tracking-wide">{EVENT.dateShort}</span>
-            </div>
-            <div className="flex items-center px-5 py-3 text-sm">{EVENT.monthYear}</div>
-            <div className="flex items-center gap-1.5 px-5 py-3 text-sm border-l border-white/10">
-              <MapPin size={14} color="var(--vert)" /> <span className="font-semibold">{EVENT.venue}</span>&nbsp;{EVENT.city}
-            </div>
+            )}
           </div>
           <div>
-            <button onClick={() => setView("register")} className="cb-btn">{t("hero_cta", lang)} <ChevronRight size={16} /></button>
+            <button onClick={() => setView("register")} className="cb-btn w-full sm:w-auto justify-center">{t("hero_cta", lang)} <ChevronRight size={16} /></button>
           </div>
         </div>
       </section>
 
+      {hasTheme && (
+        <section className="px-4 sm:px-5 py-8 sm:py-12" style={{ background: "var(--vert-fonce)" }}>
+          <div className="max-w-4xl mx-auto text-center text-white">
+            <div className="cb-label mb-2" style={{ color: "var(--vert)" }}>{t("theme_label", lang)}</div>
+            <p className="font-display leading-relaxed" style={{ fontSize: "clamp(1rem, 4vw, 1.3rem)" }}>{event.theme[lang]}</p>
+          </div>
+        </section>
+      )}
+
       {/* PARTENAIRES & INTERVENANTS */}
-      <section className="max-w-6xl mx-auto px-5 py-14">
+      <section id="speakers-section" className="max-w-6xl mx-auto px-5 py-14">
         <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--vert-fonce)" }}>{t("speakers_title", lang)}</h2>
         <div className="grid sm:grid-cols-2 gap-5">
-          {SPEAKERS.map((s, i) => (
-            <div key={i} className="flex items-start gap-4 bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
-              <div className="seal w-11 h-11 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:3, background:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}><Quote size={16} color="var(--vert-fonce)" /></div></div>
+          {speakers.map((s, i) => (
+            <div key={s.id || i} className="flex items-start gap-4 bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
+              {s.image ? (
+                <img src={s.image} alt={s.name} className="w-32 h-32 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
+              ) : (
+                <div className="seal w-32 h-32 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:6, background:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}><Quote size={36} color="var(--vert-fonce)" /></div></div>
+              )}
               <div>
                 <div className="font-semibold text-sm">{s.name}</div>
                 <div className="text-xs text-black/60 mt-1 leading-relaxed">{s.role[lang]}</div>
@@ -479,58 +1340,134 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides }) {
         </div>
       </section>
 
-      {/* TOURISM CAROUSEL */}
-      <section id="tourism-section" className="px-5 py-14" style={{ background: "var(--sable-deep)" }}>
-        <div className="max-w-6xl mx-auto">
-          <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("tourism_title", lang)}</h2>
-          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5">
-            {tourism.map((site, i) => (
-              <div key={site.id || i} className="bg-white">
-                {site.image ? (
-                  <div style={{ height: "110px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center" }} />
-                ) : (
-                  <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "110px" }} />
-                )}
-                <div className="p-4">
-                  <div className="font-semibold text-sm mb-1">{site.name[lang]}</div>
-                  <div className="text-xs text-black/60 leading-relaxed">{site.desc[lang]}</div>
+      {memberCompanies && memberCompanies.length > 0 && (
+        <section id="companies-section" className="px-2 sm:px-5 py-14" style={{ background: "var(--sable-deep)" }}>
+          <div className="max-w-6xl mx-auto">
+            <h2 className="font-display font-semibold text-2xl mb-8 px-3 sm:px-0" style={{ color: "var(--navy)" }}>{t("member_companies_title", lang)}</h2>
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {memberCompanies.map(c => (
+                <div key={c.id} className="bg-white p-3 flex flex-col items-center text-center" style={{ border: "1px solid #CFC4A3" }}>
+                  {c.logo ? (
+                    <img src={c.logo} alt={c.name} className="w-24 h-24 object-contain mb-3" />
+                  ) : (
+                    <div className="w-24 h-24 mb-3 flex items-center justify-center" style={{ background: "var(--sable)" }}><Building2 size={32} color="var(--vert-fonce)" /></div>
+                  )}
+                  <div className="font-semibold text-sm mb-1">{c.name}</div>
+                  {c.dgName && <div className="text-xs text-black/60 mb-2 break-words">{t("dg_label", lang)} : {c.dgName}</div>}
+                  {c.address && <div className="text-xs text-black/50 break-words">{c.address}</div>}
+                  {c.phone && <div className="text-xs text-black/50 break-words">{c.phone}</div>}
+                  {c.email && <div className="text-xs text-black/50 break-words">{c.email}</div>}
+                  {c.website && (
+                    <a href={normalizeUrl(c.website)} target="_blank" rel="noopener noreferrer" className="text-xs mt-1 break-words" style={{ color: "var(--vert-fonce)", textDecoration: "underline" }}>{t("company_website_label", lang)}</a>
+                  )}
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* HOTELS */}
       <section id="hotels-section" className="max-w-6xl mx-auto px-5 py-14">
         <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("hotels_title", lang)}</h2>
         <div className="grid md:grid-cols-3 gap-6">
-          {hotels.map(h => (
+          {hotels.map(h => {
+            const gallery = [h.image, ...(h.gallery || [])].filter(Boolean);
+            const hName = h.name[lang] || h.name.fr;
+            return (
             <div key={h.id} className="border" style={{ borderColor: "#CFC4A3" }}>
               {h.image ? (
-                <div className="h-24 flex items-end p-3" style={{ backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center" }}>
-                  <span className="text-white font-display font-semibold text-lg" style={{ textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>{h.name}</span>
-                </div>
+                <button onClick={() => gallery.length && setGalleryItem({ title: hName, images: gallery })} className="w-full flex items-end p-3 text-left" style={{ height: "280px", backgroundImage: `url(${h.image})`, backgroundSize: "cover", backgroundPosition: "center", cursor: gallery.length ? "pointer" : "default" }}>
+                  <span className="text-white font-display font-semibold text-lg" style={{ textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>{hName}</span>
+                </button>
               ) : (
-                <div style={{ background: "var(--navy)" }} className="h-24 flex items-end p-3">
-                  <span className="text-white font-display font-semibold text-lg">{h.name}</span>
+                <div style={{ background: "var(--navy)", height: "280px" }} className="flex items-end p-3">
+                  <span className="text-white font-display font-semibold text-lg">{hName}</span>
                 </div>
               )}
               <div className="p-4">
-                <div className="text-xs text-black/50 mb-2 flex items-center gap-1"><MapPin size={12} /> {h.distance}</div>
+                <div className="text-xs text-black/50 mb-2 flex items-center gap-1"><MapPin size={12} /> {h.distance[lang] || h.distance.fr}</div>
                 <p className="text-sm mb-3 leading-relaxed">{h.desc[lang]}</p>
                 <div className="flex flex-wrap gap-1.5 mb-3">
-                  {h.amenities.map(a => <span key={a} className="text-[11px] px-2 py-0.5 bg-[var(--sable-deep)]">{a}</span>)}
+                  {(h.amenities[lang] || []).map(a => <span key={a} className="text-[11px] px-2 py-0.5 bg-[var(--sable-deep)]">{a}</span>)}
                 </div>
-                <div className="text-sm font-mono font-semibold" style={{ color: "var(--argile)" }}>
-                  {h.rooms[0].price.toLocaleString()} {h.rooms[0].cur} {t("per_night", lang)}
+                <div className="space-y-1 mb-3">
+                  {h.rooms.map(r => (
+                    <div key={r.id} className="flex justify-between items-baseline text-sm">
+                      <span className="text-black/70">{r.type[lang] || r.type.fr}</span>
+                      <span className="font-mono font-semibold whitespace-nowrap" style={{ color: "var(--argile)" }}>{r.price.toLocaleString()} {r.cur} {t("per_night", lang)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {gallery.length > 0 && (
+                    <button onClick={() => setGalleryItem({ title: hName, images: gallery })} className="cb-btn-outline text-xs py-1.5 px-3"><ImageIcon size={13} /> {t("view_photos", lang)}</button>
+                  )}
+                  {h.website && (
+                    <a href={normalizeUrl(h.website)} target="_blank" rel="noopener noreferrer" className="cb-btn-outline text-xs py-1.5 px-3" style={{ textDecoration: "none" }}><Globe2 size={13} /> {t("visit_website", lang)}</a>
+                  )}
                 </div>
               </div>
             </div>
-          ))}
+          );})}
         </div>
       </section>
+
+      {/* TOURISM CAROUSEL */}
+      <section id="tourism-section" className="px-5 py-14" style={{ background: "var(--sable-deep)" }}>
+        <div className="max-w-6xl mx-auto">
+          <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("tourism_title", lang)}</h2>
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5">
+            {tourism.map((site, i) => {
+              const siteGallery = [site.image, ...(site.gallery || [])].filter(Boolean);
+              return (
+              <div key={site.id || i} className="bg-white">
+                {site.image ? (
+                  <button onClick={() => siteGallery.length && setGalleryItem({ title: site.name[lang], images: siteGallery })} className="w-full text-left" style={{ height: "280px", backgroundImage: `url(${site.image})`, backgroundSize: "cover", backgroundPosition: "center", cursor: siteGallery.length ? "pointer" : "default" }} />
+                ) : (
+                  <div style={{ background: [ "var(--lagune)","var(--argile)","var(--ocre)","var(--navy)" ][i % 4], height: "280px" }} />
+                )}
+                <div className="p-4">
+                  <div className="font-semibold text-sm mb-1">{site.name[lang]}</div>
+                  <div className="text-xs text-black/60 leading-relaxed mb-2">{site.desc[lang]}</div>
+                  {siteGallery.length > 1 && (
+                    <button onClick={() => setGalleryItem({ title: site.name[lang], images: siteGallery })} className="cb-btn-outline text-xs py-1 px-2"><ImageIcon size={12} /> {t("view_photos", lang)}</button>
+                  )}
+                </div>
+              </div>
+            );})}
+          </div>
+        </div>
+      </section>
+
+      {galleryItem && (
+        <GalleryModal title={galleryItem.title} images={galleryItem.images} onClose={() => setGalleryItem(null)} />
+      )}
     </>
+  );
+}
+
+function GalleryModal({ title, images, onClose }) {
+  const [index, setIndex] = useState(0);
+  const next = () => setIndex(i => (i + 1) % images.length);
+  const prev = () => setIndex(i => (i - 1 + images.length) % images.length);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(11,13,12,.92)" }} onClick={onClose}>
+      <button onClick={onClose} className="absolute top-5 right-5 text-white"><X size={28} /></button>
+      <div className="text-white absolute top-5 left-5 font-display font-semibold text-lg">{title}</div>
+      <div className="relative max-w-5xl w-full px-16" onClick={e => e.stopPropagation()}>
+        <img src={images[index]} alt={title} className="w-full object-contain" style={{ maxHeight: "80vh" }} />
+        {images.length > 1 && (
+          <>
+            <button onClick={prev} className="absolute left-0 top-1/2 -translate-y-1/2 text-white p-2"><ChevronLeft size={36} /></button>
+            <button onClick={next} className="absolute right-0 top-1/2 -translate-y-1/2 text-white p-2"><ChevronRight size={36} /></button>
+          </>
+        )}
+      </div>
+      {images.length > 1 && (
+        <div className="absolute bottom-6 text-white/70 text-sm font-mono">{index + 1} / {images.length}</div>
+      )}
+    </div>
   );
 }
 
@@ -538,8 +1475,67 @@ function Field({ label, children }) {
   return <div><label className="cb-label">{label}</label>{children}</div>;
 }
 
-function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels }) {
+function ReviewRow({ label, value }) {
+  return (
+    <div className="flex justify-between gap-4 py-1.5 border-b border-dashed" style={{ borderColor: "#E7DCC2" }}>
+      <span className="text-black/50">{label}</span>
+      <span className="font-medium text-right">{value || "—"}</span>
+    </div>
+  );
+}
+
+function Captcha({ lang, valid, onValidChange }) {
+  const [nums] = useState(() => ({ a: 2 + Math.floor(Math.random() * 8), b: 2 + Math.floor(Math.random() * 8) }));
+  const [input, setInput] = useState("");
+
+  function handleChange(v) {
+    setInput(v);
+    onValidChange(v.trim() !== "" && Number(v) === nums.a + nums.b);
+  }
+
+  return (
+    <div className="max-w-xs">
+      <label className="cb-label">{t("captcha_label", lang)}</label>
+      <div className="flex items-center gap-3">
+        <span className="font-mono font-semibold text-base" style={{ color: "var(--navy)" }}>{nums.a} + {nums.b} =</span>
+        <input type="number" className="cb-input" style={{ width: "90px" }} value={input} onChange={e => handleChange(e.target.value)} />
+        {input !== "" && (valid ? <Check size={18} color="var(--vert-fonce)" /> : <X size={18} color="#8A2A2A" />)}
+      </div>
+    </div>
+  );
+}
+
+function DynamicField({ field, lang, value, onChange }) {
+  const label = field.label[lang] + (field.required ? " *" : "");
+  if (field.field_type === "textarea") {
+    return <Field label={label}><textarea className="cb-input" rows={3} value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
+  }
+  const type = ["email", "tel", "date", "number", "time"].includes(field.field_type) ? field.field_type : "text";
+  return <Field label={label}><input type={type} className="cb-input" value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
+}
+
+function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels, orgTypes, formFields }) {
   const titles = ["step1_title","step2_title","step3_title","step4_title","step5_title"];
+  const [stepError, setStepError] = useState("");
+  const [captchaValid, setCaptchaValid] = useState(false);
+  const fieldsForStep = (n) => formFields.filter(f => f.step === n).sort((a,b) => a.display_order - b.display_order);
+
+  function validateAndAdvance() {
+    const missing = fieldsForStep(step).filter(f => f.required && !String(form[f.field_key] || "").trim());
+    if (missing.length) {
+      setStepError(t("required_fields_error", lang) + " " + missing.map(f => f.label[lang]).join(", "));
+      return;
+    }
+    const badPhones = fieldsForStep(step).filter(f => f.field_type === "tel" && form[f.field_key] && !/^\+\d{6,15}$/.test(String(form[f.field_key]).replace(/[\s.-]/g, "")));
+    if (badPhones.length) {
+      setStepError(t("phone_format_error", lang) + " " + badPhones.map(f => f.label[lang]).join(", "));
+      return;
+    }
+    setStepError("");
+    if (step === 5 && !captchaValid) return;
+    if (step < 5) setStep(s => s + 1); else onSubmit();
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-5 py-12">
       <div className="flex items-center gap-2 mb-8 text-xs font-mono">
@@ -554,21 +1550,20 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
 
       {step === 1 && (
         <div className="grid sm:grid-cols-2 gap-5">
-          <Field label={t("last_name", lang)}><input className="cb-input" value={form.lastName} onChange={e=>update("lastName", e.target.value)} /></Field>
-          <Field label={t("first_name", lang)}><input className="cb-input" value={form.firstName} onChange={e=>update("firstName", e.target.value)} /></Field>
-          <Field label={t("position", lang)}><input className="cb-input" value={form.position} onChange={e=>update("position", e.target.value)} /></Field>
-          <Field label={t("organization", lang)}><input className="cb-input" value={form.organization} onChange={e=>update("organization", e.target.value)} /></Field>
+          {fieldsForStep(1).map(f => (
+            <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />
+          ))}
           <div className="sm:col-span-2">
             <label className="cb-label">{t("org_type", lang)}</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {ORG_TYPES.map(ot => (
-                <div key={ot} onClick={() => update("orgType", ot)} className={`radio-card ${form.orgType===ot ? "active":""}`}>
-                  {form.orgType===ot && <Check size={14} color="var(--lagune)" />} {t(ot === "bureau" ? "bureau" : ot === "insurer" ? "insurer" : ot === "regulator" ? "regulator" : "other", lang)}
+              {orgTypes.map(ot => (
+                <div key={ot.id} onClick={() => update("orgType", ot.label.fr)} className={`radio-card ${form.orgType===ot.label.fr ? "active":""}`}>
+                  {form.orgType===ot.label.fr && <Check size={14} color="var(--lagune)" />} {ot.label[lang]}
                 </div>
               ))}
             </div>
           </div>
-          {form.orgType === "other" && (
+          {orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther && (
             <div className="sm:col-span-2"><Field label={t("org_other", lang)}><input className="cb-input" value={form.orgOther} onChange={e=>update("orgOther", e.target.value)} /></Field></div>
           )}
         </div>
@@ -581,10 +1576,9 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
               {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </Field>
-          <Field label={t("city", lang)}><input className="cb-input" value={form.city} onChange={e=>update("city", e.target.value)} /></Field>
-          <Field label={t("phone", lang)}><input className="cb-input" value={form.phone} onChange={e=>update("phone", e.target.value)} /></Field>
-          <Field label={t("email", lang)}><input type="email" className="cb-input" value={form.email} onChange={e=>update("email", e.target.value)} /></Field>
-          <div className="sm:col-span-2"><Field label={t("address", lang)}><input className="cb-input" value={form.address} onChange={e=>update("address", e.target.value)} /></Field></div>
+          {fieldsForStep(2).map(f => (
+            <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />
+          ))}
         </div>
       )}
 
@@ -604,12 +1598,12 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
             <>
               <Field label={t("nav_hotels", lang)}>
                 <select className="cb-input" value={form.hotelId} onChange={e=>{ const h = hotels.find(x=>x.id===e.target.value); update("hotelId", e.target.value); update("roomId", h.rooms[0].id); }}>
-                  {hotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                  {hotels.map(h => <option key={h.id} value={h.id}>{h.name[lang] || h.name.fr}</option>)}
                 </select>
               </Field>
-              <Field label="Type de chambre">
+              <Field label={t("room_type", lang)}>
                 <select className="cb-input" value={form.roomId} onChange={e=>update("roomId", e.target.value)}>
-                  {selectedHotel.rooms.map(r => <option key={r.id} value={r.id}>{r.type} — {r.price.toLocaleString()} {r.cur}</option>)}
+                  {selectedHotel.rooms.map(r => <option key={r.id} value={r.id}>{r.type[lang] || r.type.fr} — {r.price.toLocaleString()} {r.cur}</option>)}
                 </select>
               </Field>
               <div className="grid sm:grid-cols-2 gap-5">
@@ -623,43 +1617,72 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
 
       {step === 4 && (
         <div className="grid sm:grid-cols-2 gap-5">
-          <Field label={t("arrival_date", lang)}><input type="date" className="cb-input" value={form.arrivalDate} onChange={e=>update("arrivalDate", e.target.value)} /></Field>
-          <Field label={t("flight_number", lang)}><input className="cb-input" value={form.flightNumber} onChange={e=>update("flightNumber", e.target.value)} /></Field>
-          <Field label={t("airline", lang)}><input className="cb-input" value={form.airline} onChange={e=>update("airline", e.target.value)} /></Field>
-          <div>
-            <label className="cb-label">{t("transfer", lang)}</label>
-            <div className="flex gap-3">
-              {["yes","no"].map(v => (
-                <div key={v} onClick={() => update("transfer", v)} className={`radio-card ${form.transfer===v?"active":""}`}>
-                  {form.transfer===v && <Check size={14} color="var(--lagune)"/>} {v==="yes" ? t("yes",lang) : t("no",lang)}
-                </div>
-              ))}
-            </div>
-          </div>
+          {fieldsForStep(4).map(f => (
+            <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />
+          ))}
         </div>
       )}
 
       {step === 5 && (
-        <div className="bg-white border p-6 space-y-4 text-sm" style={{ borderColor: "#CFC4A3" }}>
+        <div className="bg-white border p-6 space-y-6 text-sm" style={{ borderColor: "#CFC4A3" }}>
+          <p className="text-xs text-black/50 -mt-2 mb-2">{t("review_help", lang)}</p>
+
           <div>
-            <div className="cb-label">{t("step1_title", lang)}</div>
-            <div>{form.firstName} {form.lastName} — {form.position} — {form.organization}</div>
+            <div className="cb-label mb-2">{t("step1_title", lang)}</div>
+            <div className="space-y-1">
+              {fieldsForStep(1).map(f => (
+                <ReviewRow key={f.id} label={f.label[lang]} value={form[f.field_key]} />
+              ))}
+              <ReviewRow label={t("org_type", lang)} value={form.orgType} />
+              {orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther && (
+                <ReviewRow label={t("org_other", lang)} value={form.orgOther} />
+              )}
+            </div>
           </div>
+
           <div>
-            <div className="cb-label">{t("step2_title", lang)}</div>
-            <div>{form.country}, {form.city} · {form.email} · {form.phone}</div>
+            <div className="cb-label mb-2">{t("step2_title", lang)}</div>
+            <div className="space-y-1">
+              <ReviewRow label={t("country", lang)} value={form.country} />
+              {fieldsForStep(2).map(f => (
+                <ReviewRow key={f.id} label={f.label[lang]} value={form[f.field_key]} />
+              ))}
+            </div>
           </div>
+
           <div>
-            <div className="cb-label">{t("step3_title", lang)}</div>
-            <div>{form.wantsHotel === "yes" ? `${selectedHotel.name} — ${selectedRoom.type} (${form.checkIn || "—"} → ${form.checkOut || "—"})` : t("hotel_none", lang)}</div>
+            <div className="cb-label mb-2">{t("step3_title", lang)}</div>
+            <div className="space-y-1">
+              <ReviewRow label={t("want_hotel", lang)} value={form.wantsHotel === "yes" ? t("yes", lang) : t("no", lang)} />
+              {form.wantsHotel === "yes" && selectedHotel && (
+                <>
+                  <ReviewRow label={t("nav_hotels", lang)} value={selectedHotel.name[lang] || selectedHotel.name.fr} />
+                  <ReviewRow label={t("room_type", lang)} value={selectedRoom?.type ? (selectedRoom.type[lang] || selectedRoom.type.fr) : ""} />
+                  <ReviewRow label={t("check_in", lang)} value={form.checkIn} />
+                  <ReviewRow label={t("check_out", lang)} value={form.checkOut} />
+                </>
+              )}
+            </div>
           </div>
+
           <div>
-            <div className="cb-label">{t("step4_title", lang)}</div>
-            <div>{form.airline || "—"} {form.flightNumber} — {form.arrivalDate || "—"}</div>
+            <div className="cb-label mb-2">{t("step4_title", lang)}</div>
+            <div className="space-y-1">
+              {fieldsForStep(4).map(f => (
+                <ReviewRow key={f.id} label={f.label[lang]} value={form[f.field_key]} />
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t pt-5" style={{ borderColor: "#E7DCC2" }}>
+            <Captcha lang={lang} valid={captchaValid} onValidChange={setCaptchaValid} />
           </div>
         </div>
       )}
 
+      {stepError && (
+        <div className="mt-4 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0" }}>{stepError}</div>
+      )}
       {submitError && (
         <div className="mt-4 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0" }}>{submitError}</div>
       )}
@@ -667,9 +1690,9 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
       <div className="flex justify-between mt-8">
         <button onClick={() => step === 1 ? setView("public") : setStep(s => s - 1)} className="cb-btn-outline" disabled={submitting}><ChevronLeft size={16} /> {t("back", lang)}</button>
         {step < 5 ? (
-          <button onClick={() => setStep(s => s + 1)} className="cb-btn">{t("next", lang)} <ChevronRight size={16} /></button>
+          <button onClick={validateAndAdvance} className="cb-btn">{t("next", lang)} <ChevronRight size={16} /></button>
         ) : (
-          <button onClick={onSubmit} className="cb-btn" disabled={submitting} style={{ opacity: submitting ? 0.7 : 1 }}>
+          <button onClick={validateAndAdvance} className="cb-btn" disabled={submitting || !captchaValid} style={{ opacity: (submitting || !captchaValid) ? 0.5 : 1 }}>
             {submitting ? t("submitting", lang) : t("submit", lang)} {!submitting && <Check size={16} />}
           </button>
         )}
@@ -678,12 +1701,12 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
   );
 }
 
-function Confirmation({ lang, record, onDone }) {
+function Confirmation({ lang, record, onDone, eventData }) {
   return (
     <div className="max-w-xl mx-auto px-5 py-16 text-center">
       <div className="stamp mx-auto mb-8" style={{ color: "var(--argile)" }}>
         <ShieldCheck size={28} />
-        <span className="font-mono text-[10px] mt-1">{EVENT.year}</span>
+        <span className="font-mono text-[10px] mt-1">{eventData.year || DEFAULT_EVENT.year}</span>
       </div>
       <h2 className="font-display font-semibold text-2xl mb-2" style={{ color: "var(--navy)" }}>{t("confirmed_title", lang)}</h2>
       <p className="text-sm text-black/60 mb-6">{record.firstName} {record.lastName}</p>
@@ -691,6 +1714,7 @@ function Confirmation({ lang, record, onDone }) {
         <div className="cb-label mb-1">{t("reg_number", lang)}</div>
         <div className="font-mono font-semibold text-lg" style={{ color: "var(--argile)" }}>{record.regNumber}</div>
       </div>
+      <p className="text-sm text-black/60 mb-8 max-w-sm mx-auto leading-relaxed">{t("email_sent_notice", lang)}</p>
       <div>
         <button onClick={onDone} className="cb-btn">{t("back_home", lang)}</button>
       </div>
@@ -729,31 +1753,97 @@ function AdminLogin({ lang }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, setView, adminUser, authChecked, participantsLoading, onRefresh }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
+  const [generatingBadges, setGeneratingBadges] = useState(false);
+  const [myHotels, setMyHotels] = useState([]);
+  const [myCountries, setMyCountries] = useState([]);
+  const [clearing, setClearing] = useState(false);
+  const canEdit = myRole === "super_admin" || myRole === "manager";
+  const isSuperAdmin = myRole === "super_admin";
+  const isHotelRole = myRole === "hotel";
+  const isCountryRole = myRole === "country";
+
+  useEffect(() => {
+    if (isHotelRole) listMyManagedHotels().then(setMyHotels);
+  }, [isHotelRole]);
+
+  useEffect(() => {
+    if (isCountryRole) listMyManagedCountries().then(setMyCountries);
+  }, [isCountryRole]);
+
+  async function handleDownloadBadges() {
+    setGeneratingBadges(true);
+    try {
+      await downloadBadges(filtered, eventData, lang, `badges-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`);
+    } catch (e) { /* best effort */ }
+    setGeneratingBadges(false);
+  }
+
+  async function handleClearParticipants() {
+    const typed = window.prompt(`${t("clear_participants_confirm_text", lang)}\n\n(${t("clear_participants_confirm_word", lang)})`);
+    if (typed === null) return;
+    if (typed.trim().toUpperCase() !== t("clear_participants_confirm_word", lang)) {
+      alert(t("clear_participants_wrong_word", lang));
+      return;
+    }
+    setClearing(true);
+    try {
+      const count = await clearParticipantsForActiveEvent();
+      alert(`${count} ${t("clear_participants_success", lang)}`);
+      onRefresh();
+    } catch (e) {
+      alert(String(e.message || e));
+    }
+    setClearing(false);
+  }
   if (!authChecked) return null;
   if (!adminUser) return <AdminLogin lang={lang} />;
+  if (needsMfa) return <MfaChallenge lang={lang} factorId={mfaFactorId} onVerified={onMfaVerified} />;
+  if (myRole === null) return null;
   return (
     <div className="max-w-6xl mx-auto px-5 py-10">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <LayoutDashboard size={20} color="var(--navy)" />
           <h2 className="font-display font-semibold text-2xl" style={{ color: "var(--navy)" }}>{t("dashboard", lang)}</h2>
+          {myRole === "viewer" && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><Eye size={11}/> {t("role_viewer", lang)}</span>}
+          {isHotelRole && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><HotelIcon size={11}/> {t("role_hotel", lang)}</span>}
+          {isCountryRole && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><Globe2 size={11}/> {t("role_country", lang)}</span>}
         </div>
         <div className="flex items-center gap-3">
+          {tab === "participants" && isSuperAdmin && (
+            <button onClick={handleClearParticipants} disabled={clearing} className="text-sm py-1.5 px-3 flex items-center gap-1.5" style={{ border: "1px solid #8A2A2A", color: "#8A2A2A", opacity: clearing ? 0.6 : 1 }}>
+              <Trash2 size={14} /> {t("clear_participants_btn", lang)}
+            </button>
+          )}
           {tab === "participants" && <button onClick={onRefresh} className="cb-btn-outline text-sm py-1.5 px-3"><RefreshCw size={14} className={participantsLoading ? "animate-spin" : ""} /> {t("refresh", lang)}</button>}
           <button onClick={() => supabase.auth.signOut()} className="text-sm flex items-center gap-1 text-black/60 hover:text-black"><LogOut size={14} /> {t("admin_logout", lang)}</button>
         </div>
       </div>
 
-      <div className="flex gap-1 mb-8 border-b" style={{ borderColor: "#CFC4A3" }}>
-        {[["participants", t("participants_tab", lang)], ["content", t("content_tab", lang)]].map(([key, label]) => (
+      <div className="flex gap-1 mb-8 border-b flex-wrap" style={{ borderColor: "#CFC4A3" }}>
+        {[["participants", t("participants_tab", lang)], ...(isSuperAdmin ? [["events", t("events_tab", lang)]] : []), ...(canEdit ? [["content", t("content_tab", lang)]] : []), ...(isSuperAdmin ? [["users", t("users_tab", lang)]] : [])].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} className="px-4 py-2.5 text-sm font-semibold" style={{ color: tab === key ? "var(--vert-fonce)" : "#8a8168", borderBottom: tab === key ? "2px solid var(--vert-fonce)" : "2px solid transparent" }}>{label}</button>
         ))}
       </div>
 
       {tab === "participants" && (
       <>
+      {isHotelRole && myHotels.length > 0 && (
+        <div className="text-xs px-3 py-2 mb-4 flex items-center gap-2 flex-wrap" style={{ background: "var(--sable-deep)" }}>
+          <HotelIcon size={13} color="var(--vert-fonce)" />
+          <strong>{t("my_hotels_banner", lang)} :</strong>
+          {myHotels.map((h, i) => <span key={h.id}>{h.name_fr || h.name}{i < myHotels.length - 1 ? "," : ""}</span>)}
+        </div>
+      )}
+      {isCountryRole && myCountries.length > 0 && (
+        <div className="text-xs px-3 py-2 mb-4 flex items-center gap-2 flex-wrap" style={{ background: "var(--sable-deep)" }}>
+          <Globe2 size={13} color="var(--vert-fonce)" />
+          <strong>{t("my_countries_banner", lang)} :</strong>
+          {myCountries.map((c, i) => <span key={c}>{c}{i < myCountries.length - 1 ? "," : ""}</span>)}
+        </div>
+      )}
       <div className="grid sm:grid-cols-3 gap-5 mb-10">
         <div className="bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
           <div className="cb-label">{t("total_reg", lang)}</div>
@@ -773,7 +1863,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <div className="space-y-1 text-sm">
             {Object.entries(stats.byOrg).length === 0 && <span className="text-black/40">—</span>}
             {Object.entries(stats.byOrg).map(([o,n]) => (
-              <div key={o} className="flex justify-between"><span>{t(o, lang)}</span><span className="font-mono">{n}</span></div>
+              <div key={o} className="flex justify-between"><span>{o}</span><span className="font-mono">{n}</span></div>
             ))}
           </div>
         </div>
@@ -784,40 +1874,89 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         <h3 className="font-display font-semibold text-xl" style={{ color: "var(--navy)" }}>{t("participants", lang)}</h3>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-3 mb-2 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
           <input className="cb-input pl-9" placeholder={t("search_ph", lang)} value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
-        <select className="cb-input sm:w-52" value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
+        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
+        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
+        {!isHotelRole && !isCountryRole && <button onClick={handleDownloadBadges} disabled={generatingBadges || filtered.length === 0} className="cb-btn-outline whitespace-nowrap" style={{ opacity: generatingBadges ? 0.7 : 1 }}><Download size={15} /> {generatingBadges ? t("generating_badges", lang) : t("download_all_badges", lang)}</button>}
+      </div>
+      <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
+        <select className="cb-input sm:w-48" value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
           <option value="">{t("all_countries", lang)}</option>
           {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button onClick={() => downloadCSV(toCSV(filtered), `participants-${EVENT.code}-${EVENT.year}.csv`)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_csv", lang)}</button>
+        <select className="cb-input sm:w-48" value={hotelFilter} onChange={e=>setHotelFilter(e.target.value)}>
+          <option value="">{t("filter_hotel", lang)}</option>
+          {hotelOptions.map(h => <option key={h} value={h}>{h}</option>)}
+        </select>
+        <div className="sm:w-44">
+          <label className="cb-label">{t("filter_arrival", lang)}</label>
+          <input type="date" className="cb-input" value={arrivalFilter} onChange={e=>setArrivalFilter(e.target.value)} />
+        </div>
+        <div className="sm:w-44">
+          <label className="cb-label">{t("filter_departure", lang)}</label>
+          <input type="date" className="cb-input" value={departureFilter} onChange={e=>setDepartureFilter(e.target.value)} />
+        </div>
+        {(countryFilter || hotelFilter || arrivalFilter || departureFilter) && (
+          <button onClick={() => { setCountryFilter(""); setHotelFilter(""); setArrivalFilter(""); setDepartureFilter(""); }} className="text-xs text-black/50 underline">{t("reset_filters", lang)}</button>
+        )}
       </div>
 
-      <div className="bg-white border overflow-auto" style={{ borderColor: "#CFC4A3" }}>
-        <table className="w-full text-sm">
-          <thead style={{ background: "var(--sable-deep)" }}>
+      <div className="bg-white border" style={{ borderColor: "#CFC4A3", maxHeight: "560px", overflow: "auto" }}>
+        <table className="w-full text-sm" style={{ minWidth: "1400px" }}>
+          <thead style={{ background: "var(--sable-deep)", position: "sticky", top: 0, zIndex: 1 }}>
             <tr className="text-left">
-              {["#", t("last_name",lang), t("first_name",lang), t("organization",lang), t("country",lang), t("email",lang), t("nav_hotels",lang)].map(h => (
+              {["#", t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
                 <th key={h} className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
+              <th className="px-3 py-2"></th>
+              {canEdit && <th className="px-3 py-2"></th>}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
+              <tr><td colSpan={17} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
             )}
             {filtered.map(p => (
               <tr key={p.id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
-                <td className="px-3 py-2 font-mono text-xs">{p.regNumber}</td>
-                <td className="px-3 py-2">{p.lastName}</td>
-                <td className="px-3 py-2">{p.firstName}</td>
-                <td className="px-3 py-2">{p.organization}</td>
-                <td className="px-3 py-2">{p.country}</td>
-                <td className="px-3 py-2">{p.email}</td>
-                <td className="px-3 py-2">{p.hotelName || "—"}</td>
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.regNumber}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.lastName}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.firstName}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.organization}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.orgType || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.country}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <span>{p.email}</span>
+                    {p.email && p.confirmationEmailSent === true && <span title={t("email_sent_ok", lang)}><Check size={13} color="var(--vert-fonce)" /></span>}
+                    {p.email && p.confirmationEmailSent === false && <span title={p.confirmationEmailError || t("email_sent_fail", lang)}><X size={13} color="#8A2A2A" /></span>}
+                    {canEdit && p.email && p.editToken && p.confirmationEmailSent !== null && (
+                      <button onClick={() => onResendConfirmation(p)} title={t("resend_email_btn", lang)} className="text-[10px] underline text-black/50 whitespace-nowrap">{t("resend_email_btn", lang)}</button>
+                    )}
+                    {p.confirmationEmailSent === null && <span className="text-[10px] text-black/40">…</span>}
+                  </div>
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.hotelName || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.roomType || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.arrivalDate || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.arrivalTime || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.flightNumber || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.departureDate || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.departureTime || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{p.departureFlightNumber || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {!isHotelRole && !isCountryRole && (
+                    <button onClick={() => downloadBadges([p], eventData, lang, `badge-${p.regNumber}.pdf`)} title={t("download_badge", lang)}><QrCode size={14} color="var(--vert-fonce)" /></button>
+                  )}
+                </td>
+                {canEdit && (
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <button onClick={() => onDeleteParticipant(p.id)} title={t("delete", lang)}><Trash2 size={14} color="#8A2A2A" /></button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -826,7 +1965,9 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       </>
       )}
 
-      {tab === "content" && <ContentManager lang={lang} />}
+      {tab === "events" && isSuperAdmin && <EventsManager lang={lang} activeEventId={eventData.id} onActiveEventChanged={onEventChange} eventData={eventData} />}
+      {tab === "content" && <ContentManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} eventData={eventData} onEventChange={onEventChange} canEdit={canEdit} footerText={footerText} onFooterChange={onFooterChange} privacyPolicy={privacyPolicy} />}
+      {tab === "users" && isSuperAdmin && <UsersManager lang={lang} currentUserId={adminUser.id} eventId={eventData.id} />}
     </div>
   );
 }
@@ -857,11 +1998,44 @@ function ImageUploader({ lang, value, onChange, folder }) {
     <div>
       <label className="cb-label">{t("image", lang)}</label>
       {value && (
-        <div className="mb-2 w-full h-28" style={{ backgroundImage: `url(${value})`, backgroundSize: "cover", backgroundPosition: "center", border: "1px solid #CFC4A3" }} />
+        <div className="mb-2 w-full" style={{ height: "320px", backgroundImage: `url(${value})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center", backgroundColor: "#F1EEE4", border: "1px solid #CFC4A3" }} />
       )}
       <label className="cb-btn-outline text-sm cursor-pointer inline-flex">
         <ImageIcon size={14} /> {uploading ? t("uploading", lang) : t("upload_image", lang)}
         <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
+      </label>
+      {error && <div className="text-xs mt-1" style={{ color: "#8A2A2A" }}>{error}</div>}
+    </div>
+  );
+}
+
+function FileUploader({ lang, value, onChange, folder, label }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const url = await uploadMedia(file, folder);
+      onChange(url);
+    } catch (err) {
+      setError(String(err.message || err));
+    }
+    setUploading(false);
+  }
+
+  return (
+    <div>
+      <label className="cb-label">{label}</label>
+      {value && (
+        <a href={value} target="_blank" rel="noopener noreferrer" className="text-xs block mb-2 truncate" style={{ color: "var(--vert-fonce)", textDecoration: "underline" }}>{value}</a>
+      )}
+      <label className="cb-btn-outline text-sm cursor-pointer inline-flex">
+        <ImageIcon size={14} /> {uploading ? t("uploading", lang) : t("upload_pdf", lang)}
+        <input type="file" accept="application/pdf" className="hidden" onChange={handleFile} disabled={uploading} />
       </label>
       {error && <div className="text-xs mt-1" style={{ color: "#8A2A2A" }}>{error}</div>}
     </div>
@@ -877,38 +2051,124 @@ function StatusBadge({ status }) {
   );
 }
 
-function ContentManager({ lang }) {
-  const [sub, setSub] = useState("hero");
+function ContentManager({ lang, logoUrl, onLogoChange, eventData, onEventChange, canEdit, footerText, onFooterChange, privacyPolicy }) {
+  const [sub, setSub] = useState("logo");
+  const [events, setEvents] = useState([]);
+  const [selectedEventId, setSelectedEventId] = useState(eventData.id);
+
+  useEffect(() => { listAllEvents().then(setEvents); }, []);
+  useEffect(() => { setSelectedEventId(eventData.id); }, [eventData.id]);
+
+  const eventId = selectedEventId;
+  const contentSubs = ["carousel", "tourism", "hotels", "speakers", "companies"];
   const subs = [
-    ["hero", t("hero_carousel_tab", lang)],
+    ["logo", t("logo_tab", lang)],
+    ["footer", t("footer_tab", lang)],
+    ["privacy", t("privacy_tab", lang)],
+    ["carousel", t("hero_carousel_tab", lang)],
+    ["menu", t("menu_tab", lang)],
+    ["orgtypes", t("org_types_tab", lang)],
+    ["formfields", t("form_fields_tab", lang)],
+    ["email", t("email_tab", lang)],
+    ["whatsapp", t("whatsapp_tab", lang)],
     ["tourism", t("tourism_tab", lang)],
     ["hotels", t("hotels_tab", lang)],
+    ["companies", t("companies_tab", lang)],
+    ["speakers", t("speakers_tab", lang)],
   ];
   return (
     <div>
-      <div className="flex gap-4 mb-6 text-sm">
+      {!canEdit && <div className="text-xs px-3 py-2 mb-4 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
+      <div className="flex gap-4 mb-6 text-sm flex-wrap">
         {subs.map(([key, label]) => (
           <button key={key} onClick={() => setSub(key)} className="px-3 py-1.5" style={{ background: sub === key ? "var(--vert-fonce)" : "#fff", color: sub === key ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{label}</button>
         ))}
       </div>
-      {sub === "hero" && <HeroSlidesManager lang={lang} />}
-      {sub === "tourism" && <TourismManager lang={lang} />}
-      {sub === "hotels" && <HotelsManager lang={lang} />}
+      {contentSubs.includes(sub) && (
+        <div className="mb-5 max-w-sm">
+          <label className="cb-label">{t("editing_content_for", lang)}</label>
+          <select className="cb-input" value={selectedEventId || ""} onChange={e => setSelectedEventId(e.target.value)}>
+            {events.map(ev => (
+              <option key={ev.id} value={ev.id}>
+                {(ev.title?.fr || ev.code)} — {ev.year} {ev.id === eventData.id ? `(${t("currently_active", lang)})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {sub === "logo" && <LogoManager lang={lang} logoUrl={logoUrl} onLogoChange={onLogoChange} canEdit={canEdit} />}
+      {sub === "footer" && <FooterManager lang={lang} footerText={footerText} onFooterChange={onFooterChange} canEdit={canEdit} />}
+      {sub === "privacy" && <PrivacyPolicyManager lang={lang} canEdit={canEdit} privacyPolicy={privacyPolicy} onPolicyChange={onEventChange} brand={eventData.brand[lang]} />}
+      {sub === "carousel" && <HeroSlidesManager lang={lang} canEdit={canEdit} eventId={eventId} />}
+      {sub === "menu" && <MenuManager lang={lang} canEdit={canEdit} />}
+      {sub === "orgtypes" && <OrgTypesManager lang={lang} canEdit={canEdit} />}
+      {sub === "formfields" && <FormFieldsManager lang={lang} canEdit={canEdit} />}
+      {sub === "email" && <EmailTemplateManager lang={lang} canEdit={canEdit} />}
+      {sub === "whatsapp" && <WhatsAppTemplateManager lang={lang} canEdit={canEdit} />}
+      {sub === "tourism" && <TourismManager lang={lang} canEdit={canEdit} eventId={eventId} />}
+      {sub === "hotels" && <HotelsManager lang={lang} canEdit={canEdit} eventId={eventId} />}
+      {sub === "companies" && <MemberCompaniesManager lang={lang} canEdit={canEdit} eventId={eventId} />}
+      {sub === "speakers" && <SpeakersManager lang={lang} canEdit={canEdit} eventId={eventId} />}
     </div>
   );
 }
 
-function HeroSlidesManager({ lang }) {
+function LogoManager({ lang, logoUrl, onLogoChange, canEdit }) {
+  const [draft, setDraft] = useState(logoUrl || "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await setSetting("event_logo", draft || null);
+      onLogoChange(draft);
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  async function handleRemove() {
+    setSaving(true);
+    try {
+      await setSetting("event_logo", null);
+      setDraft("");
+      onLogoChange("");
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  return (
+    <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+      <p className="text-xs text-black/50">{t("logo_help", lang)}</p>
+      {canEdit ? (
+        <>
+          <ImageUploader lang={lang} value={draft} onChange={setDraft} folder="logo" />
+          <div className="flex gap-2">
+            <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+            {draft && <button onClick={handleRemove} className="cb-btn-outline text-sm" disabled={saving}>{t("delete", lang)}</button>}
+          </div>
+          {saved && <div className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓ {t("save", lang)}</div>}
+        </>
+      ) : draft && (
+        <img src={draft} alt="Logo" className="w-56 h-56 rounded-full object-cover" />
+      )}
+    </div>
+  );
+}
+
+function HeroSlidesManager({ lang , canEdit, eventId }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  async function load() { setLoading(true); setItems(await fetchAll("hero_slides")); setLoading(false); }
-  useEffect(() => { load(); }, []);
+  async function load() { setLoading(true); setItems(await fetchAllForEvent("hero_slides", eventId)); setLoading(false); }
+  useEffect(() => { load(); }, [eventId]);
 
   async function save() {
     if (!editing.image_url) return;
-    await upsertRow("hero_slides", editing);
+    await upsertRow("hero_slides", { ...editing, event_id: eventId });
     setEditing(null);
     load();
   }
@@ -921,15 +2181,15 @@ function HeroSlidesManager({ lang }) {
   return (
     <div>
       <p className="text-xs text-black/50 mb-4 max-w-lg">{t("hero_carousel_help", lang)}</p>
-      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
         {items.map(it => (
           <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
-            <div className="h-28" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+            <div className="h-72" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} />
             <div className="p-3 flex items-center justify-between">
               <StatusBadge status={it.status} />
               <div className="flex gap-2">
-                <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
-                <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
               </div>
             </div>
           </div>
@@ -954,23 +2214,23 @@ function HeroSlidesManager({ lang }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing({ image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
 }
 
-function TourismManager({ lang }) {
+function TourismManager({ lang , canEdit, eventId }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  async function load() { setLoading(true); setItems(await fetchAll("tourist_sites")); setLoading(false); }
-  useEffect(() => { load(); }, []);
+  async function load() { setLoading(true); setItems(await fetchAllForEvent("tourist_sites", eventId)); setLoading(false); }
+  useEffect(() => { load(); }, [eventId]);
 
   async function save() {
     if (!editing.name_fr) return;
-    await upsertRow("tourist_sites", editing);
+    await upsertRow("tourist_sites", { ...editing, event_id: eventId });
     setEditing(null);
     load();
   }
@@ -982,17 +2242,17 @@ function TourismManager({ lang }) {
 
   return (
     <div>
-      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
         {items.map(it => (
           <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
-            {it.image_url ? <div className="h-24" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-24" style={{ background: "var(--sable-deep)" }} />}
+            {it.image_url ? <div className="h-72" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-72" style={{ background: "var(--sable-deep)" }} />}
             <div className="p-3">
               <div className="text-sm font-semibold mb-1">{it.name_fr}</div>
               <div className="flex items-center justify-between">
                 <StatusBadge status={it.status} />
                 <div className="flex gap-2">
-                  <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
-                  <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                  {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                  {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
                 </div>
               </div>
             </div>
@@ -1004,6 +2264,20 @@ function TourismManager({ lang }) {
       {editing ? (
         <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
           <ImageUploader lang={lang} value={editing.image_url} onChange={url => setEditing(e => ({ ...e, image_url: url }))} folder="tourism" />
+          <div>
+            <label className="cb-label">{t("gallery_label", lang)}</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {(editing.gallery || []).map((url, idx) => (
+                <div key={idx} className="relative" style={{ width: "110px", height: "110px" }}>
+                  <img src={url} alt="" className="w-full h-full object-cover" style={{ border: "1px solid #CFC4A3" }} />
+                  <button onClick={() => setEditing(x => ({ ...x, gallery: x.gallery.filter((_, i) => i !== idx) }))} className="absolute -top-2 -right-2 bg-white rounded-full" style={{ border: "1px solid #CFC4A3", width: "22px", height: "22px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <X size={13} color="#8A2A2A" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <ImageUploader lang={lang} value="" onChange={url => setEditing(x => ({ ...x, gallery: [...(x.gallery || []), url] }))} folder="tourism" />
+          </div>
           <div className="grid sm:grid-cols-3 gap-3">
             <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.name_fr || ""} onChange={e=>setEditing(x=>({ ...x, name_fr: e.target.value }))} /></Field>
             <Field label={t("name_en", lang)}><input className="cb-input" value={editing.name_en || ""} onChange={e=>setEditing(x=>({ ...x, name_en: e.target.value }))} /></Field>
@@ -1030,23 +2304,102 @@ function TourismManager({ lang }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing({ name_fr: "", name_en: "", name_pt: "", desc_fr: "", desc_en: "", desc_pt: "", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name_fr: "", name_en: "", name_pt: "", desc_fr: "", desc_en: "", desc_pt: "", image_url: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
 }
 
-function HotelsManager({ lang }) {
+function MemberCompaniesManager({ lang, canEdit, eventId }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  async function load() { setLoading(true); setItems(await fetchAll("cms_hotels")); setLoading(false); }
-  useEffect(() => { load(); }, []);
+  async function load() { setLoading(true); setItems(await fetchAllForEvent("member_companies", eventId)); setLoading(false); }
+  useEffect(() => { load(); }, [eventId]);
 
   async function save() {
     if (!editing.name) return;
-    await upsertRow("cms_hotels", editing);
+    await upsertRow("member_companies", { ...editing, event_id: eventId });
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("member_companies", id);
+    load();
+  }
+
+  return (
+    <div>
+      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="bg-white border p-4 flex flex-col items-center text-center" style={{ borderColor: "#CFC4A3" }}>
+            {it.logo_url ? (
+              <img src={it.logo_url} alt={it.name} className="w-20 h-20 object-contain mb-2" />
+            ) : (
+              <div className="w-20 h-20 mb-2 flex items-center justify-center" style={{ background: "var(--sable-deep)" }}><Building2 size={26} color="var(--vert-fonce)" /></div>
+            )}
+            <div className="text-sm font-semibold mb-1">{it.name}</div>
+            {it.dg_name && <div className="text-xs text-black/60 mb-1">{t("dg_label", lang)} : {it.dg_name}</div>}
+            {it.address && <div className="text-xs text-black/50">{it.address}</div>}
+            {it.phone && <div className="text-xs text-black/50 mb-2">{it.phone}</div>}
+            {it.email && <div className="text-xs text-black/50">{it.email}</div>}
+            {it.website && <div className="text-xs text-black/50 mb-2 truncate max-w-full">{it.website}</div>}
+            <div className="flex items-center justify-between w-full mt-2">
+              <StatusBadge status={it.status} />
+              <div className="flex gap-2">
+                {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <ImageUploader lang={lang} value={editing.logo_url} onChange={url => setEditing(e => ({ ...e, logo_url: url }))} folder="companies" />
+          <Field label={t("company_name_label", lang)}><input className="cb-input" value={editing.name || ""} onChange={e=>setEditing(x=>({ ...x, name: e.target.value }))} /></Field>
+          <Field label={t("dg_label", lang)}><input className="cb-input" value={editing.dg_name || ""} onChange={e=>setEditing(x=>({ ...x, dg_name: e.target.value }))} /></Field>
+          <Field label={t("address_label", lang)}><input className="cb-input" value={editing.address || ""} onChange={e=>setEditing(x=>({ ...x, address: e.target.value }))} /></Field>
+          <Field label={t("phone_label", lang)}><input className="cb-input" value={editing.phone || ""} onChange={e=>setEditing(x=>({ ...x, phone: e.target.value }))} /></Field>
+          <Field label={t("company_email_label", lang)}><input type="email" className="cb-input" value={editing.email || ""} onChange={e=>setEditing(x=>({ ...x, email: e.target.value }))} /></Field>
+          <Field label={t("company_website_label", lang)}><input type="url" className="cb-input" value={editing.website || ""} onChange={e=>setEditing(x=>({ ...x, website: e.target.value }))} placeholder="https://..." /></Field>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        canEdit && <button onClick={() => setEditing({ name: "", logo_url: "", dg_name: "", address: "", phone: "", email: "", website: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function HotelsManager({ lang , canEdit, eventId }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAllForEvent("cms_hotels", eventId)); setLoading(false); }
+  useEffect(() => { load(); }, [eventId]);
+
+  async function save() {
+    if (!editing.name_fr) return;
+    await upsertRow("cms_hotels", { ...editing, event_id: eventId });
     setEditing(null);
     load();
   }
@@ -1058,18 +2411,18 @@ function HotelsManager({ lang }) {
 
   return (
     <div>
-      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
         {items.map(it => (
           <div key={it.id} className="bg-white border" style={{ borderColor: "#CFC4A3" }}>
-            {it.image_url ? <div className="h-24" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-24" style={{ background: "var(--navy)" }} />}
+            {it.image_url ? <div className="h-72" style={{ backgroundImage: `url(${it.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} /> : <div className="h-72" style={{ background: "var(--navy)" }} />}
             <div className="p-3">
-              <div className="text-sm font-semibold mb-1">{it.name}</div>
+              <div className="text-sm font-semibold mb-1">{it.name_fr || it.name}</div>
               <div className="text-xs text-black/50 mb-2">{Number(it.price || 0).toLocaleString()} {it.currency}</div>
               <div className="flex items-center justify-between">
                 <StatusBadge status={it.status} />
                 <div className="flex gap-2">
-                  <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>
-                  <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>
+                  {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                  {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
                 </div>
               </div>
             </div>
@@ -1081,21 +2434,92 @@ function HotelsManager({ lang }) {
       {editing ? (
         <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
           <ImageUploader lang={lang} value={editing.image_url} onChange={url => setEditing(e => ({ ...e, image_url: url }))} folder="hotels" />
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Field label={t("organization", lang) === "Organization" ? "Hotel name" : "Nom de l'hôtel"}><input className="cb-input" value={editing.name || ""} onChange={e=>setEditing(x=>({ ...x, name: e.target.value }))} /></Field>
-            <Field label="Distance"><input className="cb-input" value={editing.distance || ""} onChange={e=>setEditing(x=>({ ...x, distance: e.target.value }))} /></Field>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.name_fr || ""} onChange={e=>setEditing(x=>({ ...x, name_fr: e.target.value }))} /></Field>
+            <Field label={t("name_en", lang)}><input className="cb-input" value={editing.name_en || ""} onChange={e=>setEditing(x=>({ ...x, name_en: e.target.value }))} /></Field>
+            <Field label={t("name_pt", lang)}><input className="cb-input" value={editing.name_pt || ""} onChange={e=>setEditing(x=>({ ...x, name_pt: e.target.value }))} /></Field>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("distance_fr", lang)}><input className="cb-input" value={editing.distance_fr || ""} onChange={e=>setEditing(x=>({ ...x, distance_fr: e.target.value }))} /></Field>
+            <Field label={t("distance_en", lang)}><input className="cb-input" value={editing.distance_en || ""} onChange={e=>setEditing(x=>({ ...x, distance_en: e.target.value }))} /></Field>
+            <Field label={t("distance_pt", lang)}><input className="cb-input" value={editing.distance_pt || ""} onChange={e=>setEditing(x=>({ ...x, distance_pt: e.target.value }))} /></Field>
+          </div>
+          <Field label={t("website_label", lang)}><input type="url" className="cb-input" value={editing.website || ""} onChange={e=>setEditing(x=>({ ...x, website: e.target.value }))} placeholder="https://..." /></Field>
+          <div>
+            <label className="cb-label">{t("gallery_label", lang)}</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {(editing.gallery || []).map((url, idx) => (
+                <div key={idx} className="relative" style={{ width: "110px", height: "110px" }}>
+                  <img src={url} alt="" className="w-full h-full object-cover" style={{ border: "1px solid #CFC4A3" }} />
+                  <button onClick={() => setEditing(x => ({ ...x, gallery: x.gallery.filter((_, i) => i !== idx) }))} className="absolute -top-2 -right-2 bg-white rounded-full" style={{ border: "1px solid #CFC4A3", width: "22px", height: "22px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <X size={13} color="#8A2A2A" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <ImageUploader lang={lang} value="" onChange={url => setEditing(x => ({ ...x, gallery: [...(x.gallery || []), url] }))} folder="hotels" />
           </div>
           <div className="grid sm:grid-cols-3 gap-3">
             <Field label={t("desc_fr", lang)}><textarea className="cb-input" rows={3} value={editing.desc_fr || ""} onChange={e=>setEditing(x=>({ ...x, desc_fr: e.target.value }))} /></Field>
             <Field label={t("desc_en", lang)}><textarea className="cb-input" rows={3} value={editing.desc_en || ""} onChange={e=>setEditing(x=>({ ...x, desc_en: e.target.value }))} /></Field>
             <Field label={t("desc_pt", lang)}><textarea className="cb-input" rows={3} value={editing.desc_pt || ""} onChange={e=>setEditing(x=>({ ...x, desc_pt: e.target.value }))} /></Field>
           </div>
-          <Field label={t("amenities_help", lang)}><input className="cb-input" value={editing.amenities || ""} onChange={e=>setEditing(x=>({ ...x, amenities: e.target.value }))} placeholder="Wi-Fi, Piscine, Parking" /></Field>
-          <div className="grid sm:grid-cols-4 gap-3">
-            <Field label={t("price", lang)}><input type="number" className="cb-input" value={editing.price || 0} onChange={e=>setEditing(x=>({ ...x, price: Number(e.target.value) }))} /></Field>
-            <Field label={t("currency", lang)}><input className="cb-input" value={editing.currency || "FCFA"} onChange={e=>setEditing(x=>({ ...x, currency: e.target.value }))} /></Field>
-            <Field label={t("room_type", lang)}><input className="cb-input" value={editing.room_type || "Standard"} onChange={e=>setEditing(x=>({ ...x, room_type: e.target.value }))} /></Field>
-            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+          <div>
+            <label className="cb-label mb-2 block">{t("amenities_title", lang)}</label>
+            <p className="text-xs text-black/50 mb-2">{t("amenities_help", lang)}</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field label={t("amenities_fr_label", lang)}><input className="cb-input" value={editing.amenities_fr || ""} onChange={e=>setEditing(x=>({ ...x, amenities_fr: e.target.value }))} placeholder="Wi-Fi, Piscine, Parking" /></Field>
+              <Field label={t("amenities_en_label", lang)}><input className="cb-input" value={editing.amenities_en || ""} onChange={e=>setEditing(x=>({ ...x, amenities_en: e.target.value }))} placeholder="Wi-Fi, Pool, Parking" /></Field>
+              <Field label={t("amenities_pt_label", lang)}><input className="cb-input" value={editing.amenities_pt || ""} onChange={e=>setEditing(x=>({ ...x, amenities_pt: e.target.value }))} placeholder="Wi-Fi, Piscina, Estacionamento" /></Field>
+            </div>
+          </div>
+          <div>
+            <label className="cb-label mb-2 block">{t("room_categories_label", lang)}</label>
+            <div className="space-y-3 mb-2">
+              {(editing.rooms || []).map((room, idx) => {
+                const rt = typeof room.type === "object" && room.type !== null ? room.type : { fr: room.type || "", en: "", pt: "" };
+                return (
+                <div key={idx} className="p-3 space-y-2" style={{ background: "var(--sable-deep)" }}>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] text-black/50 uppercase">{t("room_type_fr", lang)}</label>
+                      <input className="cb-input" value={rt.fr || ""} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,type:{...rt,fr:e.target.value}}:r) }))} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-black/50 uppercase">{t("room_type_en", lang)}</label>
+                      <input className="cb-input" value={rt.en || ""} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,type:{...rt,en:e.target.value}}:r) }))} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-black/50 uppercase">{t("room_type_pt", lang)}</label>
+                      <input className="cb-input" value={rt.pt || ""} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,type:{...rt,pt:e.target.value}}:r) }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-4">
+                      <label className="text-[10px] text-black/50 uppercase">{t("price", lang)}</label>
+                      <input type="number" className="cb-input" value={room.price || 0} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,price:Number(e.target.value)}:r) }))} />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="text-[10px] text-black/50 uppercase">{t("currency", lang)}</label>
+                      <input className="cb-input" value={room.currency || "FCFA"} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,currency:e.target.value}:r) }))} />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="text-[10px] text-black/50 uppercase">{t("room_order_label", lang)}</label>
+                      <input type="number" className="cb-input" value={room.order || 0} onChange={e=>setEditing(x=>({ ...x, rooms: x.rooms.map((r,i)=>i===idx?{...r,order:Number(e.target.value)}:r) }))} />
+                    </div>
+                    <div className="col-span-2 flex justify-center pb-2">
+                      <button onClick={() => setEditing(x => ({ ...x, rooms: x.rooms.filter((_, i) => i !== idx) }))}><X size={16} color="#8A2A2A" /></button>
+                    </div>
+                  </div>
+                </div>
+              );})}
+              {(editing.rooms || []).length === 0 && <p className="text-xs text-black/40">{t("no_items", lang)}</p>}
+            </div>
+            <button onClick={() => setEditing(x => ({ ...x, rooms: [...(x.rooms || []), { type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 0, currency: "FCFA", order: (x.rooms || []).length }] }))} className="cb-btn-outline text-xs py-1.5 px-3"><Plus size={13} /> {t("add_room_category", lang)}</button>
+          </div>
+          <div>
+            <label className="cb-label">{t("hotel_order_label", lang)}</label>
+            <input type="number" className="cb-input" style={{ maxWidth: "140px" }} value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} />
           </div>
           <div>
             <label className="cb-label">{t("published", lang)}</label>
@@ -1110,7 +2534,1493 @@ function HotelsManager({ lang }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing({ name: "", distance: "", desc_fr: "", desc_en: "", desc_pt: "", amenities: "", price: 0, currency: "FCFA", room_type: "Standard", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name_fr: "", name_en: "", name_pt: "", distance_fr: "", distance_en: "", distance_pt: "", desc_fr: "", desc_en: "", desc_pt: "", amenities_fr: "", amenities_en: "", amenities_pt: "", rooms: [{ type: { fr: "Standard", en: "Standard", pt: "Standard" }, price: 0, currency: "FCFA", order: 0 }], image_url: "", website: "", gallery: [], display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function SpeakersManager({ lang , canEdit, eventId }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAllForEvent("cms_speakers", eventId)); setLoading(false); }
+  useEffect(() => { load(); }, [eventId]);
+
+  async function save() {
+    if (!editing.name) return;
+    await upsertRow("cms_speakers", { ...editing, event_id: eventId });
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("cms_speakers", id);
+    load();
+  }
+
+  return (
+    <div>
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="flex items-start gap-3 bg-white border p-4" style={{ borderColor: "#CFC4A3" }}>
+            {it.image_url ? (
+              <img src={it.image_url} alt={it.name} className="w-32 h-32 rounded-full object-cover flex-shrink-0" />
+            ) : (
+              <div className="w-32 h-32 rounded-full flex-shrink-0" style={{ background: "var(--sable-deep)" }} />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate">{it.name}</div>
+              <div className="text-xs text-black/50 truncate mb-2">{it.role_fr}</div>
+              <div className="flex items-center justify-between">
+                <StatusBadge status={it.status} />
+                <div className="flex gap-2">
+                  {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                  {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <ImageUploader lang={lang} value={editing.image_url} onChange={url => setEditing(e => ({ ...e, image_url: url }))} folder="speakers" />
+          <Field label={t("full_name", lang)}><input className="cb-input" value={editing.name || ""} onChange={e=>setEditing(x=>({ ...x, name: e.target.value }))} /></Field>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("role_fr", lang)}><textarea className="cb-input" rows={3} value={editing.role_fr || ""} onChange={e=>setEditing(x=>({ ...x, role_fr: e.target.value }))} /></Field>
+            <Field label={t("role_en", lang)}><textarea className="cb-input" rows={3} value={editing.role_en || ""} onChange={e=>setEditing(x=>({ ...x, role_en: e.target.value }))} /></Field>
+            <Field label={t("role_pt", lang)}><textarea className="cb-input" rows={3} value={editing.role_pt || ""} onChange={e=>setEditing(x=>({ ...x, role_pt: e.target.value }))} /></Field>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        canEdit && <button onClick={() => setEditing({ name: "", role_fr: "", role_en: "", role_pt: "", image_url: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function EventHeroManager({ lang, eventData, onEventChange, canEdit }) {
+  const [draft, setDraft] = useState({
+    event_edition: eventData.edition || "",
+    event_ordinal_fr: eventData.ordinal.fr || "", event_ordinal_en: eventData.ordinal.en || "", event_ordinal_pt: eventData.ordinal.pt || "",
+    event_brand_fr: eventData.brand.fr || "", event_brand_en: eventData.brand.en || "", event_brand_pt: eventData.brand.pt || "",
+    event_title_fr: eventData.title.fr || "", event_title_en: eventData.title.en || "", event_title_pt: eventData.title.pt || "",
+    event_subtitle_fr: eventData.desc.fr || "", event_subtitle_en: eventData.desc.en || "", event_subtitle_pt: eventData.desc.pt || "",
+    event_theme_fr: eventData.theme.fr || "", event_theme_en: eventData.theme.en || "", event_theme_pt: eventData.theme.pt || "",
+    event_date_short_fr: eventData.dateShort.fr || "", event_date_short_en: eventData.dateShort.en || "", event_date_short_pt: eventData.dateShort.pt || "",
+    event_month_year_fr: eventData.monthYear.fr || "", event_month_year_en: eventData.monthYear.en || "", event_month_year_pt: eventData.monthYear.pt || "",
+    event_venue_fr: eventData.venue.fr || "", event_venue_en: eventData.venue.en || "", event_venue_pt: eventData.venue.pt || "",
+    event_city: eventData.city || "", event_country: eventData.country || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  function set(key, value) { setDraft(d => ({ ...d, [key]: value })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await Promise.all(Object.entries(draft).map(([key, value]) => setSetting(key, value)));
+      onEventChange({
+        ...eventData,
+        edition: draft.event_edition,
+        ordinal: { fr: draft.event_ordinal_fr, en: draft.event_ordinal_en, pt: draft.event_ordinal_pt },
+        brand: { fr: draft.event_brand_fr, en: draft.event_brand_en, pt: draft.event_brand_pt },
+        title: { fr: draft.event_title_fr, en: draft.event_title_en, pt: draft.event_title_pt },
+        desc: { fr: draft.event_subtitle_fr, en: draft.event_subtitle_en, pt: draft.event_subtitle_pt },
+        theme: { fr: draft.event_theme_fr, en: draft.event_theme_en, pt: draft.event_theme_pt },
+        dateShort: { fr: draft.event_date_short_fr, en: draft.event_date_short_en, pt: draft.event_date_short_pt },
+        monthYear: { fr: draft.event_month_year_fr, en: draft.event_month_year_en, pt: draft.event_month_year_pt },
+        venue: { fr: draft.event_venue_fr, en: draft.event_venue_en, pt: draft.event_venue_pt },
+        city: draft.event_city, country: draft.event_country,
+      });
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  return (
+    <div className="bg-white border p-5 max-w-2xl space-y-5" style={{ borderColor: "#CFC4A3" }}>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label={t("edition_number", lang)}><input className="cb-input" value={draft.event_edition} onChange={e=>set("event_edition", e.target.value)} /></Field>
+        <div>
+          <label className="cb-label">{t("ordinal_label", lang)}</label>
+          <div className="grid grid-cols-3 gap-2">
+            <input className="cb-input" placeholder="FR" value={draft.event_ordinal_fr} onChange={e=>set("event_ordinal_fr", e.target.value)} />
+            <input className="cb-input" placeholder="EN" value={draft.event_ordinal_en} onChange={e=>set("event_ordinal_en", e.target.value)} />
+            <input className="cb-input" placeholder="PT" value={draft.event_ordinal_pt} onChange={e=>set("event_ordinal_pt", e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs text-black/50 mb-2">{t("brand_help", lang)}</p>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <Field label="FR"><input className="cb-input" value={draft.event_brand_fr} onChange={e=>set("event_brand_fr", e.target.value)} /></Field>
+          <Field label="EN"><input className="cb-input" value={draft.event_brand_en} onChange={e=>set("event_brand_en", e.target.value)} /></Field>
+          <Field label="PT"><input className="cb-input" value={draft.event_brand_pt} onChange={e=>set("event_brand_pt", e.target.value)} /></Field>
+        </div>
+      </div>
+
+      <div>
+        <label className="cb-label mb-1 block">{t("date_short_label", lang)}</label>
+        <div className="grid sm:grid-cols-3 gap-3 mb-3">
+          <input className="cb-input" placeholder="FR" value={draft.event_date_short_fr} onChange={e=>set("event_date_short_fr", e.target.value)} />
+          <input className="cb-input" placeholder="EN" value={draft.event_date_short_en} onChange={e=>set("event_date_short_en", e.target.value)} />
+          <input className="cb-input" placeholder="PT" value={draft.event_date_short_pt} onChange={e=>set("event_date_short_pt", e.target.value)} />
+        </div>
+        <label className="cb-label mb-1 block">{t("month_year_label", lang)}</label>
+        <div className="grid sm:grid-cols-3 gap-3 mb-3">
+          <input className="cb-input" placeholder="FR" value={draft.event_month_year_fr} onChange={e=>set("event_month_year_fr", e.target.value)} />
+          <input className="cb-input" placeholder="EN" value={draft.event_month_year_en} onChange={e=>set("event_month_year_en", e.target.value)} />
+          <input className="cb-input" placeholder="PT" value={draft.event_month_year_pt} onChange={e=>set("event_month_year_pt", e.target.value)} />
+        </div>
+        <label className="cb-label mb-1 block">{t("venue_label", lang)}</label>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <input className="cb-input" placeholder="FR" value={draft.event_venue_fr} onChange={e=>set("event_venue_fr", e.target.value)} />
+          <input className="cb-input" placeholder="EN" value={draft.event_venue_en} onChange={e=>set("event_venue_en", e.target.value)} />
+          <input className="cb-input" placeholder="PT" value={draft.event_venue_pt} onChange={e=>set("event_venue_pt", e.target.value)} />
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label={t("city_label", lang)}><input className="cb-input" value={draft.event_city} onChange={e=>set("event_city", e.target.value)} /></Field>
+        <Field label={t("country_label", lang)}><input className="cb-input" value={draft.event_country} onChange={e=>set("event_country", e.target.value)} /></Field>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-3">
+        <Field label={t("title_fr", lang)}><input className="cb-input" value={draft.event_title_fr} onChange={e=>set("event_title_fr", e.target.value)} /></Field>
+        <Field label={t("title_en", lang)}><input className="cb-input" value={draft.event_title_en} onChange={e=>set("event_title_en", e.target.value)} /></Field>
+        <Field label={t("title_pt", lang)}><input className="cb-input" value={draft.event_title_pt} onChange={e=>set("event_title_pt", e.target.value)} /></Field>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-3">
+        <Field label={t("subtitle_fr", lang)}><textarea className="cb-input" rows={3} value={draft.event_subtitle_fr} onChange={e=>set("event_subtitle_fr", e.target.value)} /></Field>
+        <Field label={t("subtitle_en", lang)}><textarea className="cb-input" rows={3} value={draft.event_subtitle_en} onChange={e=>set("event_subtitle_en", e.target.value)} /></Field>
+        <Field label={t("subtitle_pt", lang)}><textarea className="cb-input" rows={3} value={draft.event_subtitle_pt} onChange={e=>set("event_subtitle_pt", e.target.value)} /></Field>
+      </div>
+      <div>
+        <p className="text-xs text-black/50 mb-3">{t("hero_theme_help", lang)}</p>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <Field label={t("theme_fr", lang)}><textarea className="cb-input" rows={3} value={draft.event_theme_fr} onChange={e=>set("event_theme_fr", e.target.value)} /></Field>
+          <Field label={t("theme_en", lang)}><textarea className="cb-input" rows={3} value={draft.event_theme_en} onChange={e=>set("event_theme_en", e.target.value)} /></Field>
+          <Field label={t("theme_pt", lang)}><textarea className="cb-input" rows={3} value={draft.event_theme_pt} onChange={e=>set("event_theme_pt", e.target.value)} /></Field>
+        </div>
+      </div>
+      <div className="flex gap-2 items-center">
+        {canEdit && <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>}
+        {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
+      </div>
+    </div>
+  );
+}
+
+function MenuManager({ lang , canEdit }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAll("cms_menu_items")); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (!editing.label_fr || !editing.target) return;
+    await upsertRow("cms_menu_items", editing);
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("cms_menu_items", id);
+    load();
+  }
+
+  return (
+    <div>
+      <div className="space-y-2 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="flex items-center justify-between bg-white border px-4 py-3" style={{ borderColor: "#CFC4A3" }}>
+            <div>
+              <div className="text-sm font-semibold">{it.label_fr}</div>
+              <div className="text-xs text-black/50 font-mono">{it.target}</div>
+            </div>
+            <div className="flex items-center gap-3">
+              <StatusBadge status={it.status} />
+              {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+              {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.label_fr || ""} onChange={e=>setEditing(x=>({ ...x, label_fr: e.target.value }))} /></Field>
+            <Field label={t("name_en", lang)}><input className="cb-input" value={editing.label_en || ""} onChange={e=>setEditing(x=>({ ...x, label_en: e.target.value }))} /></Field>
+            <Field label={t("name_pt", lang)}><input className="cb-input" value={editing.label_pt || ""} onChange={e=>setEditing(x=>({ ...x, label_pt: e.target.value }))} /></Field>
+          </div>
+          <Field label={t("menu_target", lang)}><input className="cb-input" value={editing.target || ""} onChange={e=>setEditing(x=>({ ...x, target: e.target.value }))} placeholder="event-section" /></Field>
+          <p className="text-xs text-black/50">{t("menu_target_help", lang)}</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        canEdit && <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", target: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function OrgTypesManager({ lang , canEdit }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAll("cms_org_types")); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (!editing.label_fr) return;
+    await upsertRow("cms_org_types", editing);
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("cms_org_types", id);
+    load();
+  }
+
+  return (
+    <div>
+      <div className="space-y-2 mb-6">
+        {items.map(it => (
+          <div key={it.id} className="flex items-center justify-between bg-white border px-4 py-3" style={{ borderColor: "#CFC4A3" }}>
+            <div>
+              <div className="text-sm font-semibold">{it.label_fr} {it.is_other && <span className="text-[10px] px-1.5 py-0.5 ml-1" style={{ background: "var(--sable-deep)" }}>Autre</span>}</div>
+              <div className="text-xs text-black/50">{it.label_en} · {it.label_pt}</div>
+            </div>
+            <div className="flex items-center gap-3">
+              <StatusBadge status={it.status} />
+              {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+              {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40 mb-4">{t("no_items", lang)}</p>}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.label_fr || ""} onChange={e=>setEditing(x=>({ ...x, label_fr: e.target.value }))} /></Field>
+            <Field label={t("name_en", lang)}><input className="cb-input" value={editing.label_en || ""} onChange={e=>setEditing(x=>({ ...x, label_en: e.target.value }))} /></Field>
+            <Field label={t("name_pt", lang)}><input className="cb-input" value={editing.label_pt || ""} onChange={e=>setEditing(x=>({ ...x, label_pt: e.target.value }))} /></Field>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!!editing.is_other} onChange={e=>setEditing(x=>({ ...x, is_other: e.target.checked }))} />
+            {t("is_other_label", lang)}
+          </label>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        canEdit && <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", is_other: false, display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+const FIELD_TYPE_OPTIONS = ["text", "textarea", "email", "tel", "date", "time", "number"];
+const FIELD_STEP_OPTIONS = [1, 2, 4];
+
+function FormFieldsManager({ lang , canEdit }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() { setLoading(true); setItems(await fetchAll("cms_form_fields")); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  function slugify(str) {
+    return (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  }
+
+  async function save() {
+    if (!editing.label_fr) return;
+    const row = { ...editing };
+    if (!row.field_key) row.field_key = slugify(editing.label_fr) + "_" + Date.now().toString(36);
+    await upsertRow("cms_form_fields", row);
+    setEditing(null);
+    load();
+  }
+  async function remove(id) {
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("cms_form_fields", id);
+    load();
+  }
+
+  const stepLabel = (n) => ({ 1: t("step1_title", lang), 2: t("step2_title", lang), 4: t("step4_title", lang) }[n] || n);
+  const typeLabel = (ty) => t("field_type_" + ty, lang);
+
+  return (
+    <div>
+      {[1, 2, 4].map(stepNum => (
+        <div key={stepNum} className="mb-6">
+          <div className="cb-label mb-2">{stepLabel(stepNum)}</div>
+          <div className="space-y-2">
+            {items.filter(it => it.step === stepNum).sort((a,b) => a.display_order - b.display_order).map(it => (
+              <div key={it.id} className="flex items-center justify-between bg-white border px-4 py-3" style={{ borderColor: "#CFC4A3" }}>
+                <div>
+                  <div className="text-sm font-semibold">{it.label_fr} {it.required && <span className="text-[10px] px-1.5 py-0.5 ml-1" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>*</span>}</div>
+                  <div className="text-xs text-black/50 font-mono">{it.field_key} · {typeLabel(it.field_type || "text")}</div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <StatusBadge status={it.status} />
+                  {canEdit && <button onClick={() => setEditing(it)}><Pencil size={14} color="var(--vert-fonce)" /></button>}
+                  {canEdit && <button onClick={() => remove(it.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
+                </div>
+              </div>
+            ))}
+            {!loading && items.filter(it => it.step === stepNum).length === 0 && <p className="text-sm text-black/40">{t("no_items", lang)}</p>}
+          </div>
+        </div>
+      ))}
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("name_fr", lang)}><input className="cb-input" value={editing.label_fr || ""} onChange={e=>setEditing(x=>({ ...x, label_fr: e.target.value }))} /></Field>
+            <Field label={t("name_en", lang)}><input className="cb-input" value={editing.label_en || ""} onChange={e=>setEditing(x=>({ ...x, label_en: e.target.value }))} /></Field>
+            <Field label={t("name_pt", lang)}><input className="cb-input" value={editing.label_pt || ""} onChange={e=>setEditing(x=>({ ...x, label_pt: e.target.value }))} /></Field>
+          </div>
+          {editing.id ? (
+            <div className="text-xs text-black/50 font-mono">{t("field_key_label", lang)}: {editing.field_key}</div>
+          ) : (
+            <Field label={t("field_key_label", lang)}><input className="cb-input font-mono" value={editing.field_key || ""} onChange={e=>setEditing(x=>({ ...x, field_key: slugify(e.target.value) }))} placeholder={t("field_key_label", lang)} /></Field>
+          )}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="cb-label">{t("field_type_label", lang)}</label>
+              <select className="cb-input" value={editing.field_type || "text"} onChange={e=>setEditing(x=>({ ...x, field_type: e.target.value }))}>
+                {FIELD_TYPE_OPTIONS.map(ty => <option key={ty} value={ty}>{typeLabel(ty)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="cb-label">{t("field_step_label", lang)}</label>
+              <select className="cb-input" value={editing.step || 1} onChange={e=>setEditing(x=>({ ...x, step: Number(e.target.value) }))}>
+                {FIELD_STEP_OPTIONS.map(s => <option key={s} value={s}>{stepLabel(s)}</option>)}
+              </select>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!!editing.required} onChange={e=>setEditing(x=>({ ...x, required: e.target.checked }))} />
+            {t("required_label", lang)}
+          </label>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("display_order", lang)}><input type="number" className="cb-input" value={editing.display_order || 0} onChange={e=>setEditing(x=>({ ...x, display_order: Number(e.target.value) }))} /></Field>
+            <div>
+              <label className="cb-label">{t("published", lang)}</label>
+              <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+                <option value="published">{t("published", lang)}</option>
+                <option value="draft">{t("draft", lang)}</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        canEdit && <button onClick={() => setEditing({ label_fr: "", label_en: "", label_pt: "", field_key: "", field_type: "text", step: 1, required: false, display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+const ROLE_OPTIONS = ["super_admin", "manager", "viewer", "hotel", "country"];
+
+function UsersManager({ lang, currentUserId, eventId }) {
+  const [items, setItems] = useState([]);
+  const [hotels, setHotels] = useState([]);
+  const [links, setLinks] = useState([]);
+  const [countryLinks, setCountryLinks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState(null);
+  const [error, setError] = useState("");
+
+  async function load() {
+    setLoading(true);
+    const [profiles, hotelList, linkList, countryLinkList] = await Promise.all([
+      listAdminProfiles(),
+      fetchAllForEvent("cms_hotels", eventId),
+      listHotelManagerLinks(),
+      listCountryManagerLinks(),
+    ]);
+    setItems(profiles);
+    setHotels(hotelList);
+    setLinks(linkList);
+    setCountryLinks(countryLinkList);
+    setLoading(false);
+  }
+  useEffect(() => { load(); }, [eventId]);
+
+  async function handleRoleChange(userId, role) {
+    setSavingId(userId);
+    setError("");
+    try {
+      await updateAdminRole(userId, role);
+      setItems(list => list.map(u => u.user_id === userId ? { ...u, role } : u));
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+    setSavingId(null);
+  }
+
+  async function handleRemove(userId) {
+    if (userId === currentUserId) {
+      setError(t("cannot_remove_self", lang));
+      return;
+    }
+    if (!window.confirm(t("confirm_remove_user", lang))) return;
+    setSavingId(userId);
+    setError("");
+    try {
+      await removeAdminProfile(userId);
+      setItems(list => list.filter(u => u.user_id !== userId));
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+    setSavingId(null);
+  }
+
+  async function toggleHotel(userId, hotelId, checked) {
+    setError("");
+    try {
+      if (checked) {
+        await addHotelManager(userId, hotelId);
+        setLinks(l => [...l, { user_id: userId, hotel_id: hotelId }]);
+      } else {
+        await removeHotelManager(userId, hotelId);
+        setLinks(l => l.filter(x => !(x.user_id === userId && x.hotel_id === hotelId)));
+      }
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+  }
+
+  async function toggleCountry(userId, country, checked) {
+    setError("");
+    try {
+      if (checked) {
+        await addCountryManager(userId, country);
+        setCountryLinks(l => [...l, { user_id: userId, country }]);
+      } else {
+        await removeCountryManager(userId, country);
+        setCountryLinks(l => l.filter(x => !(x.user_id === userId && x.country === country)));
+      }
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+  }
+
+  return (
+    <div>
+      <MfaSetup lang={lang} />
+
+      <p className="text-xs text-black/50 mb-2 max-w-xl">{t("users_help", lang)}</p>
+      <div className="text-xs text-black/50 mb-6 max-w-xl space-y-1">
+        <div><strong>{t("role_super_admin", lang)}</strong> — {t("role_super_admin_help", lang)}</div>
+        <div><strong>{t("role_manager", lang)}</strong> — {t("role_manager_help", lang)}</div>
+        <div><strong>{t("role_viewer", lang)}</strong> — {t("role_viewer_help", lang)}</div>
+        <div><strong>{t("role_hotel", lang)}</strong> — {t("role_hotel_help", lang)}</div>
+        <div><strong>{t("role_country", lang)}</strong> — {t("role_country_help", lang)}</div>
+      </div>
+
+      {error && <div className="text-sm px-3 py-2 mb-4" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>{error}</div>}
+
+      <div className="bg-white border overflow-auto" style={{ borderColor: "#CFC4A3" }}>
+        <table className="w-full text-sm">
+          <thead style={{ background: "var(--sable-deep)" }}>
+            <tr className="text-left">
+              <th className="px-3 py-2 font-semibold text-xs uppercase tracking-wide">{t("admin_email", lang)}</th>
+              <th className="px-3 py-2 font-semibold text-xs uppercase tracking-wide">{t("role_label", lang)}</th>
+              <th className="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {!loading && items.length === 0 && (
+              <tr><td colSpan={3} className="px-3 py-8 text-center text-black/40">{t("no_users", lang)}</td></tr>
+            )}
+            {items.map(u => (
+              <React.Fragment key={u.user_id}>
+              <tr className="border-t" style={{ borderColor: "#E7DCC2" }}>
+                <td className="px-3 py-2">
+                  {u.email}
+                  {u.user_id === currentUserId && <span className="text-[10px] px-1.5 py-0.5 ml-2" style={{ background: "var(--sable-deep)" }}>{t("you_label", lang)}</span>}
+                </td>
+                <td className="px-3 py-2">
+                  <select className="cb-input py-1" style={{ width: "auto" }} value={u.role} disabled={savingId === u.user_id} onChange={e => handleRoleChange(u.user_id, e.target.value)}>
+                    {ROLE_OPTIONS.map(r => <option key={r} value={r}>{t("role_" + r, lang)}</option>)}
+                  </select>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <button onClick={() => handleRemove(u.user_id)} disabled={savingId === u.user_id} title={t("remove_access", lang)}>
+                    <Trash2 size={14} color="#8A2A2A" />
+                  </button>
+                </td>
+              </tr>
+              {u.role === "hotel" && (
+                <tr className="border-t" style={{ borderColor: "#E7DCC2", background: "var(--sable-deep)" }}>
+                  <td colSpan={3} className="px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-wide text-black/50 mb-1">{t("assign_hotels_label", lang)}</div>
+                    <p className="text-xs text-black/50 mb-2">{t("assign_hotels_help", lang)}</p>
+                    <div className="flex flex-wrap gap-3">
+                      {hotels.length === 0 && <span className="text-xs text-black/40">{t("no_items", lang)}</span>}
+                      {hotels.map(h => {
+                        const checked = links.some(l => l.user_id === u.user_id && l.hotel_id === h.id);
+                        return (
+                          <label key={h.id} className="flex items-center gap-1.5 text-sm bg-white px-2 py-1 border" style={{ borderColor: "#CFC4A3" }}>
+                            <input type="checkbox" checked={checked} onChange={e => toggleHotel(u.user_id, h.id, e.target.checked)} />
+                            {h.name_fr || h.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {u.role === "country" && (
+                <tr className="border-t" style={{ borderColor: "#E7DCC2", background: "var(--sable-deep)" }}>
+                  <td colSpan={3} className="px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-wide text-black/50 mb-1">{t("assign_countries_label", lang)}</div>
+                    <p className="text-xs text-black/50 mb-2">{t("assign_countries_help", lang)}</p>
+                    <div className="flex flex-wrap gap-3">
+                      {COUNTRIES.map(c => {
+                        const checked = countryLinks.some(l => l.user_id === u.user_id && l.country === c);
+                        return (
+                          <label key={c} className="flex items-center gap-1.5 text-sm bg-white px-2 py-1 border" style={{ borderColor: "#CFC4A3" }}>
+                            <input type="checkbox" checked={checked} onChange={e => toggleCountry(u.user_id, c, e.target.checked)} />
+                            {c}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView }) {
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [expired, setExpired] = useState(false);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      if (!token) { setNotFound(true); setLoading(false); return; }
+      const { data, error } = await supabase.rpc("get_participant_by_token", { p_token: token });
+      if (error || !data) { setNotFound(true); setLoading(false); return; }
+      if (data.expired) { setExpired(true); setLoading(false); return; }
+      setForm({
+        lastName: data.last_name || "", firstName: data.first_name || "", position: data.position || "", organization: data.organization || "",
+        orgType: data.org_type || (orgTypes[0]?.label.fr || ""), orgOther: data.org_other || "",
+        country: data.country || COUNTRIES[11], city: data.city || "", phone: data.phone || "", email: data.email || "", address: data.address || "",
+        wantsHotel: data.wants_hotel || "yes", hotelId: data.hotel_id || hotels[0]?.id || "", roomId: data.room_id || hotels[0]?.rooms[0]?.id || "",
+        checkIn: data.check_in || "", checkOut: data.check_out || "",
+        flightNumber: data.flight_number || "", airline: data.airline || "", arrivalDate: data.arrival_date || "", arrivalTime: data.arrival_time || "",
+        departureDate: data.departure_date || "", departureTime: data.departure_time || "", departureFlightNumber: data.departure_flight_number || "",
+      });
+      setLoading(false);
+    })();
+  }, [token]);
+
+  function update(field, value) { setForm(f => ({ ...f, [field]: value })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    setError("");
+    const isOtherSelected = orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther;
+    const finalOrgType = isOtherSelected && form.orgOther.trim() ? form.orgOther.trim() : form.orgType;
+    const payload = {
+      ...form,
+      orgType: finalOrgType,
+      hotelName: form.wantsHotel === "yes" ? (selectedHotel?.name ? (selectedHotel.name[lang] || selectedHotel.name.fr) : "") : "",
+      roomType: form.wantsHotel === "yes" ? (selectedRoom?.type ? (selectedRoom.type[lang] || selectedRoom.type.fr) : "") : "",
+    };
+    const { data, error } = await supabase.rpc("update_participant_by_token", { p_token: token, payload });
+    setSaving(false);
+    if (error) { setError(t("submit_error", lang)); return; }
+    if (data === false) { setExpired(true); return; }
+    setSaved(true);
+  }
+
+  if (loading) return <div className="max-w-xl mx-auto px-5 py-20 text-center text-black/50">…</div>;
+  if (notFound) return (
+    <div className="max-w-xl mx-auto px-5 py-20 text-center">
+      <p className="text-black/60 mb-6">{t("update_link_invalid", lang)}</p>
+      <button onClick={() => setView("public")} className="cb-btn">{t("back_home", lang)}</button>
+    </div>
+  );
+  if (expired) return (
+    <div className="max-w-xl mx-auto px-5 py-20 text-center">
+      <p className="text-black/60 mb-6">{t("update_link_expired", lang)}</p>
+      <button onClick={() => setView("public")} className="cb-btn">{t("back_home", lang)}</button>
+    </div>
+  );
+
+  const selectedHotel = hotels.find(h => h.id === form.hotelId) || hotels[0];
+  const selectedRoom = selectedHotel?.rooms.find(r => r.id === form.roomId) || selectedHotel?.rooms[0];
+  const fieldsForStep = (n) => formFields.filter(f => f.step === n).sort((a,b) => a.display_order - b.display_order);
+
+  return (
+    <div className="max-w-3xl mx-auto px-5 py-12">
+      <h2 className="font-display font-semibold text-2xl mb-2" style={{ color: "var(--navy)" }}>{t("update_title", lang)}</h2>
+      <p className="text-sm text-black/50 mb-8">{t("update_intro", lang)}</p>
+
+      <div className="space-y-8">
+        <div>
+          <div className="cb-label mb-3">{t("step1_title", lang)}</div>
+          <div className="grid sm:grid-cols-2 gap-5">
+            {fieldsForStep(1).map(f => <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />)}
+            <div className="sm:col-span-2">
+              <label className="cb-label">{t("org_type", lang)}</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {orgTypes.map(ot => (
+                  <div key={ot.id} onClick={() => update("orgType", ot.label.fr)} className={`radio-card ${form.orgType===ot.label.fr ? "active":""}`}>
+                    {form.orgType===ot.label.fr && <Check size={14} color="var(--lagune)" />} {ot.label[lang]}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther && (
+              <div className="sm:col-span-2"><Field label={t("org_other", lang)}><input className="cb-input" value={form.orgOther} onChange={e=>update("orgOther", e.target.value)} /></Field></div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="cb-label mb-3">{t("step2_title", lang)}</div>
+          <div className="grid sm:grid-cols-2 gap-5">
+            <Field label={t("country", lang)}>
+              <select className="cb-input" value={form.country} onChange={e=>update("country", e.target.value)}>
+                {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+            {fieldsForStep(2).map(f => <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />)}
+          </div>
+        </div>
+
+        <div>
+          <div className="cb-label mb-3">{t("step3_title", lang)}</div>
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              {["yes","no"].map(v => (
+                <div key={v} onClick={() => update("wantsHotel", v)} className={`radio-card ${form.wantsHotel===v?"active":""}`}>
+                  {form.wantsHotel===v && <Check size={14} color="var(--lagune)"/>} {v==="yes" ? t("yes",lang) : t("no",lang)}
+                </div>
+              ))}
+            </div>
+            {form.wantsHotel === "yes" && selectedHotel && (
+              <>
+                <Field label={t("nav_hotels", lang)}>
+                  <select className="cb-input" value={form.hotelId} onChange={e=>{ const h = hotels.find(x=>x.id===e.target.value); update("hotelId", e.target.value); update("roomId", h.rooms[0].id); }}>
+                    {hotels.map(h => <option key={h.id} value={h.id}>{h.name[lang] || h.name.fr}</option>)}
+                  </select>
+                </Field>
+                <Field label={t("room_type", lang)}>
+                  <select className="cb-input" value={form.roomId} onChange={e=>update("roomId", e.target.value)}>
+                    {selectedHotel.rooms.map(r => <option key={r.id} value={r.id}>{r.type[lang] || r.type.fr} — {r.price.toLocaleString()} {r.cur}</option>)}
+                  </select>
+                </Field>
+                <div className="grid sm:grid-cols-2 gap-5">
+                  <Field label={t("check_in", lang)}><input type="date" className="cb-input" value={form.checkIn} onChange={e=>update("checkIn", e.target.value)} /></Field>
+                  <Field label={t("check_out", lang)}><input type="date" className="cb-input" value={form.checkOut} onChange={e=>update("checkOut", e.target.value)} /></Field>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="cb-label mb-3">{t("step4_title", lang)}</div>
+          <div className="grid sm:grid-cols-2 gap-5">
+            {fieldsForStep(4).map(f => <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />)}
+          </div>
+        </div>
+      </div>
+
+      {error && <div className="mt-6 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0" }}>{error}</div>}
+      {saved && <div className="mt-6 text-sm px-4 py-3" style={{ background: "#EAF6EE", color: "var(--vert-fonce)" }}>{t("update_saved", lang)}</div>}
+
+      <div className="mt-8">
+        <button onClick={handleSave} className="cb-btn" disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>{saving ? t("submitting", lang) : t("update_save", lang)}</button>
+      </div>
+    </div>
+  );
+}
+
+function EmailTemplateManager({ lang, canEdit }) {
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [activeLang, setActiveLang] = useState("fr");
+
+  useEffect(() => {
+    (async () => {
+      const s = await getAllSettings();
+      setDraft({
+        email_subject_fr: s.email_subject_fr || "", email_subject_en: s.email_subject_en || "", email_subject_pt: s.email_subject_pt || "",
+        email_body_fr: s.email_body_fr || "", email_body_en: s.email_body_en || "", email_body_pt: s.email_body_pt || "",
+        edit_link_expiry_days: s.edit_link_expiry_days || "30",
+      });
+    })();
+  }, []);
+
+  function set(key, value) { setDraft(d => ({ ...d, [key]: value })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await Promise.all(Object.entries(draft).map(([key, value]) => setSetting(key, value)));
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  if (!draft) return null;
+
+  return (
+    <div className="bg-white border p-5 max-w-2xl space-y-4" style={{ borderColor: "#CFC4A3" }}>
+      {!canEdit && <div className="text-xs px-3 py-2 mb-2 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
+      <div className="flex gap-2 mb-2">
+        {["fr","en","pt"].map(l => (
+          <button key={l} onClick={() => setActiveLang(l)} className="px-3 py-1 text-xs" style={{ background: activeLang === l ? "var(--vert-fonce)" : "#fff", color: activeLang === l ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{l.toUpperCase()}</button>
+        ))}
+      </div>
+      <p className="text-xs text-black/50">{t("email_vars_help", lang)}</p>
+      <Field label={t("email_subject_label", lang)}>
+        <input className="cb-input" disabled={!canEdit} value={draft[`email_subject_${activeLang}`]} onChange={e=>set(`email_subject_${activeLang}`, e.target.value)} />
+      </Field>
+      <Field label={t("email_body_label", lang)}>
+        <textarea className="cb-input" rows={10} disabled={!canEdit} value={draft[`email_body_${activeLang}`]} onChange={e=>set(`email_body_${activeLang}`, e.target.value)} />
+      </Field>
+      <div className="border-t pt-4" style={{ borderColor: "#E7DCC2" }}>
+        <Field label={t("edit_link_expiry_label", lang)}>
+          <input type="number" min="1" className="cb-input" style={{ maxWidth: "140px" }} disabled={!canEdit} value={draft.edit_link_expiry_days} onChange={e=>set("edit_link_expiry_days", e.target.value)} />
+        </Field>
+        <p className="text-xs text-black/50 mt-2">{t("edit_link_security_note", lang)}</p>
+      </div>
+      {canEdit && (
+        <div className="flex gap-2 items-center">
+          <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+          {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const EVENT_TYPE_OPTIONS = ["ag", "zone1", "zone2", "other"];
+const EVENT_STATUS_OPTIONS = ["draft", "open", "closed", "archived"];
+const EMPTY_LANG3 = { fr: "", en: "", pt: "" };
+
+function emptyEventDraft() {
+  return {
+    type: "other", year: new Date().getFullYear(), code: "", edition: "",
+    ordinal: { fr: "e", en: "", pt: "ª" },
+    title: { ...EMPTY_LANG3 }, theme: { ...EMPTY_LANG3 }, subtitle: { ...EMPTY_LANG3 },
+    date_short: { ...EMPTY_LANG3 }, month_year: { ...EMPTY_LANG3 }, venue: { ...EMPTY_LANG3 },
+    city: "", country: "", status: "draft",
+    badge_header_image: "", badge_body_image: "", badge_footer_image: "", badge_pdf: { ...EMPTY_LANG3 },
+    program_pdf: { ...EMPTY_LANG3 },
+    participation_fee: { ...EMPTY_LANG3 },
+  };
+}
+
+function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData }) {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+
+  async function load() { setLoading(true); setItems(await listAllEvents()); setLoading(false); }
+  useEffect(() => { load(); }, []);
+
+  function set3(key, l, value) { setEditing(x => ({ ...x, [key]: { ...x[key], [l]: value } })); }
+
+  async function save() {
+    if (!editing.code) return;
+    await upsertRow("events", editing);
+    setEditing(null);
+    await load();
+    if (editing.id === activeEventId) onActiveEventChanged();
+  }
+
+  async function remove(id) {
+    if (id === activeEventId) return;
+    if (!window.confirm(t("confirm_delete", lang))) return;
+    await deleteRow("events", id);
+    load();
+  }
+
+  async function activate(id) {
+    setBusyId(id);
+    try { await setActiveEvent(id); await load(); onActiveEventChanged(); }
+    catch (e) { setError(String(e.message || e)); }
+    setBusyId(null);
+  }
+
+  async function duplicate(ev) {
+    const newYear = window.prompt(t("duplicate_event_prompt_year", lang), String(ev.year + 1));
+    if (!newYear) return;
+    const newCode = window.prompt(t("duplicate_event_prompt_code", lang), ev.code.replace(/\d+$/, "") + (Number(ev.year) + 1 - 1984));
+    if (!newCode) return;
+    setBusyId(ev.id);
+    try {
+      await duplicateEvent(ev.id, Number(newYear), newCode);
+      await load();
+      window.alert(t("duplicate_event_success", lang));
+    } catch (e) { setError(String(e.message || e)); }
+    setBusyId(null);
+  }
+
+  const typeLabel = (ty) => t("event_type_" + ty, lang);
+  const statusLabel = (s) => t("status_" + s, lang);
+
+  return (
+    <div>
+      {error && <div className="text-sm px-3 py-2 mb-4" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>{error}</div>}
+
+      <div className="space-y-2 mb-6">
+        {items.map(ev => (
+          <div key={ev.id} className="flex items-center justify-between bg-white border px-4 py-3 flex-wrap gap-2" style={{ borderColor: "#CFC4A3" }}>
+            <div>
+              <div className="text-sm font-semibold flex items-center gap-2">
+                {ev.title?.fr || ev.code} <span className="text-xs text-black/40 font-mono">{ev.code} · {ev.year}</span>
+                {ev.id === activeEventId && <span className="text-[10px] px-1.5 py-0.5" style={{ background: "#EAF6EE", color: "var(--vert-fonce)" }}>{t("currently_active", lang)}</span>}
+              </div>
+              <div className="text-xs text-black/50">{typeLabel(ev.type)} · {statusLabel(ev.status)}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              {ev.id !== activeEventId && (
+                <button onClick={() => activate(ev.id)} disabled={busyId === ev.id} className="cb-btn-outline text-xs py-1 px-2">{t("set_active_event", lang)}</button>
+              )}
+              <button onClick={() => duplicate(ev)} disabled={busyId === ev.id} className="cb-btn-outline text-xs py-1 px-2">{t("duplicate_event_btn", lang)}</button>
+              <button onClick={() => setEditing({ ...ev })}><Pencil size={14} color="var(--vert-fonce)" /></button>
+              {ev.id !== activeEventId && <button onClick={() => remove(ev.id)}><Trash2 size={14} color="#8A2A2A" /></button>}
+            </div>
+          </div>
+        ))}
+        {!loading && items.length === 0 && !editing && <p className="text-sm text-black/40">{t("no_items", lang)}</p>}
+      </div>
+
+      {editing ? (
+        <div className="bg-white border p-5 max-w-2xl space-y-5" style={{ borderColor: "#CFC4A3" }}>
+          <div className="grid sm:grid-cols-4 gap-3">
+            <div>
+              <label className="cb-label">{t("event_type_label", lang)}</label>
+              <select className="cb-input" value={editing.type} onChange={e=>setEditing(x=>({ ...x, type: e.target.value }))}>
+                {EVENT_TYPE_OPTIONS.map(ty => <option key={ty} value={ty}>{typeLabel(ty)}</option>)}
+              </select>
+            </div>
+            <Field label={t("event_year_label", lang)}><input type="number" className="cb-input" value={editing.year} onChange={e=>setEditing(x=>({ ...x, year: Number(e.target.value) }))} /></Field>
+            <Field label={t("event_code_label", lang)}><input className="cb-input font-mono" value={editing.code} onChange={e=>setEditing(x=>({ ...x, code: e.target.value.toUpperCase() }))} /></Field>
+            <Field label={t("edition_number", lang)}><input className="cb-input" value={editing.edition || ""} onChange={e=>setEditing(x=>({ ...x, edition: e.target.value }))} /></Field>
+          </div>
+          <div>
+            <label className="cb-label">{t("event_status_label", lang)}</label>
+            <select className="cb-input" value={editing.status} onChange={e=>setEditing(x=>({ ...x, status: e.target.value }))}>
+              {EVENT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="cb-label">{t("ordinal_label", lang)}</label>
+            <div className="grid grid-cols-3 gap-2">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.ordinal[l]} onChange={e=>set3("ordinal", l, e.target.value)} />)}
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("title_fr", lang)}><input className="cb-input" value={editing.title.fr} onChange={e=>set3("title","fr",e.target.value)} /></Field>
+            <Field label={t("title_en", lang)}><input className="cb-input" value={editing.title.en} onChange={e=>set3("title","en",e.target.value)} /></Field>
+            <Field label={t("title_pt", lang)}><input className="cb-input" value={editing.title.pt} onChange={e=>set3("title","pt",e.target.value)} /></Field>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label={t("subtitle_fr", lang)}><textarea className="cb-input" rows={3} value={editing.subtitle.fr} onChange={e=>set3("subtitle","fr",e.target.value)} /></Field>
+            <Field label={t("subtitle_en", lang)}><textarea className="cb-input" rows={3} value={editing.subtitle.en} onChange={e=>set3("subtitle","en",e.target.value)} /></Field>
+            <Field label={t("subtitle_pt", lang)}><textarea className="cb-input" rows={3} value={editing.subtitle.pt} onChange={e=>set3("subtitle","pt",e.target.value)} /></Field>
+          </div>
+          <div>
+            <p className="text-xs text-black/50 mb-3">{t("hero_theme_help", lang)}</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field label={t("theme_fr", lang)}><textarea className="cb-input" rows={3} value={editing.theme.fr} onChange={e=>set3("theme","fr",e.target.value)} /></Field>
+              <Field label={t("theme_en", lang)}><textarea className="cb-input" rows={3} value={editing.theme.en} onChange={e=>set3("theme","en",e.target.value)} /></Field>
+              <Field label={t("theme_pt", lang)}><textarea className="cb-input" rows={3} value={editing.theme.pt} onChange={e=>set3("theme","pt",e.target.value)} /></Field>
+            </div>
+          </div>
+
+          <div>
+            <label className="cb-label mb-1 block">{t("date_short_label", lang)}</label>
+            <div className="grid sm:grid-cols-3 gap-3 mb-3">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.date_short[l]} onChange={e=>set3("date_short", l, e.target.value)} />)}
+            </div>
+            <label className="cb-label mb-1 block">{t("month_year_label", lang)}</label>
+            <div className="grid sm:grid-cols-3 gap-3 mb-3">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.month_year[l]} onChange={e=>set3("month_year", l, e.target.value)} />)}
+            </div>
+            <label className="cb-label mb-1 block">{t("venue_label", lang)}</label>
+            <div className="grid sm:grid-cols-3 gap-3">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase()} value={editing.venue[l]} onChange={e=>set3("venue", l, e.target.value)} />)}
+            </div>
+          </div>
+          <div>
+            <label className="cb-label mb-1 block">{t("participation_fee_label", lang)}</label>
+            <p className="text-xs text-black/50 mb-2">{t("participation_fee_help", lang)}</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              {["fr","en","pt"].map(l => <input key={l} className="cb-input" placeholder={l.toUpperCase() + " — ex: 50 000 FCFA"} value={editing.participation_fee[l]} onChange={e=>set3("participation_fee", l, e.target.value)} />)}
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t("city_label", lang)}><input className="cb-input" value={editing.city || ""} onChange={e=>setEditing(x=>({ ...x, city: e.target.value }))} /></Field>
+            <Field label={t("country_label", lang)}><input className="cb-input" value={editing.country || ""} onChange={e=>setEditing(x=>({ ...x, country: e.target.value }))} /></Field>
+          </div>
+
+          <div className="border-t pt-5" style={{ borderColor: "#E7DCC2" }}>
+            <div className="cb-label mb-3">{t("badge_header_tab", lang)}</div>
+            <div className="grid sm:grid-cols-3 gap-4 mb-4">
+              <div>
+                <ImageUploader lang={lang} value={editing.badge_header_image} onChange={url => setEditing(x => ({ ...x, badge_header_image: url }))} folder="badges" />
+                <div className="cb-label mt-1">{t("badge_header_image_label", lang)}</div>
+              </div>
+              <div>
+                <ImageUploader lang={lang} value={editing.badge_body_image} onChange={url => setEditing(x => ({ ...x, badge_body_image: url }))} folder="badges" />
+                <div className="cb-label mt-1">{t("badge_body_image_label", lang)}</div>
+              </div>
+              <div>
+                <ImageUploader lang={lang} value={editing.badge_footer_image} onChange={url => setEditing(x => ({ ...x, badge_footer_image: url }))} folder="badges" />
+                <div className="cb-label mt-1">{t("badge_footer_image_label", lang)}</div>
+              </div>
+            </div>
+            <div>
+              <div className="cb-label mb-2">{t("badge_pdf_label", lang)}</div>
+              <div className="grid sm:grid-cols-3 gap-3">
+                <FileUploader lang={lang} value={editing.badge_pdf.fr} onChange={url => set3("badge_pdf","fr",url)} folder="badge-pdf" label="FR" />
+                <FileUploader lang={lang} value={editing.badge_pdf.en} onChange={url => set3("badge_pdf","en",url)} folder="badge-pdf" label="EN" />
+                <FileUploader lang={lang} value={editing.badge_pdf.pt} onChange={url => set3("badge_pdf","pt",url)} folder="badge-pdf" label="PT" />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-5" style={{ borderColor: "#E7DCC2" }}>
+            <div className="cb-label mb-2">{t("program_pdf_label", lang)}</div>
+            <p className="text-xs text-black/50 mb-3">{t("program_pdf_help", lang)}</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <FileUploader lang={lang} value={editing.program_pdf.fr} onChange={url => set3("program_pdf","fr",url)} folder="program-pdf" label="FR" />
+              <FileUploader lang={lang} value={editing.program_pdf.en} onChange={url => set3("program_pdf","en",url)} folder="program-pdf" label="EN" />
+              <FileUploader lang={lang} value={editing.program_pdf.pt} onChange={url => set3("program_pdf","pt",url)} folder="program-pdf" label="PT" />
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={save} className="cb-btn text-sm">{t("save", lang)}</button>
+            <button onClick={() => setEditing(null)} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setEditing(emptyEventDraft())} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+      )}
+    </div>
+  );
+}
+
+function ArchivesPage({ lang, setView }) {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => { setEvents(await listArchivedEvents()); setLoading(false); })();
+  }, []);
+
+  const typeLabel = (ty) => t("event_type_" + ty, lang);
+
+  return (
+    <div className="max-w-4xl mx-auto px-5 py-14">
+      <h2 className="font-display font-semibold text-2xl mb-8" style={{ color: "var(--navy)" }}>{t("archives_title", lang)}</h2>
+      {!loading && events.length === 0 && <p className="text-black/50 text-sm">{t("no_archived_events", lang)}</p>}
+      <div className="space-y-4">
+        {events.map(ev => (
+          <div key={ev.id} className="bg-white border p-5 flex flex-wrap items-center justify-between gap-3" style={{ borderColor: "#CFC4A3" }}>
+            <div>
+              <div className="cb-label mb-1">{typeLabel(ev.type)} · {ev.year}</div>
+              <div className="font-display font-semibold text-lg" style={{ color: "var(--navy)" }}>{ev.title?.[lang] || ev.title?.fr}</div>
+              <div className="text-sm text-black/60 mt-1 flex items-center gap-3 flex-wrap">
+                <span className="flex items-center gap-1"><Calendar size={13} /> {ev.date_short?.[lang]} {ev.month_year?.[lang]}</span>
+                <span className="flex items-center gap-1"><MapPin size={13} /> {ev.city}, {ev.country}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-10">
+        <button onClick={() => setView("public")} className="cb-btn-outline text-sm">{t("back_home", lang)}</button>
+      </div>
+    </div>
+  );
+}
+
+function FooterManager({ lang, footerText, onFooterChange, canEdit }) {
+  const [draft, setDraft] = useState({ fr: footerText.fr, en: footerText.en, pt: footerText.pt });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [activeLang, setActiveLang] = useState("fr");
+
+  function set(l, value) { setDraft(d => ({ ...d, [l]: value })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await Promise.all([
+        setSetting("footer_text_fr", draft.fr),
+        setSetting("footer_text_en", draft.en),
+        setSetting("footer_text_pt", draft.pt),
+      ]);
+      await onFooterChange();
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  return (
+    <div className="bg-white border p-5 max-w-2xl space-y-4" style={{ borderColor: "#CFC4A3" }}>
+      {!canEdit && <div className="text-xs px-3 py-2 mb-2 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
+      <p className="text-xs text-black/50">{t("footer_help", lang)}</p>
+      <div className="flex gap-2 mb-2">
+        {["fr","en","pt"].map(l => (
+          <button key={l} onClick={() => setActiveLang(l)} className="px-3 py-1 text-xs" style={{ background: activeLang === l ? "var(--vert-fonce)" : "#fff", color: activeLang === l ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{l.toUpperCase()}</button>
+        ))}
+      </div>
+      <Field label={t("footer_text_label", lang)}>
+        <textarea className="cb-input" rows={4} disabled={!canEdit} value={draft[activeLang]} onChange={e=>set(activeLang, e.target.value)} />
+      </Field>
+      {canEdit && (
+        <div className="flex gap-2 items-center">
+          <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+          {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PrivacyPolicyManager({ lang, canEdit, privacyPolicy, onPolicyChange, brand }) {
+  const DEFAULTS = {
+    fr: { title: "Politique de confidentialité", updated: "Dernière mise à jour : septembre 2026", sections: [
+      { h: "1. Introduction", p: `La présente politique de confidentialité décrit comment ${brand} ("nous") collecte, utilise et protège les informations des personnes qui utilisent ce site web et l'application mobile associée (ensemble, la "Plateforme"), dans le cadre de l'organisation des réunions et assemblées du Système de la Carte Brune CEDEAO.` },
+      { h: "2. Données que nous collectons", p: "Lors de votre inscription à un événement, nous collectons : votre nom, prénom, organisation, type d'organisme, pays, adresse email, numéro de téléphone, ainsi que, si vous réservez un hôtel via la plateforme, vos dates et horaires d'arrivée/départ et numéros de vol. Aucune donnée de paiement n'est collectée ou traitée par la Plateforme." },
+      { h: "3. Utilisation des données", p: "Ces informations sont utilisées uniquement pour : traiter votre inscription, générer votre badge et numéro d'enregistrement, communiquer avec vous au sujet de l'événement (confirmation, rappels, modifications), et faciliter la coordination avec les hôtels partenaires pour les réservations." },
+      { h: "4. Partage des données", p: "Vos informations de réservation hôtelière (nom, dates de séjour) peuvent être partagées avec l'hôtel concerné, dans la seule mesure nécessaire à la gestion de votre séjour. Vos données ne sont ni vendues, ni louées, ni partagées à des fins commerciales avec des tiers." },
+      { h: "5. Conservation des données", p: "Les données des participants sont conservées le temps nécessaire à l'organisation de l'événement concerné, puis archivées à des fins statistiques et de continuité entre éditions du Conseil des Bureaux." },
+      { h: "6. Vos droits", p: "Vous pouvez à tout moment demander la consultation, la correction ou la suppression de vos données en nous contactant à l'adresse indiquée ci-dessous, ou via le lien de modification d'inscription envoyé par email lors de votre inscription." },
+      { h: "7. Sécurité", p: "Les données sont hébergées sur une infrastructure sécurisée (Supabase) avec accès restreint aux seules personnes autorisées dans le cadre de l'organisation de l'événement." },
+      { h: "8. Contact", p: "Pour toute question relative à cette politique ou à vos données personnelles, vous pouvez nous contacter via les coordonnées indiquées sur la page d'accueil de la Plateforme." },
+    ]},
+    en: { title: "Privacy Policy", updated: "Last updated: September 2026", sections: [
+      { h: "1. Introduction", p: `This privacy policy describes how ${brand} ("we") collects, uses and protects the information of people using this website and its associated mobile application (together, the "Platform"), in connection with organizing meetings and assemblies of the ECOWAS Brown Card Scheme.` },
+      { h: "2. Data we collect", p: "When you register for an event, we collect: your first and last name, organization, organization type, country, email address, phone number, and, if you book a hotel through the platform, your arrival/departure dates, times and flight numbers. No payment data is collected or processed by the Platform." },
+      { h: "3. How we use your data", p: "This information is used solely to: process your registration, generate your badge and registration number, communicate with you about the event (confirmation, reminders, changes), and coordinate with partner hotels for bookings." },
+      { h: "4. Data sharing", p: "Your hotel booking information (name, stay dates) may be shared with the relevant hotel, only to the extent necessary to manage your stay. Your data is never sold, rented, or shared with third parties for commercial purposes." },
+      { h: "5. Data retention", p: "Participant data is kept for as long as necessary to organize the relevant event, then archived for statistical purposes and continuity between editions of the Council of Bureaux." },
+      { h: "6. Your rights", p: "You may at any time request to view, correct, or delete your data by contacting us at the address below, or via the registration edit link sent by email upon registration." },
+      { h: "7. Security", p: "Data is hosted on secure infrastructure (Supabase) with access restricted to persons authorized in connection with organizing the event." },
+      { h: "8. Contact", p: "For any question regarding this policy or your personal data, please contact us using the details provided on the Platform's homepage." },
+    ]},
+    pt: { title: "Política de Privacidade", updated: "Última atualização: setembro de 2026", sections: [
+      { h: "1. Introdução", p: `Esta política de privacidade descreve como ${brand} ("nós") recolhe, utiliza e protege as informações das pessoas que utilizam este site e a aplicação móvel associada (em conjunto, a "Plataforma"), no âmbito da organização das reuniões e assembleias do Sistema do Cartão Castanho da CEDEAO.` },
+      { h: "2. Dados que recolhemos", p: "Ao inscrever-se num evento, recolhemos: nome, apelido, organização, tipo de organismo, país, endereço de email, número de telefone e, caso reserve um hotel através da plataforma, datas e horários de chegada/partida e números de voo. Nenhum dado de pagamento é recolhido ou processado pela Plataforma." },
+      { h: "3. Utilização dos dados", p: "Estas informações são utilizadas apenas para: processar a sua inscrição, gerar o seu crachá e número de registo, comunicar consigo sobre o evento (confirmação, lembretes, alterações) e coordenar com os hotéis parceiros as reservas." },
+      { h: "4. Partilha de dados", p: "As suas informações de reserva de hotel (nome, datas de estadia) podem ser partilhadas com o hotel em questão, apenas na medida necessária à gestão da sua estadia. Os seus dados nunca são vendidos, alugados ou partilhados com terceiros para fins comerciais." },
+      { h: "5. Conservação dos dados", p: "Os dados dos participantes são conservados pelo tempo necessário à organização do evento em questão, sendo depois arquivados para fins estatísticos e de continuidade entre edições do Conselho de Gabinetes." },
+      { h: "6. Os seus direitos", p: "Pode a qualquer momento solicitar a consulta, correção ou eliminação dos seus dados contactando-nos através do endereço abaixo, ou através do link de edição de inscrição enviado por email no momento da inscrição." },
+      { h: "7. Segurança", p: "Os dados são alojados numa infraestrutura segura (Supabase), com acesso restrito às pessoas autorizadas no âmbito da organização do evento." },
+      { h: "8. Contacto", p: "Para qualquer questão relativa a esta política ou aos seus dados pessoais, contacte-nos através dos contactos indicados na página inicial da Plataforma." },
+    ]},
+  };
+
+  const [draft, setDraft] = useState({
+    fr: (privacyPolicy && privacyPolicy.fr) || DEFAULTS.fr,
+    en: (privacyPolicy && privacyPolicy.en) || DEFAULTS.en,
+    pt: (privacyPolicy && privacyPolicy.pt) || DEFAULTS.pt,
+  });
+  const [activeLang, setActiveLang] = useState("fr");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  function updateField(field, value) {
+    setDraft(d => ({ ...d, [activeLang]: { ...d[activeLang], [field]: value } }));
+    setSaved(false);
+  }
+  function updateSection(idx, field, value) {
+    setDraft(d => {
+      const sections = d[activeLang].sections.map((s, i) => i === idx ? { ...s, [field]: value } : s);
+      return { ...d, [activeLang]: { ...d[activeLang], sections } };
+    });
+    setSaved(false);
+  }
+  function addSection() {
+    setDraft(d => ({ ...d, [activeLang]: { ...d[activeLang], sections: [...d[activeLang].sections, { h: "", p: "" }] } }));
+    setSaved(false);
+  }
+  function removeSection(idx) {
+    setDraft(d => ({ ...d, [activeLang]: { ...d[activeLang], sections: d[activeLang].sections.filter((_, i) => i !== idx) } }));
+    setSaved(false);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await Promise.all([
+        setSetting("privacy_policy_fr", JSON.stringify(draft.fr)),
+        setSetting("privacy_policy_en", JSON.stringify(draft.en)),
+        setSetting("privacy_policy_pt", JSON.stringify(draft.pt)),
+      ]);
+      await onPolicyChange();
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  const d = draft[activeLang];
+
+  return (
+    <div className="bg-white border p-5 max-w-3xl space-y-4" style={{ borderColor: "#CFC4A3" }}>
+      {!canEdit && <div className="text-xs px-3 py-2 mb-2 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
+      <p className="text-xs text-black/50">{t("privacy_policy_help", lang)}</p>
+      <div className="flex gap-2 mb-2">
+        {["fr","en","pt"].map(l => (
+          <button key={l} onClick={() => setActiveLang(l)} className="px-3 py-1 text-xs" style={{ background: activeLang === l ? "var(--vert-fonce)" : "#fff", color: activeLang === l ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{l.toUpperCase()}</button>
+        ))}
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label={t("privacy_policy_title_label", lang)}><input className="cb-input" disabled={!canEdit} value={d.title} onChange={e=>updateField("title", e.target.value)} /></Field>
+        <Field label={t("privacy_policy_updated_label", lang)}><input className="cb-input" disabled={!canEdit} value={d.updated} onChange={e=>updateField("updated", e.target.value)} /></Field>
+      </div>
+      <div className="space-y-3">
+        {d.sections.map((s, idx) => (
+          <div key={idx} className="p-3 space-y-2" style={{ background: "var(--sable-deep)" }}>
+            <div className="flex items-center gap-2">
+              <input className="cb-input flex-1" disabled={!canEdit} placeholder={t("privacy_policy_section_heading", lang)} value={s.h} onChange={e=>updateSection(idx, "h", e.target.value)} />
+              {canEdit && <button onClick={() => removeSection(idx)}><X size={16} color="#8A2A2A" /></button>}
+            </div>
+            <textarea className="cb-input" rows={3} disabled={!canEdit} placeholder={t("privacy_policy_section_text", lang)} value={s.p} onChange={e=>updateSection(idx, "p", e.target.value)} />
+          </div>
+        ))}
+      </div>
+      {canEdit && (
+        <div className="flex gap-2 items-center flex-wrap">
+          <button onClick={addSection} className="cb-btn-outline text-xs py-1.5 px-3"><Plus size={13} /> {t("privacy_policy_add_section", lang)}</button>
+          <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+          {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function WhatsAppTemplateManager({ lang, canEdit }) {
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [activeLang, setActiveLang] = useState("fr");
+
+  useEffect(() => {
+    (async () => {
+      const s = await getAllSettings();
+      setDraft({
+        whatsapp_body_fr: s.whatsapp_body_fr || "", whatsapp_body_en: s.whatsapp_body_en || "", whatsapp_body_pt: s.whatsapp_body_pt || "",
+        whatsapp_group_link: s.whatsapp_group_link || "",
+        whatsapp_template_id_fr: s.whatsapp_template_id_fr || "",
+        whatsapp_template_id_en: s.whatsapp_template_id_en || "",
+        whatsapp_template_id_pt: s.whatsapp_template_id_pt || "",
+      });
+    })();
+  }, []);
+
+  function set(key, value) { setDraft(d => ({ ...d, [key]: value })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await Promise.all(Object.entries(draft).map(([key, value]) => setSetting(key, value)));
+      setSaved(true);
+    } catch (e) { /* best effort */ }
+    setSaving(false);
+  }
+
+  if (!draft) return null;
+
+  return (
+    <div className="bg-white border p-5 max-w-2xl space-y-4" style={{ borderColor: "#CFC4A3" }}>
+      {!canEdit && <div className="text-xs px-3 py-2 mb-2 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("read_only_notice", lang)}</div>}
+
+      <Field label={t("whatsapp_group_link_label", lang)}>
+        <input type="url" className="cb-input" disabled={!canEdit} value={draft.whatsapp_group_link} onChange={e=>set("whatsapp_group_link", e.target.value)} placeholder="https://chat.whatsapp.com/..." />
+      </Field>
+      <p className="text-xs text-black/50">{t("whatsapp_group_help", lang)}</p>
+
+      <div className="border-t pt-4" style={{ borderColor: "#E7DCC2" }}>
+        <div className="cb-label mb-2">{t("whatsapp_template_id_label", lang)}</div>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-black/50 mb-1 block">FR</label>
+            <input className="cb-input font-mono" disabled={!canEdit} value={draft.whatsapp_template_id_fr} onChange={e=>set("whatsapp_template_id_fr", e.target.value)} placeholder="tpl_confirmation_fr" />
+          </div>
+          <div>
+            <label className="text-xs text-black/50 mb-1 block">EN</label>
+            <input className="cb-input font-mono" disabled={!canEdit} value={draft.whatsapp_template_id_en} onChange={e=>set("whatsapp_template_id_en", e.target.value)} placeholder="tpl_confirmation_en" />
+          </div>
+          <div>
+            <label className="text-xs text-black/50 mb-1 block">PT</label>
+            <input className="cb-input font-mono" disabled={!canEdit} value={draft.whatsapp_template_id_pt} onChange={e=>set("whatsapp_template_id_pt", e.target.value)} placeholder="tpl_confirmation_pt" />
+          </div>
+        </div>
+        <p className="text-xs text-black/50 mt-2 whitespace-pre-line">{t("whatsapp_template_help", lang)}</p>
+      </div>
+
+      <div className="border-t pt-4" style={{ borderColor: "#E7DCC2" }}>
+        <div className="flex gap-2 mb-2">
+          {["fr","en","pt"].map(l => (
+            <button key={l} onClick={() => setActiveLang(l)} className="px-3 py-1 text-xs" style={{ background: activeLang === l ? "var(--vert-fonce)" : "#fff", color: activeLang === l ? "#fff" : "var(--vert-fonce)", border: "1px solid var(--vert-fonce)" }}>{l.toUpperCase()}</button>
+          ))}
+        </div>
+        {draft[`whatsapp_template_id_${activeLang}`] ? (
+          <div className="text-xs px-2.5 py-1.5 mb-3 inline-block" style={{ background: "#F1EEE4", color: "#8a8168" }}>{t("whatsapp_body_ignored", lang)}</div>
+        ) : (
+          <div className="text-xs px-2.5 py-1.5 mb-3 inline-block" style={{ background: "#EAF6EE", color: "var(--vert-fonce)" }}>{t("whatsapp_body_active", lang)}</div>
+        )}
+        <p className="text-xs text-black/50 mb-2">{t("whatsapp_vars_help", lang)}</p>
+        <Field label={t("whatsapp_body_label", lang)}>
+          <textarea className="cb-input" rows={8} disabled={!canEdit} value={draft[`whatsapp_body_${activeLang}`]} onChange={e=>set(`whatsapp_body_${activeLang}`, e.target.value)} />
+        </Field>
+      </div>
+
+      {canEdit && (
+        <div className="flex gap-2 items-center">
+          <button onClick={handleSave} className="cb-btn text-sm" disabled={saving}>{t("save", lang)}</button>
+          {saved && <span className="text-xs" style={{ color: "var(--vert-fonce)" }}>✓</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Écran de vérification 2FA affiché juste après la connexion par
+// mot de passe, quand un compte a déjà activé l'authentification à
+// deux facteurs (TOTP, compatible Google Authenticator).
+function MfaChallenge({ lang, factorId, onVerified }) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleVerify(e) {
+    e.preventDefault();
+    if (!factorId) { setError(t("mfa_no_factor_error", lang)); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
+      if (challengeError) throw challengeError;
+      const { error: verifyError } = await supabase.auth.mfa.verify({ factorId, challengeId: challenge.id, code: code.trim() });
+      if (verifyError) throw verifyError;
+      await onVerified();
+    } catch (err) {
+      setError(t("mfa_invalid_code", lang));
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div className="max-w-sm mx-auto px-5 py-20">
+      <div className="flex items-center gap-2 mb-6">
+        <Lock size={18} color="var(--vert-fonce)" />
+        <h2 className="font-display font-semibold text-xl" style={{ color: "var(--vert-fonce)" }}>{t("mfa_challenge_title", lang)}</h2>
+      </div>
+      <p className="text-sm text-black/60 mb-5">{t("mfa_challenge_help", lang)}</p>
+      <form onSubmit={handleVerify} className="space-y-4">
+        <Field label={t("mfa_code_label", lang)}>
+          <input type="text" inputMode="numeric" autoFocus maxLength={6} className="cb-input font-mono text-center text-lg tracking-widest" value={code} onChange={e=>setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" />
+        </Field>
+        {error && <div className="text-sm px-3 py-2" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>{error}</div>}
+        <button type="submit" className="cb-btn w-full justify-center" disabled={loading || code.length !== 6} style={{ opacity: (loading || code.length !== 6) ? 0.6 : 1 }}>{t("mfa_verify_button", lang)}</button>
+      </form>
+    </div>
+  );
+}
+
+// Activation / désactivation de la 2FA pour le compte actuellement
+// connecté — visible en haut de l'onglet Utilisateurs.
+function MfaSetup({ lang }) {
+  const [factors, setFactors] = useState([]);
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollData, setEnrollData] = useState(null); // {factorId, qrCode, secret}
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    const { data } = await supabase.auth.mfa.listFactors();
+    setFactors(data?.totp || []);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function startEnroll() {
+    setError("");
+    setBusy(true);
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: `admin-${Date.now()}` });
+    setBusy(false);
+    if (error) { setError(String(error.message || error)); return; }
+    setEnrollData({ factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
+    setEnrolling(true);
+  }
+
+  async function confirmEnroll(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId: enrollData.factorId });
+      if (challengeError) throw challengeError;
+      const { error: verifyError } = await supabase.auth.mfa.verify({ factorId: enrollData.factorId, challengeId: challenge.id, code: code.trim() });
+      if (verifyError) throw verifyError;
+      setEnrolling(false);
+      setEnrollData(null);
+      setCode("");
+      await load();
+    } catch (err) {
+      setError(t("mfa_invalid_code", lang));
+    }
+    setBusy(false);
+  }
+
+  async function cancelEnroll() {
+    if (enrollData?.factorId) {
+      try { await supabase.auth.mfa.unenroll({ factorId: enrollData.factorId }); } catch (e) { /* best effort */ }
+    }
+    setEnrolling(false);
+    setEnrollData(null);
+    setCode("");
+    setError("");
+  }
+
+  async function removeFactor(factorId) {
+    if (!window.confirm(t("mfa_confirm_remove", lang))) return;
+    setBusy(true);
+    try {
+      await supabase.auth.mfa.unenroll({ factorId });
+      await load();
+    } catch (e) { setError(String(e.message || e)); }
+    setBusy(false);
+  }
+
+  const verifiedFactor = factors.find(f => f.status === "verified");
+
+  return (
+    <div className="bg-white border p-5 mb-8 max-w-lg" style={{ borderColor: "#CFC4A3" }}>
+      <div className="flex items-center gap-2 mb-3">
+        <Lock size={16} color="var(--vert-fonce)" />
+        <div className="font-display font-semibold" style={{ color: "var(--vert-fonce)" }}>{t("mfa_setup_title", lang)}</div>
+      </div>
+      <p className="text-xs text-black/50 mb-4">{t("mfa_setup_help", lang)}</p>
+
+      {error && <div className="text-sm px-3 py-2 mb-3" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>{error}</div>}
+
+      {!enrolling && verifiedFactor && (
+        <div className="flex items-center justify-between">
+          <span className="text-sm flex items-center gap-2" style={{ color: "var(--vert-fonce)" }}><Check size={16} /> {t("mfa_enabled_status", lang)}</span>
+          <button onClick={() => removeFactor(verifiedFactor.id)} disabled={busy} className="cb-btn-outline text-xs py-1.5 px-3">{t("mfa_disable_button", lang)}</button>
+        </div>
+      )}
+
+      {!enrolling && !verifiedFactor && (
+        <button onClick={startEnroll} disabled={busy} className="cb-btn text-sm">{t("mfa_enable_button", lang)}</button>
+      )}
+
+      {enrolling && enrollData && (
+        <div className="space-y-4">
+          <p className="text-sm">{t("mfa_scan_help", lang)}</p>
+          <div className="flex justify-center bg-white p-3" style={{ border: "1px solid #CFC4A3", maxWidth: "220px" }}>
+            <img src={enrollData.qrCode} alt="QR code" style={{ width: "100%", height: "auto" }} />
+          </div>
+          <div className="text-xs text-black/50">
+            {t("mfa_manual_key", lang)} <span className="font-mono select-all">{enrollData.secret}</span>
+          </div>
+          <form onSubmit={confirmEnroll} className="space-y-3">
+            <Field label={t("mfa_code_label", lang)}>
+              <input type="text" inputMode="numeric" maxLength={6} className="cb-input font-mono text-center text-lg tracking-widest" value={code} onChange={e=>setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" />
+            </Field>
+            <div className="flex gap-2">
+              <button type="submit" className="cb-btn text-sm" disabled={busy || code.length !== 6} style={{ opacity: (busy || code.length !== 6) ? 0.6 : 1 }}>{t("mfa_verify_button", lang)}</button>
+              <button type="button" onClick={cancelEnroll} className="cb-btn-outline text-sm">{t("cancel", lang)}</button>
+            </div>
+          </form>
+        </div>
       )}
     </div>
   );
