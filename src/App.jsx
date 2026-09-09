@@ -140,7 +140,7 @@ const T = {
   council: { fr: "Conseil des Bureaux — Système d'Assurance Carte Brune CEDEAO", en: "Council of Bureaux — ECOWAS Brown Card Insurance Scheme", pt: "Conselho de Bureaux — Sistema de Seguro Cartão Castanho da CEDEAO" },
   hero_cta: { fr: "S'inscrire à la réunion", en: "Register for the meeting", pt: "Inscrever-se na reunião" },
   tourism_title: { fr: "Découvrir Dakar", en: "Discover Dakar", pt: "Descobrir Dakar" },
-  member_companies_title: { fr: "Compagnies membres", en: "Member companies", pt: "Companhias membros" },
+  member_companies_title: { fr: "Compagnies membres du Bureau National Carte Brune CEDEAO du Sénégal", en: "Member companies of the ECOWAS Brown Card National Bureau of Senegal", pt: "Companhias membros do Departamento Nacional do Cartão Castanho da CEDEAO do Senegal" },
   dg_label: { fr: "Directeur Général", en: "CEO", pt: "Diretor Geral" },
   company_name_label: { fr: "Nom de la compagnie", en: "Company name", pt: "Nome da companhia" },
   address_label: { fr: "Adresse", en: "Address", pt: "Endereço" },
