@@ -147,6 +147,8 @@ const T = {
   phone_label: { fr: "Téléphone", en: "Phone", pt: "Telefone" },
   company_email_label: { fr: "Email", en: "Email", pt: "Email" },
   company_website_label: { fr: "Site web", en: "Website", pt: "Site web" },
+  logo_zoom_label: { fr: "Zoom du logo", en: "Logo zoom", pt: "Zoom do logótipo" },
+  logo_zoom_help: { fr: "Si le logo paraît minuscule dans le cadre malgré une image haute résolution, augmente ce réglage pour zoomer dessus.", en: "If the logo looks tiny in the frame despite a high-resolution image, increase this setting to zoom in on it.", pt: "Se o logótipo parecer minúsculo na moldura apesar de uma imagem de alta resolução, aumenta este ajuste para dar zoom." },
   companies_tab: { fr: "Compagnies membres", en: "Member companies", pt: "Companhias membros" },
   speakers_title: { fr: "Comité d'organisation", en: "Organizing committee", pt: "Comité organizador" },
   hotels_title: { fr: "Hébergement recommandé", en: "Recommended accommodation", pt: "Alojamento recomendado" },
@@ -748,6 +750,7 @@ export default function App() {
       id: r.id,
       name: r.name,
       logo: r.logo_url,
+      logoScale: r.logo_scale,
       dgName: r.dg_name,
       address: r.address,
       phone: r.phone,
@@ -1348,7 +1351,9 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
               {memberCompanies.map(c => (
                 <div key={c.id} className="bg-white p-3 flex flex-col items-center text-center" style={{ border: "1px solid #CFC4A3" }}>
                   {c.logo ? (
-                    <img src={c.logo} alt={c.name} className="w-24 h-24 object-contain mb-3" />
+                    <div className="w-24 h-24 mb-3 overflow-hidden flex items-center justify-center">
+                      <img src={c.logo} alt={c.name} className="w-full h-full object-contain" style={{ transform: `scale(${(c.logoScale || 100) / 100})` }} />
+                    </div>
                   ) : (
                     <div className="w-24 h-24 mb-3 flex items-center justify-center" style={{ background: "var(--sable)" }}><Building2 size={32} color="var(--vert-fonce)" /></div>
                   )}
@@ -2336,7 +2341,9 @@ function MemberCompaniesManager({ lang, canEdit, eventId }) {
         {items.map(it => (
           <div key={it.id} className="bg-white border p-4 flex flex-col items-center text-center" style={{ borderColor: "#CFC4A3" }}>
             {it.logo_url ? (
-              <img src={it.logo_url} alt={it.name} className="w-20 h-20 object-contain mb-2" />
+              <div className="w-20 h-20 mb-2 overflow-hidden flex items-center justify-center" style={{ background: "var(--sable-deep)" }}>
+                <img src={it.logo_url} alt={it.name} className="w-full h-full object-contain" style={{ transform: `scale(${(it.logo_scale || 100) / 100})` }} />
+              </div>
             ) : (
               <div className="w-20 h-20 mb-2 flex items-center justify-center" style={{ background: "var(--sable-deep)" }}><Building2 size={26} color="var(--vert-fonce)" /></div>
             )}
@@ -2361,6 +2368,18 @@ function MemberCompaniesManager({ lang, canEdit, eventId }) {
       {editing ? (
         <div className="bg-white border p-5 max-w-lg space-y-4" style={{ borderColor: "#CFC4A3" }}>
           <ImageUploader lang={lang} value={editing.logo_url} onChange={url => setEditing(e => ({ ...e, logo_url: url }))} folder="companies" />
+          {editing.logo_url && (
+            <div>
+              <label className="cb-label">{t("logo_zoom_label", lang)} — {editing.logo_scale || 100}%</label>
+              <div className="flex items-center gap-3">
+                <input type="range" min="50" max="300" step="5" value={editing.logo_scale || 100} onChange={e=>setEditing(x=>({ ...x, logo_scale: Number(e.target.value) }))} className="flex-1" />
+                <div className="w-16 h-16 flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ background: "var(--sable-deep)", border: "1px solid #CFC4A3" }}>
+                  <img src={editing.logo_url} alt="" className="w-full h-full object-contain" style={{ transform: `scale(${(editing.logo_scale || 100) / 100})` }} />
+                </div>
+              </div>
+              <p className="text-xs text-black/50 mt-1">{t("logo_zoom_help", lang)}</p>
+            </div>
+          )}
           <Field label={t("company_name_label", lang)}><input className="cb-input" value={editing.name || ""} onChange={e=>setEditing(x=>({ ...x, name: e.target.value }))} /></Field>
           <Field label={t("dg_label", lang)}><input className="cb-input" value={editing.dg_name || ""} onChange={e=>setEditing(x=>({ ...x, dg_name: e.target.value }))} /></Field>
           <Field label={t("address_label", lang)}><input className="cb-input" value={editing.address || ""} onChange={e=>setEditing(x=>({ ...x, address: e.target.value }))} /></Field>
@@ -2383,7 +2402,7 @@ function MemberCompaniesManager({ lang, canEdit, eventId }) {
           </div>
         </div>
       ) : (
-        canEdit && <button onClick={() => setEditing({ name: "", logo_url: "", dg_name: "", address: "", phone: "", email: "", website: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
+        canEdit && <button onClick={() => setEditing({ name: "", logo_url: "", logo_scale: 100, dg_name: "", address: "", phone: "", email: "", website: "", display_order: items.length, status: "published" })} className="cb-btn text-sm"><Plus size={15} /> {t("add_new", lang)}</button>
       )}
     </div>
   );
