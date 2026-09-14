@@ -210,6 +210,8 @@ const T = {
   email_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}" },
   download_badge: { fr: "Télécharger le badge", en: "Download badge", pt: "Descarregar crachá" },
   scan_for_documents: { fr: "Scanner pour consulter les documents", en: "Scan to view documents", pt: "Digitalizar para consultar os documentos" },
+  badge_country_col: { fr: "Badge — Pays affiché", en: "Badge — Country shown", pt: "Crachá — País exibido" },
+  badge_country_placeholder: { fr: "(pays par défaut)", en: "(default: country)", pt: "(padrão: país)" },
   download_all_badges: { fr: "Télécharger les badges", en: "Download badges", pt: "Descarregar crachás" },
   generating_badges: { fr: "Génération en cours…", en: "Generating…", pt: "A gerar…" },
   admin: { fr: "Administration", en: "Admin", pt: "Administração" },
@@ -631,12 +633,8 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const pdfLink = pickBadgePdfLink(eventData, lang);
   const qrValue = pdfLink || p.regNumber || p.id || "";
   const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 220 });
-  const qrSize = Math.min(textW - 8, 23);
-  doc.addImage(qrDataUrl, "PNG", textX + (textW - qrSize) / 2, qrBoxY + 3, qrSize, qrSize);
-  doc.setTextColor(255, 255, 255);
-  doc.setFont(undefined, "bold");
-  doc.setFontSize(6.5);
-  doc.text(t("scan_for_documents", lang).toUpperCase(), textX + textW / 2, qrBoxY + qrSize + 8, { align: "center", maxWidth: textW - 4 });
+  const qrSize = Math.min(textW - 8, qrBoxH - 6);
+  doc.addImage(qrDataUrl, "PNG", textX + (textW - qrSize) / 2, qrBoxY + (qrBoxH - qrSize) / 2, qrSize, qrSize);
 
   // ---------- Pied : 2ème rangée de drapeaux (image admin) ----------
   const footerY = bodyY + BADGE_BODY_H;
@@ -658,7 +656,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.text(fullName, BADGE_W / 2, bannerY + 10, { align: "center", maxWidth: BADGE_W - 10 });
   doc.setTextColor(...YELLOW);
   doc.setFontSize(10);
-  doc.text((p.country || "").toUpperCase(), BADGE_W / 2, bannerY + 17, { align: "center", maxWidth: BADGE_W - 10 });
+  doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), BADGE_W / 2, bannerY + 17, { align: "center", maxWidth: BADGE_W - 10 });
 
   // ---------- Ligne du bas : Lieu + Dates (dynamique) ----------
   const bottomY = bannerY + BADGE_NAME_BANNER_H;
@@ -957,6 +955,7 @@ export default function App() {
       editToken: row.edit_token,
       confirmationEmailSent: row.confirmation_email_sent,
       confirmationEmailError: row.confirmation_email_error,
+      badgeCountryLabel: row.badge_country_label,
     };
   }
 
@@ -975,6 +974,14 @@ export default function App() {
     try {
       await deleteRow("participants", id);
       setParticipants(list => list.filter(p => p.id !== id));
+    } catch (e) { /* best effort */ }
+  }
+
+  async function updateBadgeCountryLabel(id, value) {
+    const trimmed = (value || "").trim();
+    setParticipants(list => list.map(x => x.id === id ? { ...x, badgeCountryLabel: trimmed } : x));
+    try {
+      await upsertRow("participants", { id, badge_country_label: trimmed || null });
     } catch (e) { /* best effort */ }
   }
 
@@ -1212,7 +1219,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
       )}
 
       {view === "archives" && (
@@ -1807,7 +1814,22 @@ function AdminLogin({ lang }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
+function BadgeCountryLabelInput({ participant, onSave, lang }) {
+  const [value, setValue] = useState(participant.badgeCountryLabel || "");
+  useEffect(() => { setValue(participant.badgeCountryLabel || ""); }, [participant.id, participant.badgeCountryLabel]);
+  return (
+    <input
+      className="text-xs px-1.5 py-1 border"
+      style={{ borderColor: "#CFC4A3", width: "110px" }}
+      placeholder={participant.country || t("badge_country_placeholder", lang)}
+      value={value}
+      onChange={e => setValue(e.target.value)}
+      onBlur={() => { if ((participant.badgeCountryLabel || "") !== value) onSave(participant.id, value); }}
+    />
+  );
+}
+
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const [myHotels, setMyHotels] = useState([]);
@@ -1963,7 +1985,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         <table className="w-full text-sm" style={{ minWidth: "1400px" }}>
           <thead style={{ background: "var(--sable-deep)", position: "sticky", top: 0, zIndex: 1 }}>
             <tr className="text-left">
-              {["#", t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
+              {["#", t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("badge_country_col",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
                 <th key={h} className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
               <th className="px-3 py-2"></th>
@@ -1972,7 +1994,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={17} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
+              <tr><td colSpan={18} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
             )}
             {filtered.map(p => (
               <tr key={p.id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
@@ -1982,6 +2004,11 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
                 <td className="px-3 py-2 whitespace-nowrap">{p.organization}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.orgType || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.country}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {canEdit ? (
+                    <BadgeCountryLabelInput participant={p} onSave={onUpdateBadgeLabel} lang={lang} />
+                  ) : (p.badgeCountryLabel || "—")}
+                </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <div className="flex items-center gap-1.5">
                     <span>{p.email}</span>
