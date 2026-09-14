@@ -658,7 +658,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.text(fullName, BADGE_W / 2, bannerY + 10, { align: "center", maxWidth: BADGE_W - 10 });
   doc.setTextColor(...YELLOW);
   doc.setFontSize(10);
-  doc.text((p.position || p.organization || "").toUpperCase(), BADGE_W / 2, bannerY + 17, { align: "center", maxWidth: BADGE_W - 10 });
+  doc.text((p.country || "").toUpperCase(), BADGE_W / 2, bannerY + 17, { align: "center", maxWidth: BADGE_W - 10 });
 
   // ---------- Ligne du bas : Lieu + Dates (dynamique) ----------
   const bottomY = bannerY + BADGE_NAME_BANNER_H;
