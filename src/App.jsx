@@ -209,6 +209,7 @@ const T = {
   email_body_label: { fr: "Corps de l'email", en: "Email body", pt: "Corpo do email" },
   email_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}" },
   download_badge: { fr: "Télécharger le badge", en: "Download badge", pt: "Descarregar crachá" },
+  scan_for_documents: { fr: "Scanner pour consulter les documents", en: "Scan to view documents", pt: "Digitalizar para consultar os documentos" },
   download_all_badges: { fr: "Télécharger les badges", en: "Download badges", pt: "Descarregar crachás" },
   generating_badges: { fr: "Génération en cours…", en: "Generating…", pt: "A gerar…" },
   admin: { fr: "Administration", en: "Admin", pt: "Administração" },
@@ -313,9 +314,9 @@ const T = {
   duplicate_event_prompt_code: { fr: "Code du nouvel événement (ex: AG43) :", en: "Code of the new event (e.g. AG43):", pt: "Código do novo evento (ex: AG43):" },
   duplicate_event_success: { fr: "Événement dupliqué avec succès (en brouillon) — retrouvez-le dans la liste pour l'éditer.", en: "Event duplicated successfully (as draft) — find it in the list to edit it.", pt: "Evento duplicado com sucesso (como rascunho) — encontre-o na lista para editar." },
   badge_header_tab: { fr: "Images du badge (en-tête / corps / pied de page)", en: "Badge images (header / body / footer)", pt: "Imagens do crachá (cabeçalho / corpo / rodapé)" },
-  badge_header_image_label: { fr: "Image d'en-tête", en: "Header image", pt: "Imagem do cabeçalho" },
-  badge_body_image_label: { fr: "Image du corps (le Nom, Prénom et Pays s'affichent par-dessus)", en: "Body image (Name and Country are shown on top)", pt: "Imagem do corpo (Nome e País são exibidos por cima)" },
-  badge_footer_image_label: { fr: "Image du pied de page (le QR code s'affiche en bas à droite)", en: "Footer image (the QR code appears bottom-right)", pt: "Imagem do rodapé (o QR code aparece em baixo à direita)" },
+  badge_header_image_label: { fr: "Image d'en-tête (logos + 1ère rangée de drapeaux) — pleine largeur", en: "Header image (logos + 1st flag row) — full width", pt: "Imagem do cabeçalho (logótipos + 1ª fila de bandeiras) — largura total" },
+  badge_body_image_label: { fr: "Photo (lieu emblématique) — format portrait recommandé (ratio environ 3:4). Occupe la colonne de gauche ; le titre de l'événement et le QR code s'affichent automatiquement à droite.", en: "Photo (landmark) — portrait format recommended (ratio approx. 3:4). Fills the left column; the event title and QR code are drawn automatically on the right.", pt: "Foto (local emblemático) — formato retrato recomendado (proporção aprox. 3:4). Ocupa a coluna esquerda; o título do evento e o QR code são exibidos automaticamente à direita." },
+  badge_footer_image_label: { fr: "Image (2ème rangée de drapeaux) — pleine largeur, sous la photo. Le Nom, la Fonction, le lieu et les dates s'affichent automatiquement en dessous.", en: "Image (2nd flag row) — full width, below the photo. Name, position, venue and dates are drawn automatically below.", pt: "Imagem (2ª fila de bandeiras) — largura total, abaixo da foto. Nome, função, local e datas são exibidos automaticamente abaixo." },
   badge_pdf_label: { fr: "Document PDF (le QR code du badge y renverra)", en: "PDF document (the badge QR code will link to it)", pt: "Documento PDF (o QR code do crachá remeterá para ele)" },
   upload_pdf: { fr: "Choisir un PDF", en: "Choose PDF", pt: "Escolher PDF" },
   archives_title: { fr: "Archives des réunions", en: "Meeting archives", pt: "Arquivo de reuniões" },
@@ -569,59 +570,107 @@ function pickBadgePdfLink(event, lang) {
   return pdf[lang] || pdf.fr || pdf.en || pdf.pt || "";
 }
 
-const BADGE_W = 90, BADGE_H = 130;
-const BADGE_HEADER_H = 24, BADGE_FOOTER_H = 22;
-const BADGE_BODY_H = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H;
+const BADGE_W = 100, BADGE_H = 150;
+const BADGE_HEADER_H = 22;   // logos + 1ère rangée de drapeaux (image admin)
+const BADGE_FOOTER_H = 10;   // 2ème rangée de drapeaux (image admin)
+const BADGE_NAME_BANNER_H = 20; // bandeau vert nom/fonction (dessiné dynamiquement)
+const BADGE_BOTTOM_H = 26;   // ligne lieu + dates (dessinée dynamiquement)
+const BADGE_BODY_H = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H - BADGE_NAME_BANNER_H - BADGE_BOTTOM_H;
 
-// Badge composé de 3 images fournies par l'admin (en-tête, corps,
-// pied de page). Les seules variables affichées par-dessus sont le
-// Nom & Prénom et le Pays du participant, plus le QR code (en bas à
-// droite du pied de page, petit format).
+// Badge complet, inspiré du modèle officiel : logos + drapeaux en
+// haut et en bas (2 images fournies par l'admin), photo d'un lieu
+// emblématique à gauche du corps, titre de l'événement à droite
+// (texte dynamique), gros QR code encart vert (renvoie vers le
+// programme/documents), bandeau vert Nom + Fonction, et ligne
+// Lieu + Dates tout en bas. Tout, sauf les 2 images de drapeaux et
+// la photo, est généré dynamiquement à partir des données réelles
+// de l'événement et du participant.
 async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, lang) {
+  const GREEN = [20, 83, 45];
+  const BROWN = [107, 58, 31];
+  const SAND = [245, 242, 234];
+  const YELLOW = [230, 200, 60];
+
+  // ---------- En-tête : logos + drapeaux (image admin) ----------
   if (headerImg) {
     try { doc.addImage(headerImg, imgFormat(headerImg), 0, 0, BADGE_W, BADGE_HEADER_H); } catch (e) { /* skip */ }
   } else {
-    doc.setFillColor(20, 83, 45);
+    doc.setFillColor(...GREEN);
     doc.rect(0, 0, BADGE_W, BADGE_HEADER_H, "F");
   }
 
+  // ---------- Corps : photo (gauche) + titre événement (droite) ----------
+  const photoW = 56;
+  const bodyY = BADGE_HEADER_H;
   if (bodyImg) {
-    try { doc.addImage(bodyImg, imgFormat(bodyImg), 0, BADGE_HEADER_H, BADGE_W, BADGE_BODY_H); } catch (e) { /* skip */ }
-  }
-
-  if (footerImg) {
-    try { doc.addImage(footerImg, imgFormat(footerImg), 0, BADGE_HEADER_H + BADGE_BODY_H, BADGE_W, BADGE_FOOTER_H); } catch (e) { /* skip */ }
+    try { doc.addImage(bodyImg, imgFormat(bodyImg), 0, bodyY, photoW, BADGE_BODY_H); } catch (e) { /* skip */ }
   } else {
-    doc.setFillColor(245, 242, 234);
-    doc.rect(0, BADGE_HEADER_H + BADGE_BODY_H, BADGE_W, BADGE_FOOTER_H, "F");
+    doc.setFillColor(...SAND);
+    doc.rect(0, bodyY, photoW, BADGE_BODY_H, "F");
   }
 
-  // Panneau translucide + Nom/Prénom + Pays, centrés sur le corps.
-  const panelY = BADGE_HEADER_H + BADGE_BODY_H / 2 - 15;
-  doc.saveGraphicsState();
-  doc.setGState(new doc.GState({ opacity: 0.82 }));
-  doc.setFillColor(255, 255, 255);
-  doc.rect(5, panelY, BADGE_W - 10, 30, "F");
-  doc.restoreGraphicsState();
-
-  doc.setTextColor(26, 23, 18);
+  // Titre dynamique de l'événement (toujours à jour, même si l'édition change)
+  const textX = photoW + 4;
+  const textW = BADGE_W - photoW - 8;
+  doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
   doc.setFontSize(15);
-  const fullName = `${p.firstName || ""} ${p.lastName || ""}`.trim();
-  doc.text(fullName, BADGE_W / 2, panelY + 13, { align: "center", maxWidth: BADGE_W - 16 });
-  doc.setFont(undefined, "normal");
-  doc.setFontSize(10.5);
-  doc.setTextColor(70, 70, 70);
-  doc.text(p.country || "", BADGE_W / 2, panelY + 22, { align: "center" });
+  doc.text(`${eventData.edition || ""}${eventData.ordinal?.[lang] || ""}`, textX, bodyY + 10);
+  doc.setFontSize(11.5);
+  const titleLines = doc.splitTextToSize(
+    `${(eventData.title?.[lang] || "").toUpperCase()} DU SYSTÈME D'ASSURANCE ${(eventData.brand?.[lang] || "").toUpperCase()}`,
+    textW
+  );
+  doc.text(titleLines, textX, bodyY + 18);
 
-  // QR code : petit format, en bas à droite du pied de page — renvoie
-  // vers le document PDF configuré pour la langue courante.
+  // ---------- Encart QR (vert), en bas de la colonne de droite ----------
+  const qrBoxH = 34;
+  const qrBoxY = bodyY + BADGE_BODY_H - qrBoxH;
+  doc.setFillColor(...GREEN);
+  doc.roundedRect(textX, qrBoxY, textW, qrBoxH, 2, 2, "F");
   const pdfLink = pickBadgePdfLink(eventData, lang);
   const qrValue = pdfLink || p.regNumber || p.id || "";
-  const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 160 });
-  const qrSize = 15;
-  const qrY = BADGE_HEADER_H + BADGE_BODY_H + (BADGE_FOOTER_H - qrSize) / 2;
-  doc.addImage(qrDataUrl, "PNG", BADGE_W - qrSize - 4, qrY, qrSize, qrSize);
+  const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 220 });
+  const qrSize = Math.min(textW - 8, 23);
+  doc.addImage(qrDataUrl, "PNG", textX + (textW - qrSize) / 2, qrBoxY + 3, qrSize, qrSize);
+  doc.setTextColor(255, 255, 255);
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(6.5);
+  doc.text(t("scan_for_documents", lang).toUpperCase(), textX + textW / 2, qrBoxY + qrSize + 8, { align: "center", maxWidth: textW - 4 });
+
+  // ---------- Pied : 2ème rangée de drapeaux (image admin) ----------
+  const footerY = bodyY + BADGE_BODY_H;
+  if (footerImg) {
+    try { doc.addImage(footerImg, imgFormat(footerImg), 0, footerY, BADGE_W, BADGE_FOOTER_H); } catch (e) { /* skip */ }
+  } else {
+    doc.setFillColor(...SAND);
+    doc.rect(0, footerY, BADGE_W, BADGE_FOOTER_H, "F");
+  }
+
+  // ---------- Bandeau vert : Nom + Fonction (dynamique) ----------
+  const bannerY = footerY + BADGE_FOOTER_H;
+  doc.setFillColor(...GREEN);
+  doc.rect(0, bannerY, BADGE_W, BADGE_NAME_BANNER_H, "F");
+  const fullName = `${p.lastName || ""} ${p.firstName || ""}`.trim().toUpperCase();
+  doc.setTextColor(255, 255, 255);
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(14);
+  doc.text(fullName, BADGE_W / 2, bannerY + 10, { align: "center", maxWidth: BADGE_W - 10 });
+  doc.setTextColor(...YELLOW);
+  doc.setFontSize(10);
+  doc.text((p.position || p.organization || "").toUpperCase(), BADGE_W / 2, bannerY + 17, { align: "center", maxWidth: BADGE_W - 10 });
+
+  // ---------- Ligne du bas : Lieu + Dates (dynamique) ----------
+  const bottomY = bannerY + BADGE_NAME_BANNER_H;
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, bottomY, BADGE_W, BADGE_BOTTOM_H, "F");
+  doc.setTextColor(...BROWN);
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(9.5);
+  const locationLine = `${(eventData.city || "").toUpperCase()} ${(eventData.country || "").toUpperCase()}`;
+  const dateLine = `${eventData.dateShort?.[lang] || ""} ${eventData.monthYear?.[lang] || ""}`;
+  doc.text(locationLine, BADGE_W / 2, bottomY + 11, { align: "center", maxWidth: BADGE_W - 10 });
+  doc.text(dateLine, BADGE_W / 2, bottomY + 20, { align: "center", maxWidth: BADGE_W - 10 });
 }
 
 async function downloadBadges(participants, eventData, lang, filename) {
