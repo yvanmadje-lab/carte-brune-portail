@@ -597,9 +597,9 @@ function pickBadgePdfLink(event, lang) {
 
 const BADGE_W = 100, BADGE_H = 150;
 const BADGE_HEADER_H = 22;   // logos + 1ère rangée de drapeaux (image admin)
-const BADGE_FOOTER_H = 10;   // 2ème rangée de drapeaux (image admin)
+const BADGE_FOOTER_H = 5;    // 2ème rangée de drapeaux (image admin) — réduite de moitié
 const BADGE_NAME_BANNER_H = 24; // bandeau vert nom/fonction (dessiné dynamiquement)
-const BADGE_BOTTOM_H = 22;   // ligne lieu + dates (dessinée dynamiquement)
+const BADGE_BOTTOM_H = 27;   // lieu (hôtel + ville-pays) + dates (dessinée dynamiquement)
 const BADGE_BODY_H = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H - BADGE_NAME_BANNER_H - BADGE_BOTTOM_H;
 
 // Badge complet, inspiré du modèle officiel : logos + drapeaux en
@@ -760,27 +760,38 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.setFontSize(S(10));
   doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), X(BADGE_W / 2), Y(cursorY + 2.5), { align: "center", maxWidth: nameMaxW * scale });
 
-  // ---------- Ligne du bas : Lieu + Dates (dynamique, avec icônes) ----------
+  // ---------- Ligne du bas : Lieu (hôtel + ville-pays) + Dates ----------
+  // Icônes alignées dans une même colonne verticale (calculée sur le
+  // texte le plus large des 3 lignes), au lieu d'être centrées
+  // indépendamment ligne par ligne.
   const bottomY = bannerY + BADGE_NAME_BANNER_H;
   doc.setFillColor(255, 255, 255);
   doc.rect(X(0), Y(bottomY), S(BADGE_W), S(BADGE_BOTTOM_H), "F");
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
   doc.setFontSize(S(9.5));
-  const locationLine = `${(eventData.city || "").toUpperCase()} ${(eventData.country || "").toUpperCase()}`;
+  const venueLine = (eventData.venue?.[lang] || "").toUpperCase();
+  const cityCountryLine = `${(eventData.city || "").toUpperCase()} - ${(eventData.country || "").toUpperCase()}`;
   const dateLine = `${eventData.dateShort?.[lang] || ""} ${eventData.monthYear?.[lang] || ""}`;
-  const iconSize = 4.5;
+  const iconSize = 4.2;
   const iconGap = 2;
 
-  const locW = doc.getTextWidth(locationLine) / scale;
-  const locStartX = BADGE_W / 2 - (iconSize + iconGap + locW) / 2;
-  drawPinIcon(doc, X(locStartX + iconSize / 2), Y(bottomY + 11 - iconSize * 0.75), S(iconSize), BROWN);
-  doc.text(locationLine, X(locStartX + iconSize + iconGap), Y(bottomY + 11), { maxWidth: S(BADGE_W - 10 - iconSize - iconGap) });
-
+  const venueW = doc.getTextWidth(venueLine) / scale;
+  const cityW = doc.getTextWidth(cityCountryLine) / scale;
   const dateW = doc.getTextWidth(dateLine) / scale;
-  const dateStartX = BADGE_W / 2 - (iconSize + iconGap + dateW) / 2;
-  drawCalendarIcon(doc, X(dateStartX + iconSize / 2), Y(bottomY + 20 - iconSize * 0.62), S(iconSize), BROWN);
-  doc.text(dateLine, X(dateStartX + iconSize + iconGap), Y(bottomY + 20), { maxWidth: S(BADGE_W - 10 - iconSize - iconGap) });
+  const blockW = Math.max(venueW, cityW, dateW) + iconSize + iconGap;
+  const groupStartX = BADGE_W / 2 - blockW / 2;
+  const iconCx = groupStartX + iconSize / 2;
+  const textX2 = groupStartX + iconSize + iconGap;
+  const maxTextW = S(BADGE_W - 10 - iconSize - iconGap);
+
+  const line1Y = bottomY + 7.5, line2Y = bottomY + 12, line3Y = bottomY + 21;
+  drawPinIcon(doc, X(iconCx), Y((line1Y + line2Y) / 2 - iconSize * 0.55), S(iconSize), BROWN);
+  doc.text(venueLine, X(textX2), Y(line1Y), { maxWidth: maxTextW });
+  doc.text(cityCountryLine, X(textX2), Y(line2Y), { maxWidth: maxTextW });
+
+  drawCalendarIcon(doc, X(iconCx), Y(line3Y - iconSize * 0.62), S(iconSize), BROWN);
+  doc.text(dateLine, X(textX2), Y(line3Y), { maxWidth: maxTextW });
 }
 
 async function downloadBadges(participants, eventData, lang, filename) {
@@ -823,13 +834,15 @@ async function downloadBadges(participants, eventData, lang, filename) {
     const offsetX = cellX + (cellW - scaledW) / 2;
     const offsetY = cellY + (cellH - scaledH) / 2;
 
-    // Repère de découpe en pointillés léger autour du badge
+    await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang, offsetX, offsetY, scale);
+
+    // Repère de découpe en pointillés léger autour du badge — dessiné
+    // APRÈS le badge, pour ne pas être recouvert par ses aplats de
+    // couleur (ce qui effaçait les traits horizontaux auparavant).
     doc.setDrawColor(180, 180, 180);
     doc.setLineDashPattern([1, 1], 0);
     doc.rect(offsetX, offsetY, scaledW, scaledH);
     doc.setLineDashPattern([], 0);
-
-    await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang, offsetX, offsetY, scale);
   }
   await saveOrShareBlob(doc.output("blob"), filename);
 }
