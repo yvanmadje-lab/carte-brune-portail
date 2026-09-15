@@ -564,6 +564,28 @@ async function loadImageAsDataURL(url) {
   }
 }
 
+// Petites icônes vectorielles simples (pas besoin de police d'icônes)
+function drawPinIcon(doc, cx, topY, size, color) {
+  doc.setFillColor(...color);
+  doc.circle(cx, topY + size * 0.32, size * 0.32, "F");
+  doc.triangle(cx - size * 0.26, topY + size * 0.55, cx + size * 0.26, topY + size * 0.55, cx, topY + size, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.circle(cx, topY + size * 0.32, size * 0.12, "F");
+}
+
+function drawCalendarIcon(doc, cx, topY, size, color) {
+  const w = size, h = size * 0.9;
+  const x = cx - w / 2, y = topY;
+  doc.setDrawColor(...color);
+  doc.setLineWidth(0.25);
+  doc.rect(x, y, w, h);
+  doc.setFillColor(...color);
+  doc.rect(x, y, w, h * 0.3, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.circle(x + w * 0.28, y, w * 0.07, "F");
+  doc.circle(x + w * 0.72, y, w * 0.07, "F");
+}
+
 function imgFormat(dataUrl) {
   return dataUrl && dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
 }
@@ -619,31 +641,58 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const qrBoxY = bodyY + BADGE_BODY_H - qrBoxH;
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
-  doc.setFontSize(15);
-  const editionStr = `${eventData.edition || ""}`;
-  doc.text(editionStr, textX, bodyY + 10);
-  const editionW = doc.getTextWidth(editionStr);
-  // "ème" en exposant (français), ou le suffixe ordinal configuré pour les autres langues
-  const ordinalSuffix = lang === "fr" ? "ème" : (eventData.ordinal?.[lang] || "");
-  doc.setFontSize(8.5);
-  doc.text(ordinalSuffix, textX + editionW + 0.5, bodyY + 10 - 3.2);
-  const titleY = bodyY + 17;
+
+  const titleY = bodyY + 12;
   const titleAvailH = qrBoxY - titleY - 2; // marge de sécurité avant l'encart QR
+  const ordinalSuffix = lang === "fr" ? "ème" : (eventData.ordinal?.[lang] || "");
   const titleText = `${(eventData.title?.[lang] || "").toUpperCase()} DU SYSTÈME D'ASSURANCE CARTE BRUNE CEDEAO`;
-  // Taille de police auto-adaptative : le texte ne doit JAMAIS déborder
-  // dans la zone du QR code dessinée juste en dessous (sinon il se
-  // retrouve caché derrière le carré vert). On réduit la police tant
-  // que le texte ne tient pas dans la hauteur disponible.
+
+  // "42ème" reste sur la même ligne que le début du titre : on habille
+  // le texte manuellement (mot par mot), en réservant sur la 1ère
+  // ligne seulement la place prise par "42ème ", puis on réduit la
+  // police tant que tout ne tient pas dans la hauteur disponible
+  // avant l'encart QR (pour ne jamais rien faire disparaître dessous).
   let titleFontSize = 11.5;
-  let titleLines;
+  let wrapped;
   do {
     doc.setFontSize(titleFontSize);
-    titleLines = doc.splitTextToSize(titleText, textW);
-    const neededH = titleLines.length * titleFontSize * 0.42;
+    const editionW = doc.getTextWidth(`${eventData.edition || ""}${ordinalSuffix} `);
+    const words = titleText.split(" ");
+    wrapped = [];
+    let line = "";
+    let maxW = textW - editionW;
+    for (const w of words) {
+      const test = line ? `${line} ${w}` : w;
+      if (doc.getTextWidth(test) <= maxW) {
+        line = test;
+      } else {
+        wrapped.push(line);
+        line = w;
+        maxW = textW;
+      }
+    }
+    if (line) wrapped.push(line);
+    const neededH = wrapped.length * titleFontSize * 0.42;
     if (neededH <= titleAvailH || titleFontSize <= 7) break;
     titleFontSize -= 0.5;
   } while (true);
-  doc.text(titleLines, textX, titleY);
+
+  // Ligne 1 : "42" + "ème" en exposant, suivis du début du titre
+  doc.setFontSize(titleFontSize);
+  const editionStr = `${eventData.edition || ""}`;
+  doc.text(editionStr, textX, titleY);
+  const editionNumW = doc.getTextWidth(editionStr);
+  doc.setFontSize(titleFontSize * 0.7);
+  doc.text(ordinalSuffix, textX + editionNumW + 0.4, titleY - titleFontSize * 0.13);
+  const prefixW = doc.getTextWidth(`${editionStr}${ordinalSuffix} `);
+  doc.setFontSize(titleFontSize);
+  doc.text(wrapped[0] || "", textX + prefixW, titleY);
+
+  // Lignes suivantes, alignées normalement
+  const lineH = titleFontSize * 0.42;
+  wrapped.slice(1).forEach((line, i) => {
+    doc.text(line, textX, titleY + lineH * (i + 1));
+  });
 
   // ---------- Encart QR (vert), en bas de la colonne de droite ----------
   doc.setFillColor(...GREEN);
@@ -696,7 +745,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.setFontSize(10);
   doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), BADGE_W / 2, cursorY + 2.5, { align: "center", maxWidth: nameMaxW });
 
-  // ---------- Ligne du bas : Lieu + Dates (dynamique) ----------
+  // ---------- Ligne du bas : Lieu + Dates (dynamique, avec icônes) ----------
   const bottomY = bannerY + BADGE_NAME_BANNER_H;
   doc.setFillColor(255, 255, 255);
   doc.rect(0, bottomY, BADGE_W, BADGE_BOTTOM_H, "F");
@@ -705,8 +754,18 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.setFontSize(9.5);
   const locationLine = `${(eventData.city || "").toUpperCase()} ${(eventData.country || "").toUpperCase()}`;
   const dateLine = `${eventData.dateShort?.[lang] || ""} ${eventData.monthYear?.[lang] || ""}`;
-  doc.text(locationLine, BADGE_W / 2, bottomY + 11, { align: "center", maxWidth: BADGE_W - 10 });
-  doc.text(dateLine, BADGE_W / 2, bottomY + 20, { align: "center", maxWidth: BADGE_W - 10 });
+  const iconSize = 4.5;
+  const iconGap = 2;
+
+  const locW = doc.getTextWidth(locationLine);
+  const locStartX = BADGE_W / 2 - (iconSize + iconGap + locW) / 2;
+  drawPinIcon(doc, locStartX + iconSize / 2, bottomY + 11 - iconSize * 0.75, iconSize, BROWN);
+  doc.text(locationLine, locStartX + iconSize + iconGap, bottomY + 11, { maxWidth: BADGE_W - 10 - iconSize - iconGap });
+
+  const dateW = doc.getTextWidth(dateLine);
+  const dateStartX = BADGE_W / 2 - (iconSize + iconGap + dateW) / 2;
+  drawCalendarIcon(doc, dateStartX + iconSize / 2, bottomY + 20 - iconSize * 0.62, iconSize, BROWN);
+  doc.text(dateLine, dateStartX + iconSize + iconGap, bottomY + 20, { maxWidth: BADGE_W - 10 - iconSize - iconGap });
 }
 
 async function downloadBadges(participants, eventData, lang, filename) {
