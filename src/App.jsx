@@ -609,9 +609,9 @@ function pickBadgePdfLink(event, lang) {
 const BADGE_W = 100, BADGE_H = 150;
 const BADGE_HEADER_H = 22;   // logos + 1ère rangée de drapeaux (image admin)
 const BADGE_FOOTER_H = 5;    // 2ème rangée de drapeaux (image admin) — réduite de moitié
-const BADGE_NAME_BANNER_H = 24; // bandeau vert nom/fonction (dessiné dynamiquement)
-const BADGE_BOTTOM_H = 27;   // lieu (hôtel + ville-pays) + dates (dessinée dynamiquement)
-const BADGE_BODY_H = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H - BADGE_NAME_BANNER_H - BADGE_BOTTOM_H;
+// La hauteur du bandeau nom/pays et de la ligne lieu+dates (et donc
+// celle du corps du badge) dépend du modèle actif (portrait/paysage)
+// — calculée dynamiquement dans drawBadgePage, pas ici.
 
 // Badge complet, inspiré du modèle officiel : logos + drapeaux en
 // haut et en bas (2 images fournies par l'admin), photo d'un lieu
@@ -635,6 +635,15 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const X = v => offsetX + v * scale;
   const Y = v => offsetY + v * scale;
   const S = v => v * scale;
+  const isLandscape = eventData.badgeActiveModel === "2";
+
+  // Le bandeau nom/pays et la ligne lieu+dates sont plus compacts en
+  // Modèle 2 (paysage), pour redonner de la hauteur à la photo et au
+  // bloc titre+QR juste en dessous. Le Modèle 1 (portrait) garde ses
+  // proportions historiques, inchangées.
+  const nameBannerH = isLandscape ? 18 : 24;
+  const bottomH = isLandscape ? 20 : 27;
+  const bodyH = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H - nameBannerH - bottomH;
 
   // ---------- En-tête : logos + drapeaux (image admin) ----------
   if (headerImg) {
@@ -650,21 +659,20 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // "landscape" : photo en bandeau large en haut, titre + QR côte à
   //               côte juste en dessous
   const bodyY = BADGE_HEADER_H;
-  const isLandscape = eventData.badgeActiveModel === "2";
   const photoRadius = 4;
 
   let photoX, photoY, photoW2, photoH2, textX, textW, qrBoxX, qrBoxY, qrBoxSize;
   if (isLandscape) {
-    photoX = 0; photoY = bodyY; photoW2 = BADGE_W; photoH2 = 36;
+    photoX = 0; photoY = bodyY; photoW2 = BADGE_W; photoH2 = 48;
     const belowY = bodyY + photoH2 + 2;
-    const belowH = BADGE_BODY_H - photoH2 - 2;
-    qrBoxSize = Math.min(belowH - 4, 32);
+    const belowH = bodyH - photoH2 - 2;
+    qrBoxSize = Math.min(belowH - 4, 40);
     qrBoxX = BADGE_W - qrBoxSize - 4;
     qrBoxY = belowY;
     textX = 4;
     textW = qrBoxX - textX - 4;
   } else {
-    photoX = 0; photoY = bodyY; photoW2 = 56; photoH2 = BADGE_BODY_H;
+    photoX = 0; photoY = bodyY; photoW2 = 56; photoH2 = bodyH;
     qrBoxSize = 0; // non utilisé : le portrait garde un encart rectangulaire dédié plus bas
     textX = photoW2 + 4;
     textW = BADGE_W - photoW2 - 8;
@@ -690,11 +698,11 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   let qrBoxW, qrBoxH, titleY, titleAvailH;
   if (isLandscape) {
     qrBoxW = qrBoxSize; qrBoxH = qrBoxSize;
-    titleY = qrBoxY + 7;
-    titleAvailH = qrBoxH - 7;
+    titleY = qrBoxY + 8;
+    titleAvailH = qrBoxH - 8;
   } else {
     qrBoxH = 34; qrBoxW = textW;
-    qrBoxY = photoY + BADGE_BODY_H - qrBoxH;
+    qrBoxY = photoY + bodyH - qrBoxH;
     qrBoxX = textX;
     titleY = bodyY + 12;
     titleAvailH = qrBoxY - titleY - 2;
@@ -710,9 +718,11 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // ligne seulement la place prise par "42ème ", puis on réduit la
   // police tant que tout ne tient pas dans la hauteur disponible
   // (pour ne jamais rien faire déborder, quel que soit le format).
+  // Le Modèle 2 (paysage) dispose de plus d'espace : on part d'une
+  // police plus grande que le Modèle 1.
   // Toutes les tailles ci-dessous sont exprimées "à taille normale"
   // (100x150mm) puis converties via S() au moment de les appliquer.
-  let titleFontSize = 11.5;
+  let titleFontSize = isLandscape ? 14 : 11.5;
   let wrapped;
   do {
     doc.setFontSize(S(titleFontSize));
@@ -768,7 +778,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.addImage(qrDataUrl, "PNG", X(qrBoxX + (qrBoxW - qrSize) / 2), Y(qrBoxY + (qrBoxH - qrSize) / 2), S(qrSize), S(qrSize));
 
   // ---------- Pied : 2ème rangée de drapeaux (image admin) ----------
-  const footerY = bodyY + BADGE_BODY_H;
+  const footerY = bodyY + bodyH;
   if (footerImg) {
     try { doc.addImage(footerImg, imgFormat(footerImg), X(0), Y(footerY), S(BADGE_W), S(BADGE_FOOTER_H)); } catch (e) { /* skip */ }
   } else {
@@ -779,7 +789,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // ---------- Bandeau vert : Nom + Fonction (dynamique) ----------
   const bannerY = footerY + BADGE_FOOTER_H;
   doc.setFillColor(...GREEN);
-  doc.rect(X(0), Y(bannerY), S(BADGE_W), S(BADGE_NAME_BANNER_H), "F");
+  doc.rect(X(0), Y(bannerY), S(BADGE_W), S(nameBannerH), "F");
   const fullName = `${p.lastName || ""} ${p.firstName || ""}`.trim().toUpperCase();
   const nameMaxW = BADGE_W - 12;
   doc.setTextColor(255, 255, 255);
@@ -813,9 +823,9 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // Icônes alignées dans une même colonne verticale (calculée sur le
   // texte le plus large des 3 lignes), au lieu d'être centrées
   // indépendamment ligne par ligne.
-  const bottomY = bannerY + BADGE_NAME_BANNER_H;
+  const bottomY = bannerY + nameBannerH;
   doc.setFillColor(255, 255, 255);
-  doc.rect(X(0), Y(bottomY), S(BADGE_W), S(BADGE_BOTTOM_H), "F");
+  doc.rect(X(0), Y(bottomY), S(BADGE_W), S(bottomH), "F");
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
   doc.setFontSize(S(9.5));
