@@ -610,28 +610,37 @@ const BADGE_BODY_H = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H - BADGE_NAME_BANN
 // Lieu + Dates tout en bas. Tout, sauf les 2 images de drapeaux et
 // la photo, est généré dynamiquement à partir des données réelles
 // de l'événement et du participant.
-async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, lang) {
+async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, lang, offsetX = 0, offsetY = 0, scale = 1) {
   const GREEN = [20, 83, 45];
   const BROWN = [107, 58, 31];
   const SAND = [245, 242, 234];
   const YELLOW = [230, 200, 60];
+  // X/Y convertissent une coordonnée du badge "à taille normale"
+  // (100x150mm) en coordonnée réelle sur la page ; S convertit de la
+  // même façon une largeur, une hauteur ou une taille de police.
+  // Cela permet de dessiner plusieurs badges, réduits et côte à
+  // côte, sur une même page A4 (4 par page) sans dupliquer toute la
+  // logique de mise en page.
+  const X = v => offsetX + v * scale;
+  const Y = v => offsetY + v * scale;
+  const S = v => v * scale;
 
   // ---------- En-tête : logos + drapeaux (image admin) ----------
   if (headerImg) {
-    try { doc.addImage(headerImg, imgFormat(headerImg), 0, 0, BADGE_W, BADGE_HEADER_H); } catch (e) { /* skip */ }
+    try { doc.addImage(headerImg, imgFormat(headerImg), X(0), Y(0), S(BADGE_W), S(BADGE_HEADER_H)); } catch (e) { /* skip */ }
   } else {
     doc.setFillColor(...GREEN);
-    doc.rect(0, 0, BADGE_W, BADGE_HEADER_H, "F");
+    doc.rect(X(0), Y(0), S(BADGE_W), S(BADGE_HEADER_H), "F");
   }
 
   // ---------- Corps : photo (gauche) + titre événement (droite) ----------
   const photoW = 56;
   const bodyY = BADGE_HEADER_H;
   if (bodyImg) {
-    try { doc.addImage(bodyImg, imgFormat(bodyImg), 0, bodyY, photoW, BADGE_BODY_H); } catch (e) { /* skip */ }
+    try { doc.addImage(bodyImg, imgFormat(bodyImg), X(0), Y(bodyY), S(photoW), S(BADGE_BODY_H)); } catch (e) { /* skip */ }
   } else {
     doc.setFillColor(...SAND);
-    doc.rect(0, bodyY, photoW, BADGE_BODY_H, "F");
+    doc.rect(X(0), Y(bodyY), S(photoW), S(BADGE_BODY_H), "F");
   }
 
   // Titre dynamique de l'événement (toujours à jour, même si l'édition change)
@@ -652,18 +661,20 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // ligne seulement la place prise par "42ème ", puis on réduit la
   // police tant que tout ne tient pas dans la hauteur disponible
   // avant l'encart QR (pour ne jamais rien faire disparaître dessous).
+  // Toutes les tailles ci-dessous sont exprimées "à taille normale"
+  // (100x150mm) puis converties via S() au moment de les appliquer.
   let titleFontSize = 11.5;
   let wrapped;
   do {
-    doc.setFontSize(titleFontSize);
-    const editionW = doc.getTextWidth(`${eventData.edition || ""}${ordinalSuffix} `);
+    doc.setFontSize(S(titleFontSize));
+    const editionW = doc.getTextWidth(`${eventData.edition || ""}${ordinalSuffix} `) / scale;
     const words = titleText.split(" ");
     wrapped = [];
     let line = "";
     let maxW = textW - editionW;
     for (const w of words) {
       const test = line ? `${line} ${w}` : w;
-      if (doc.getTextWidth(test) <= maxW) {
+      if (doc.getTextWidth(test) / scale <= maxW) {
         line = test;
       } else {
         wrapped.push(line);
@@ -677,45 +688,49 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
     titleFontSize -= 0.5;
   } while (true);
 
-  // Ligne 1 : "42" + "ème" en exposant, suivis du début du titre
-  doc.setFontSize(titleFontSize);
+  // Ligne 1 : "42" + "ème" en exposant, suivis du début du titre —
+  // chaque largeur est mesurée à la bonne taille de police AVANT de
+  // passer à la suivante, pour un espacement toujours exact.
+  doc.setFontSize(S(titleFontSize));
   const editionStr = `${eventData.edition || ""}`;
-  doc.text(editionStr, textX, titleY);
-  const editionNumW = doc.getTextWidth(editionStr);
-  doc.setFontSize(titleFontSize * 0.7);
-  doc.text(ordinalSuffix, textX + editionNumW + 0.4, titleY - titleFontSize * 0.13);
-  const prefixW = doc.getTextWidth(`${editionStr}${ordinalSuffix} `);
-  doc.setFontSize(titleFontSize);
-  doc.text(wrapped[0] || "", textX + prefixW, titleY);
+  doc.text(editionStr, X(textX), Y(titleY));
+  const editionNumW = doc.getTextWidth(editionStr) / scale;
+  doc.setFontSize(S(titleFontSize * 0.7));
+  doc.text(ordinalSuffix, X(textX + editionNumW + 0.4), Y(titleY - titleFontSize * 0.13));
+  const ordinalW = doc.getTextWidth(ordinalSuffix) / scale;
+  doc.setFontSize(S(titleFontSize));
+  const spaceW = doc.getTextWidth(" ") / scale;
+  const prefixW = editionNumW + 0.4 + ordinalW + spaceW + 0.8;
+  doc.text(wrapped[0] || "", X(textX + prefixW), Y(titleY));
 
   // Lignes suivantes, alignées normalement
   const lineH = titleFontSize * 0.42;
   wrapped.slice(1).forEach((line, i) => {
-    doc.text(line, textX, titleY + lineH * (i + 1));
+    doc.text(line, X(textX), Y(titleY + lineH * (i + 1)));
   });
 
   // ---------- Encart QR (vert), en bas de la colonne de droite ----------
   doc.setFillColor(...GREEN);
-  doc.roundedRect(textX, qrBoxY, textW, qrBoxH, 2, 2, "F");
+  doc.roundedRect(X(textX), Y(qrBoxY), S(textW), S(qrBoxH), S(2), S(2), "F");
   const pdfLink = pickBadgePdfLink(eventData, lang);
   const qrValue = pdfLink || p.regNumber || p.id || "";
   const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 220 });
   const qrSize = Math.min(textW - 12, qrBoxH - 12);
-  doc.addImage(qrDataUrl, "PNG", textX + (textW - qrSize) / 2, qrBoxY + (qrBoxH - qrSize) / 2, qrSize, qrSize);
+  doc.addImage(qrDataUrl, "PNG", X(textX + (textW - qrSize) / 2), Y(qrBoxY + (qrBoxH - qrSize) / 2), S(qrSize), S(qrSize));
 
   // ---------- Pied : 2ème rangée de drapeaux (image admin) ----------
   const footerY = bodyY + BADGE_BODY_H;
   if (footerImg) {
-    try { doc.addImage(footerImg, imgFormat(footerImg), 0, footerY, BADGE_W, BADGE_FOOTER_H); } catch (e) { /* skip */ }
+    try { doc.addImage(footerImg, imgFormat(footerImg), X(0), Y(footerY), S(BADGE_W), S(BADGE_FOOTER_H)); } catch (e) { /* skip */ }
   } else {
     doc.setFillColor(...SAND);
-    doc.rect(0, footerY, BADGE_W, BADGE_FOOTER_H, "F");
+    doc.rect(X(0), Y(footerY), S(BADGE_W), S(BADGE_FOOTER_H), "F");
   }
 
   // ---------- Bandeau vert : Nom + Fonction (dynamique) ----------
   const bannerY = footerY + BADGE_FOOTER_H;
   doc.setFillColor(...GREEN);
-  doc.rect(0, bannerY, BADGE_W, BADGE_NAME_BANNER_H, "F");
+  doc.rect(X(0), Y(bannerY), S(BADGE_W), S(BADGE_NAME_BANNER_H), "F");
   const fullName = `${p.lastName || ""} ${p.firstName || ""}`.trim().toUpperCase();
   const nameMaxW = BADGE_W - 12;
   doc.setTextColor(255, 255, 255);
@@ -724,48 +739,48 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // nombre de lignes et éviter tout chevauchement avec la ligne du
   // pays juste en dessous.
   let nameFontSize = 14;
-  doc.setFontSize(nameFontSize);
-  let nameLines = doc.splitTextToSize(fullName, nameMaxW);
+  doc.setFontSize(S(nameFontSize));
+  let nameLines = doc.splitTextToSize(fullName, nameMaxW * scale);
   if (nameLines.length > 2) {
     nameFontSize = 10.5;
-    doc.setFontSize(nameFontSize);
-    nameLines = doc.splitTextToSize(fullName, nameMaxW);
+    doc.setFontSize(S(nameFontSize));
+    nameLines = doc.splitTextToSize(fullName, nameMaxW * scale);
   }
   nameLines = nameLines.slice(0, 2); // jamais plus de 2 lignes affichées
   const nameLineH = nameFontSize * 0.42;
   let cursorY = bannerY + (nameLines.length === 1 ? 10 : 7.5);
   nameLines.forEach(line => {
-    doc.text(line, BADGE_W / 2, cursorY, { align: "center" });
+    doc.text(line, X(BADGE_W / 2), Y(cursorY), { align: "center" });
     cursorY += nameLineH;
   });
 
   // Ligne du pays (ou libellé personnalisé) : toujours positionnée
   // dynamiquement après la dernière ligne du nom, jamais superposée.
   doc.setTextColor(...YELLOW);
-  doc.setFontSize(10);
-  doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), BADGE_W / 2, cursorY + 2.5, { align: "center", maxWidth: nameMaxW });
+  doc.setFontSize(S(10));
+  doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), X(BADGE_W / 2), Y(cursorY + 2.5), { align: "center", maxWidth: nameMaxW * scale });
 
   // ---------- Ligne du bas : Lieu + Dates (dynamique, avec icônes) ----------
   const bottomY = bannerY + BADGE_NAME_BANNER_H;
   doc.setFillColor(255, 255, 255);
-  doc.rect(0, bottomY, BADGE_W, BADGE_BOTTOM_H, "F");
+  doc.rect(X(0), Y(bottomY), S(BADGE_W), S(BADGE_BOTTOM_H), "F");
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
-  doc.setFontSize(9.5);
+  doc.setFontSize(S(9.5));
   const locationLine = `${(eventData.city || "").toUpperCase()} ${(eventData.country || "").toUpperCase()}`;
   const dateLine = `${eventData.dateShort?.[lang] || ""} ${eventData.monthYear?.[lang] || ""}`;
   const iconSize = 4.5;
   const iconGap = 2;
 
-  const locW = doc.getTextWidth(locationLine);
+  const locW = doc.getTextWidth(locationLine) / scale;
   const locStartX = BADGE_W / 2 - (iconSize + iconGap + locW) / 2;
-  drawPinIcon(doc, locStartX + iconSize / 2, bottomY + 11 - iconSize * 0.75, iconSize, BROWN);
-  doc.text(locationLine, locStartX + iconSize + iconGap, bottomY + 11, { maxWidth: BADGE_W - 10 - iconSize - iconGap });
+  drawPinIcon(doc, X(locStartX + iconSize / 2), Y(bottomY + 11 - iconSize * 0.75), S(iconSize), BROWN);
+  doc.text(locationLine, X(locStartX + iconSize + iconGap), Y(bottomY + 11), { maxWidth: S(BADGE_W - 10 - iconSize - iconGap) });
 
-  const dateW = doc.getTextWidth(dateLine);
+  const dateW = doc.getTextWidth(dateLine) / scale;
   const dateStartX = BADGE_W / 2 - (iconSize + iconGap + dateW) / 2;
-  drawCalendarIcon(doc, dateStartX + iconSize / 2, bottomY + 20 - iconSize * 0.62, iconSize, BROWN);
-  doc.text(dateLine, dateStartX + iconSize + iconGap, bottomY + 20, { maxWidth: BADGE_W - 10 - iconSize - iconGap });
+  drawCalendarIcon(doc, X(dateStartX + iconSize / 2), Y(bottomY + 20 - iconSize * 0.62), S(iconSize), BROWN);
+  doc.text(dateLine, X(dateStartX + iconSize + iconGap), Y(bottomY + 20), { maxWidth: S(BADGE_W - 10 - iconSize - iconGap) });
 }
 
 async function downloadBadges(participants, eventData, lang, filename) {
@@ -774,10 +789,47 @@ async function downloadBadges(participants, eventData, lang, filename) {
     loadImageAsDataURL(eventData.badgeBodyImage),
     loadImageAsDataURL(eventData.badgeFooterImage),
   ]);
-  const doc = new jsPDF({ unit: "mm", format: [BADGE_W, BADGE_H] });
+
+  if (participants.length <= 1) {
+    // Téléchargement d'un seul badge : on garde la taille réelle
+    // (100x150mm), idéale pour une imprimante à badges dédiée.
+    const doc = new jsPDF({ unit: "mm", format: [BADGE_W, BADGE_H] });
+    for (let i = 0; i < participants.length; i++) {
+      if (i > 0) doc.addPage([BADGE_W, BADGE_H]);
+      await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang);
+    }
+    await saveOrShareBlob(doc.output("blob"), filename);
+    return;
+  }
+
+  // Téléchargement de la liste complète : 4 badges par page A4
+  // (2 colonnes x 2 lignes), légèrement réduits, avec des repères de
+  // découpe en pointillés — prêt à imprimer sur une imprimante
+  // classique et à découper aux ciseaux.
+  const A4_W = 210, A4_H = 297;
+  const margin = 5, gutter = 4;
+  const cellW = (A4_W - margin * 2 - gutter) / 2;
+  const cellH = (A4_H - margin * 2 - gutter) / 2;
+  const scale = Math.min(cellW / BADGE_W, cellH / BADGE_H);
+  const scaledW = BADGE_W * scale, scaledH = BADGE_H * scale;
+
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
   for (let i = 0; i < participants.length; i++) {
-    if (i > 0) doc.addPage([BADGE_W, BADGE_H]);
-    await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang);
+    const posOnPage = i % 4;
+    if (i > 0 && posOnPage === 0) doc.addPage("a4");
+    const col = posOnPage % 2, row = Math.floor(posOnPage / 2);
+    const cellX = margin + col * (cellW + gutter);
+    const cellY = margin + row * (cellH + gutter);
+    const offsetX = cellX + (cellW - scaledW) / 2;
+    const offsetY = cellY + (cellH - scaledH) / 2;
+
+    // Repère de découpe en pointillés léger autour du badge
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.rect(offsetX, offsetY, scaledW, scaledH);
+    doc.setLineDashPattern([], 0);
+
+    await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang, offsetX, offsetY, scale);
   }
   await saveOrShareBlob(doc.output("blob"), filename);
 }
