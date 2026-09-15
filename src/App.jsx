@@ -596,10 +596,10 @@ function pickBadgePdfLink(event, lang) {
 }
 
 const BADGE_W = 100, BADGE_H = 150;
-const BADGE_HEADER_H = 19;   // logos + 1ère rangée de drapeaux (image admin) — légèrement réduite
+const BADGE_HEADER_H = 22;   // logos + 1ère rangée de drapeaux (image admin)
 const BADGE_FOOTER_H = 5;    // 2ème rangée de drapeaux (image admin) — réduite de moitié
 const BADGE_NAME_BANNER_H = 24; // bandeau vert nom/fonction (dessiné dynamiquement)
-const BADGE_BOTTOM_H = 30;   // lieu (hôtel + ville-pays) + dates (dessinée dynamiquement) — agrandie
+const BADGE_BOTTOM_H = 27;   // lieu (hôtel + ville-pays) + dates (dessinée dynamiquement)
 const BADGE_BODY_H = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H - BADGE_NAME_BANNER_H - BADGE_BOTTOM_H;
 
 // Badge complet, inspiré du modèle officiel : logos + drapeaux en
@@ -797,7 +797,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const textX2 = groupStartX + iconSize + iconGap;
   const maxTextW = S(BADGE_W - 10 - iconSize - iconGap);
 
-  const line1Y = bottomY + 8, line2Y = bottomY + 15, line3Y = bottomY + 25;
+  const line1Y = bottomY + 7, line2Y = bottomY + 10.5, line3Y = bottomY + 19;
   drawPinIcon(doc, X(iconCx), Y((line1Y + line2Y) / 2 - iconSize * 0.55), S(iconSize), BROWN);
   doc.text(venueLine, X(textX2), Y(line1Y), { maxWidth: maxTextW });
   doc.text(cityCountryLine, X(textX2), Y(line2Y), { maxWidth: maxTextW });
