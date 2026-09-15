@@ -596,10 +596,10 @@ function pickBadgePdfLink(event, lang) {
 }
 
 const BADGE_W = 100, BADGE_H = 150;
-const BADGE_HEADER_H = 22;   // logos + 1ère rangée de drapeaux (image admin)
+const BADGE_HEADER_H = 19;   // logos + 1ère rangée de drapeaux (image admin) — légèrement réduite
 const BADGE_FOOTER_H = 5;    // 2ème rangée de drapeaux (image admin) — réduite de moitié
 const BADGE_NAME_BANNER_H = 24; // bandeau vert nom/fonction (dessiné dynamiquement)
-const BADGE_BOTTOM_H = 27;   // lieu (hôtel + ville-pays) + dates (dessinée dynamiquement)
+const BADGE_BOTTOM_H = 30;   // lieu (hôtel + ville-pays) + dates (dessinée dynamiquement) — agrandie
 const BADGE_BODY_H = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H - BADGE_NAME_BANNER_H - BADGE_BOTTOM_H;
 
 // Badge complet, inspiré du modèle officiel : logos + drapeaux en
@@ -636,11 +636,23 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // ---------- Corps : photo (gauche) + titre événement (droite) ----------
   const photoW = 56;
   const bodyY = BADGE_HEADER_H;
+  const photoRadius = 4;
   if (bodyImg) {
-    try { doc.addImage(bodyImg, imgFormat(bodyImg), X(0), Y(bodyY), S(photoW), S(BADGE_BODY_H)); } catch (e) { /* skip */ }
+    // Coins arrondis appliqués automatiquement par le code (via un
+    // masque de découpe), quelle que soit l'image chargée par
+    // l'admin — pas besoin de la préparer soi-même avec des coins
+    // déjà arrondis.
+    try {
+      doc.saveGraphicsState();
+      doc.roundedRect(X(0), Y(bodyY), S(photoW), S(BADGE_BODY_H), S(photoRadius), S(photoRadius), null);
+      doc.clip();
+      doc.discardPath();
+      doc.addImage(bodyImg, imgFormat(bodyImg), X(0), Y(bodyY), S(photoW), S(BADGE_BODY_H));
+      doc.restoreGraphicsState();
+    } catch (e) { /* skip */ }
   } else {
     doc.setFillColor(...SAND);
-    doc.rect(X(0), Y(bodyY), S(photoW), S(BADGE_BODY_H), "F");
+    doc.roundedRect(X(0), Y(bodyY), S(photoW), S(BADGE_BODY_H), S(photoRadius), S(photoRadius), "F");
   }
 
   // Titre dynamique de l'événement (toujours à jour, même si l'édition change)
@@ -785,7 +797,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const textX2 = groupStartX + iconSize + iconGap;
   const maxTextW = S(BADGE_W - 10 - iconSize - iconGap);
 
-  const line1Y = bottomY + 7.5, line2Y = bottomY + 12, line3Y = bottomY + 21;
+  const line1Y = bottomY + 8, line2Y = bottomY + 15, line3Y = bottomY + 25;
   drawPinIcon(doc, X(iconCx), Y((line1Y + line2Y) / 2 - iconSize * 0.55), S(iconSize), BROWN);
   doc.text(venueLine, X(textX2), Y(line1Y), { maxWidth: maxTextW });
   doc.text(cityCountryLine, X(textX2), Y(line2Y), { maxWidth: maxTextW });
