@@ -615,6 +615,8 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // Titre dynamique de l'événement (toujours à jour, même si l'édition change)
   const textX = photoW + 4;
   const textW = BADGE_W - photoW - 8;
+  const qrBoxH = 34;
+  const qrBoxY = bodyY + BADGE_BODY_H - qrBoxH;
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
   doc.setFontSize(15);
@@ -625,16 +627,25 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const ordinalSuffix = lang === "fr" ? "ème" : (eventData.ordinal?.[lang] || "");
   doc.setFontSize(8.5);
   doc.text(ordinalSuffix, textX + editionW + 0.5, bodyY + 10 - 3.2);
-  doc.setFontSize(11.5);
-  const titleLines = doc.splitTextToSize(
-    `${(eventData.title?.[lang] || "").toUpperCase()} DU SYSTÈME D'ASSURANCE CARTE BRUNE CEDEAO`,
-    textW
-  );
-  doc.text(titleLines, textX, bodyY + 18);
+  const titleY = bodyY + 17;
+  const titleAvailH = qrBoxY - titleY - 2; // marge de sécurité avant l'encart QR
+  const titleText = `${(eventData.title?.[lang] || "").toUpperCase()} DU SYSTÈME D'ASSURANCE CARTE BRUNE CEDEAO`;
+  // Taille de police auto-adaptative : le texte ne doit JAMAIS déborder
+  // dans la zone du QR code dessinée juste en dessous (sinon il se
+  // retrouve caché derrière le carré vert). On réduit la police tant
+  // que le texte ne tient pas dans la hauteur disponible.
+  let titleFontSize = 11.5;
+  let titleLines;
+  do {
+    doc.setFontSize(titleFontSize);
+    titleLines = doc.splitTextToSize(titleText, textW);
+    const neededH = titleLines.length * titleFontSize * 0.42;
+    if (neededH <= titleAvailH || titleFontSize <= 7) break;
+    titleFontSize -= 0.5;
+  } while (true);
+  doc.text(titleLines, textX, titleY);
 
   // ---------- Encart QR (vert), en bas de la colonne de droite ----------
-  const qrBoxH = 34;
-  const qrBoxY = bodyY + BADGE_BODY_H - qrBoxH;
   doc.setFillColor(...GREEN);
   doc.roundedRect(textX, qrBoxY, textW, qrBoxH, 2, 2, "F");
   const pdfLink = pickBadgePdfLink(eventData, lang);
