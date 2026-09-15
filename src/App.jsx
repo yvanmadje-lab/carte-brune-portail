@@ -633,9 +633,9 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
     doc.rect(X(0), Y(0), S(BADGE_W), S(BADGE_HEADER_H), "F");
   }
 
-  // ---------- Corps : photo (gauche) + titre événement (droite) ----------
-  const photoW = 56;
+  // ---------- Photo (bandeau paysage, pleine largeur, en haut du corps) ----------
   const bodyY = BADGE_HEADER_H;
+  const photoH = 36;
   const photoRadius = 4;
   if (bodyImg) {
     // Coins arrondis appliqués automatiquement par le code (via un
@@ -644,27 +644,29 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
     // déjà arrondis.
     try {
       doc.saveGraphicsState();
-      doc.roundedRect(X(0), Y(bodyY), S(photoW), S(BADGE_BODY_H), S(photoRadius), S(photoRadius), null);
+      doc.roundedRect(X(0), Y(bodyY), S(BADGE_W), S(photoH), S(photoRadius), S(photoRadius), null);
       doc.clip();
       doc.discardPath();
-      doc.addImage(bodyImg, imgFormat(bodyImg), X(0), Y(bodyY), S(photoW), S(BADGE_BODY_H));
+      doc.addImage(bodyImg, imgFormat(bodyImg), X(0), Y(bodyY), S(BADGE_W), S(photoH));
       doc.restoreGraphicsState();
     } catch (e) { /* skip */ }
   } else {
     doc.setFillColor(...SAND);
-    doc.roundedRect(X(0), Y(bodyY), S(photoW), S(BADGE_BODY_H), S(photoRadius), S(photoRadius), "F");
+    doc.roundedRect(X(0), Y(bodyY), S(BADGE_W), S(photoH), S(photoRadius), S(photoRadius), "F");
   }
 
-  // Titre dynamique de l'événement (toujours à jour, même si l'édition change)
-  const textX = photoW + 4;
-  const textW = BADGE_W - photoW - 8;
-  const qrBoxH = 34;
-  const qrBoxY = bodyY + BADGE_BODY_H - qrBoxH;
+  // ---------- Sous la photo : titre événement (gauche) + QR (droite) ----------
+  const belowY = bodyY + photoH + 2;
+  const belowH = BADGE_BODY_H - photoH - 2;
+  const qrBoxSize = Math.min(belowH - 4, 32);
+  const qrBoxX = BADGE_W - qrBoxSize - 4;
+  const textX = 4;
+  const textW = qrBoxX - textX - 4;
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
 
-  const titleY = bodyY + 12;
-  const titleAvailH = qrBoxY - titleY - 2; // marge de sécurité avant l'encart QR
+  const titleY = belowY + 7;
+  const titleAvailH = belowH - 7;
   const ordinalSuffix = lang === "fr" ? "ème" : (eventData.ordinal?.[lang] || "");
   const titleText = `${(eventData.title?.[lang] || "").toUpperCase()} DU SYSTÈME D'ASSURANCE CARTE BRUNE CEDEAO`;
 
@@ -672,7 +674,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // le texte manuellement (mot par mot), en réservant sur la 1ère
   // ligne seulement la place prise par "42ème ", puis on réduit la
   // police tant que tout ne tient pas dans la hauteur disponible
-  // avant l'encart QR (pour ne jamais rien faire disparaître dessous).
+  // sous la photo (pour ne jamais rien faire déborder).
   // Toutes les tailles ci-dessous sont exprimées "à taille normale"
   // (100x150mm) puis converties via S() au moment de les appliquer.
   let titleFontSize = 11.5;
@@ -721,14 +723,14 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
     doc.text(line, X(textX), Y(titleY + lineH * (i + 1)));
   });
 
-  // ---------- Encart QR (vert), en bas de la colonne de droite ----------
+  // ---------- Encart QR (vert), à droite du titre ----------
   doc.setFillColor(...GREEN);
-  doc.roundedRect(X(textX), Y(qrBoxY), S(textW), S(qrBoxH), S(2), S(2), "F");
+  doc.roundedRect(X(qrBoxX), Y(belowY), S(qrBoxSize), S(qrBoxSize), S(2), S(2), "F");
   const pdfLink = pickBadgePdfLink(eventData, lang);
   const qrValue = pdfLink || p.regNumber || p.id || "";
   const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 220 });
-  const qrSize = Math.min(textW - 12, qrBoxH - 12);
-  doc.addImage(qrDataUrl, "PNG", X(textX + (textW - qrSize) / 2), Y(qrBoxY + (qrBoxH - qrSize) / 2), S(qrSize), S(qrSize));
+  const qrSize = qrBoxSize - 6;
+  doc.addImage(qrDataUrl, "PNG", X(qrBoxX + (qrBoxSize - qrSize) / 2), Y(belowY + (qrBoxSize - qrSize) / 2), S(qrSize), S(qrSize));
 
   // ---------- Pied : 2ème rangée de drapeaux (image admin) ----------
   const footerY = bodyY + BADGE_BODY_H;
