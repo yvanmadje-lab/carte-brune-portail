@@ -617,10 +617,16 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
   doc.setFontSize(15);
-  doc.text(`${eventData.edition || ""}${eventData.ordinal?.[lang] || ""}`, textX, bodyY + 10);
+  const editionStr = `${eventData.edition || ""}`;
+  doc.text(editionStr, textX, bodyY + 10);
+  const editionW = doc.getTextWidth(editionStr);
+  // "ème" en exposant (français), ou le suffixe ordinal configuré pour les autres langues
+  const ordinalSuffix = lang === "fr" ? "ème" : (eventData.ordinal?.[lang] || "");
+  doc.setFontSize(8.5);
+  doc.text(ordinalSuffix, textX + editionW + 0.5, bodyY + 10 - 3.2);
   doc.setFontSize(11.5);
   const titleLines = doc.splitTextToSize(
-    `${(eventData.title?.[lang] || "").toUpperCase()} DU SYSTÈME D'ASSURANCE ${(eventData.brand?.[lang] || "").toUpperCase()}`,
+    `${(eventData.title?.[lang] || "").toUpperCase()} DU SYSTÈME D'ASSURANCE CARTE BRUNE CEDEAO`,
     textW
   );
   doc.text(titleLines, textX, bodyY + 18);
@@ -633,7 +639,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const pdfLink = pickBadgePdfLink(eventData, lang);
   const qrValue = pdfLink || p.regNumber || p.id || "";
   const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 220 });
-  const qrSize = Math.min(textW - 8, qrBoxH - 6);
+  const qrSize = Math.min(textW - 12, qrBoxH - 12);
   doc.addImage(qrDataUrl, "PNG", textX + (textW - qrSize) / 2, qrBoxY + (qrBoxH - qrSize) / 2, qrSize, qrSize);
 
   // ---------- Pied : 2ème rangée de drapeaux (image admin) ----------
