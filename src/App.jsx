@@ -642,7 +642,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // bloc titre+QR juste en dessous. Le Modèle 1 (portrait) garde ses
   // proportions historiques, inchangées.
   const nameBannerH = isLandscape ? 18 : 24;
-  const bottomH = isLandscape ? 20 : 27;
+  const bottomH = isLandscape ? 17 : 24;
   const bodyH = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H - nameBannerH - bottomH;
 
   // ---------- En-tête : logos + drapeaux (image admin) ----------
@@ -807,17 +807,24 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   }
   nameLines = nameLines.slice(0, 2); // jamais plus de 2 lignes affichées
   const nameLineH = nameFontSize * 0.42;
-  let cursorY = bannerY + (nameLines.length === 1 ? 10 : 7.5);
+  // Le pays est ancré près du BAS du bandeau (jamais en dehors, quelle
+  // que soit sa hauteur), et le nom se place juste au-dessus, avec
+  // une marge haute minimale — ce qui empêche tout débordement du
+  // pays hors du bandeau vert, y compris avec un nom sur 2 lignes et
+  // un bandeau plus compact (Modèle 2).
+  const countryY = nameBannerH - 5;
+  const nameBlockH = nameLines.length * nameLineH;
+  let cursorY = bannerY + Math.max(6, countryY - 2 - nameBlockH + nameLineH);
   nameLines.forEach(line => {
     doc.text(line, X(BADGE_W / 2), Y(cursorY), { align: "center" });
     cursorY += nameLineH;
   });
 
-  // Ligne du pays (ou libellé personnalisé) : toujours positionnée
-  // dynamiquement après la dernière ligne du nom, jamais superposée.
+  // Ligne du pays (ou libellé personnalisé) : toujours ancrée près du
+  // bas du bandeau (countryY), donc jamais en dehors de celui-ci.
   doc.setTextColor(...YELLOW);
   doc.setFontSize(S(10));
-  doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), X(BADGE_W / 2), Y(cursorY + 2.5), { align: "center", maxWidth: nameMaxW * scale });
+  doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), X(BADGE_W / 2), Y(bannerY + countryY), { align: "center", maxWidth: nameMaxW * scale });
 
   // ---------- Ligne du bas : Lieu (hôtel + ville-pays) + Dates ----------
   // Icônes alignées dans une même colonne verticale (calculée sur le
@@ -828,12 +835,12 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.rect(X(0), Y(bottomY), S(BADGE_W), S(bottomH), "F");
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
-  doc.setFontSize(S(9.5));
+  doc.setFontSize(S(8));
   const venueLine = (eventData.venue?.[lang] || "").toUpperCase();
   const cityCountryLine = `${(eventData.city || "").toUpperCase()} - ${(eventData.country || "").toUpperCase()}`;
   const dateLine = `${eventData.dateShort?.[lang] || ""} ${eventData.monthYear?.[lang] || ""}`;
-  const iconSize = 4.2;
-  const iconGap = 2;
+  const iconSize = 3.6;
+  const iconGap = 1.8;
 
   const venueW = doc.getTextWidth(venueLine) / scale;
   const cityW = doc.getTextWidth(cityCountryLine) / scale;
@@ -842,9 +849,9 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const groupStartX = BADGE_W / 2 - blockW / 2;
   const iconCx = groupStartX + iconSize / 2;
   const textX2 = groupStartX + iconSize + iconGap;
-  const maxTextW = S(BADGE_W - 10 - iconSize - iconGap);
+  const maxTextW = S(BADGE_W - 6);
 
-  const line1Y = bottomY + 7, line2Y = bottomY + 10.5, line3Y = bottomY + 19;
+  const line1Y = bottomY + 5.5, line2Y = bottomY + 9, line3Y = bottomY + (isLandscape ? 14 : 16);
   drawPinIcon(doc, X(iconCx), Y((line1Y + line2Y) / 2 - iconSize * 0.55), S(iconSize), BROWN);
   doc.text(venueLine, X(textX2), Y(line1Y), { maxWidth: maxTextW });
   doc.text(cityCountryLine, X(textX2), Y(line2Y), { maxWidth: maxTextW });
