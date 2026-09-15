@@ -324,6 +324,12 @@ const T = {
   badge_layout_portrait: { fr: "Photo en portrait (colonne)", en: "Portrait photo (column)", pt: "Foto em retrato (coluna)" },
   badge_layout_landscape: { fr: "Photo en paysage (bandeau)", en: "Landscape photo (banner)", pt: "Foto em paisagem (faixa)" },
   badge_layout_help: { fr: "Choisis le format selon l'orientation de ta photo. Change simplement l'agencement — tout le reste (nom, QR, drapeaux...) reste identique.", en: "Choose the layout matching your photo's orientation. This only changes the arrangement — everything else (name, QR, flags...) stays the same.", pt: "Escolhe o formato de acordo com a orientação da tua foto. Isto só altera a disposição — tudo o resto (nome, QR, bandeiras...) mantém-se igual." },
+  badge_active_model_label: { fr: "Modèle actuellement utilisé pour les badges", en: "Currently active badge model", pt: "Modelo de crachá atualmente ativo" },
+  badge_active_model_help: { fr: "Chaque modèle garde ses propres images en mémoire — bascule librement de l'un à l'autre sans jamais perdre ce que tu as déjà configuré.", en: "Each model keeps its own images saved — switch freely between them without ever losing what you've already set up.", pt: "Cada modelo guarda as suas próprias imagens — muda livremente entre eles sem nunca perder o que já configuraste." },
+  badge_model_1_label: { fr: "Modèle 1 (portrait)", en: "Model 1 (portrait)", pt: "Modelo 1 (retrato)" },
+  badge_model_2_label: { fr: "Modèle 2 (paysage)", en: "Model 2 (landscape)", pt: "Modelo 2 (paisagem)" },
+  badge_model_1_title: { fr: "Modèle 1 — Photo en portrait (colonne)", en: "Model 1 — Portrait photo (column)", pt: "Modelo 1 — Foto em retrato (coluna)" },
+  badge_model_2_title: { fr: "Modèle 2 — Photo en paysage (bandeau)", en: "Model 2 — Landscape photo (banner)", pt: "Modelo 2 — Foto em paisagem (faixa)" },
   badge_footer_image_label: { fr: "Image (2ème rangée de drapeaux) — pleine largeur, sous la photo. Le Nom, la Fonction, le lieu et les dates s'affichent automatiquement en dessous.", en: "Image (2nd flag row) — full width, below the photo. Name, position, venue and dates are drawn automatically below.", pt: "Imagem (2ª fila de bandeiras) — largura total, abaixo da foto. Nome, função, local e datas são exibidos automaticamente abaixo." },
   badge_pdf_label: { fr: "Document PDF (le QR code du badge y renverra)", en: "PDF document (the badge QR code will link to it)", pt: "Documento PDF (o QR code do crachá remeterá para ele)" },
   upload_pdf: { fr: "Choisir un PDF", en: "Choose PDF", pt: "Escolher PDF" },
@@ -644,7 +650,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // "landscape" : photo en bandeau large en haut, titre + QR côte à
   //               côte juste en dessous
   const bodyY = BADGE_HEADER_H;
-  const isLandscape = eventData.badgeLayout === "landscape";
+  const isLandscape = eventData.badgeActiveModel === "2";
   const photoRadius = 4;
 
   let photoX, photoY, photoW2, photoH2, textX, textW, qrBoxX, qrBoxY, qrBoxSize;
@@ -838,10 +844,14 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
 }
 
 async function downloadBadges(participants, eventData, lang, filename) {
+  // Choisit le jeu d'images correspondant au modèle actuellement
+  // actif (1 = portrait, 2 = paysage) — chaque modèle garde ses
+  // propres images, indépendamment l'un de l'autre.
+  const useModel2 = eventData.badgeActiveModel === "2";
   const [headerImg, bodyImg, footerImg] = await Promise.all([
-    loadImageAsDataURL(eventData.badgeHeaderImage),
-    loadImageAsDataURL(eventData.badgeBodyImage),
-    loadImageAsDataURL(eventData.badgeFooterImage),
+    loadImageAsDataURL(useModel2 ? eventData.badgeHeaderImage2 : eventData.badgeHeaderImage1),
+    loadImageAsDataURL(useModel2 ? eventData.badgeBodyImage2 : eventData.badgeBodyImage1),
+    loadImageAsDataURL(useModel2 ? eventData.badgeFooterImage2 : eventData.badgeFooterImage1),
   ]);
 
   if (participants.length <= 1) {
@@ -965,10 +975,13 @@ export default function App() {
       venue: r.venue || DEFAULT_EVENT.venue,
       city: r.city || DEFAULT_EVENT.city,
       country: r.country || DEFAULT_EVENT.country,
-      badgeHeaderImage: r.badge_header_image || "",
-      badgeBodyImage: r.badge_body_image || "",
-      badgeFooterImage: r.badge_footer_image || "",
-      badgeLayout: r.badge_layout || "portrait",
+      badgeHeaderImage1: r.badge_header_image_1 || r.badge_header_image || "",
+      badgeBodyImage1: r.badge_body_image_1 || r.badge_body_image || "",
+      badgeFooterImage1: r.badge_footer_image_1 || r.badge_footer_image || "",
+      badgeHeaderImage2: r.badge_header_image_2 || "",
+      badgeBodyImage2: r.badge_body_image_2 || "",
+      badgeFooterImage2: r.badge_footer_image_2 || "",
+      badgeActiveModel: r.badge_active_model || "1",
       badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
       programPdf: r.program_pdf || { fr: "", en: "", pt: "" },
       participationFee: r.participation_fee || { fr: "", en: "", pt: "" },
@@ -3692,7 +3705,9 @@ function emptyEventDraft() {
     title: { ...EMPTY_LANG3 }, theme: { ...EMPTY_LANG3 }, subtitle: { ...EMPTY_LANG3 },
     date_short: { ...EMPTY_LANG3 }, month_year: { ...EMPTY_LANG3 }, venue: { ...EMPTY_LANG3 },
     city: "", country: "", status: "draft",
-    badge_header_image: "", badge_body_image: "", badge_footer_image: "", badge_layout: "portrait", badge_pdf: { ...EMPTY_LANG3 },
+    badge_header_image_1: "", badge_body_image_1: "", badge_footer_image_1: "",
+    badge_header_image_2: "", badge_body_image_2: "", badge_footer_image_2: "",
+    badge_active_model: "1", badge_pdf: { ...EMPTY_LANG3 },
     program_pdf: { ...EMPTY_LANG3 },
     participation_fee: { ...EMPTY_LANG3 },
   };
@@ -3850,32 +3865,57 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
 
           <div className="border-t pt-5" style={{ borderColor: "#E7DCC2" }}>
             <div className="cb-label mb-3">{t("badge_header_tab", lang)}</div>
-            <div className="mb-4">
-              <label className="cb-label mb-2 block">{t("badge_layout_label", lang)}</label>
+
+            <div className="mb-5 p-3" style={{ background: "var(--sable-deep)" }}>
+              <label className="cb-label mb-2 block">{t("badge_active_model_label", lang)}</label>
               <div className="flex gap-3">
-                <label className="flex items-center gap-2 text-sm bg-white px-3 py-2 border" style={{ borderColor: editing.badge_layout !== "landscape" ? "var(--vert-fonce)" : "#CFC4A3" }}>
-                  <input type="radio" name="badge_layout" checked={editing.badge_layout !== "landscape"} onChange={() => setEditing(x => ({ ...x, badge_layout: "portrait" }))} />
-                  {t("badge_layout_portrait", lang)}
+                <label className="flex items-center gap-2 text-sm bg-white px-3 py-2 border" style={{ borderColor: editing.badge_active_model !== "2" ? "var(--vert-fonce)" : "#CFC4A3" }}>
+                  <input type="radio" name="badge_active_model" checked={editing.badge_active_model !== "2"} onChange={() => setEditing(x => ({ ...x, badge_active_model: "1" }))} />
+                  {t("badge_model_1_label", lang)}
                 </label>
-                <label className="flex items-center gap-2 text-sm bg-white px-3 py-2 border" style={{ borderColor: editing.badge_layout === "landscape" ? "var(--vert-fonce)" : "#CFC4A3" }}>
-                  <input type="radio" name="badge_layout" checked={editing.badge_layout === "landscape"} onChange={() => setEditing(x => ({ ...x, badge_layout: "landscape" }))} />
-                  {t("badge_layout_landscape", lang)}
+                <label className="flex items-center gap-2 text-sm bg-white px-3 py-2 border" style={{ borderColor: editing.badge_active_model === "2" ? "var(--vert-fonce)" : "#CFC4A3" }}>
+                  <input type="radio" name="badge_active_model" checked={editing.badge_active_model === "2"} onChange={() => setEditing(x => ({ ...x, badge_active_model: "2" }))} />
+                  {t("badge_model_2_label", lang)}
                 </label>
               </div>
-              <p className="text-xs text-black/50 mt-1">{t("badge_layout_help", lang)}</p>
+              <p className="text-xs text-black/50 mt-1">{t("badge_active_model_help", lang)}</p>
             </div>
-            <div className="grid sm:grid-cols-3 gap-4 mb-4">
-              <div>
-                <ImageUploader lang={lang} value={editing.badge_header_image} onChange={url => setEditing(x => ({ ...x, badge_header_image: url }))} folder="badges" />
-                <div className="cb-label mt-1">{t("badge_header_image_label", lang)}</div>
+
+            {/* MODÈLE 1 — Portrait */}
+            <div className="mb-5 border p-3" style={{ borderColor: editing.badge_active_model !== "2" ? "var(--vert-fonce)" : "#E7DCC2" }}>
+              <div className="text-sm font-semibold mb-3" style={{ color: "var(--vert-fonce)" }}>{t("badge_model_1_title", lang)}</div>
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div>
+                  <ImageUploader lang={lang} value={editing.badge_header_image_1} onChange={url => setEditing(x => ({ ...x, badge_header_image_1: url }))} folder="badges" />
+                  <div className="cb-label mt-1">{t("badge_header_image_label", lang)}</div>
+                </div>
+                <div>
+                  <ImageUploader lang={lang} value={editing.badge_body_image_1} onChange={url => setEditing(x => ({ ...x, badge_body_image_1: url }))} folder="badges" />
+                  <div className="cb-label mt-1">{t("badge_body_image_label", lang)}</div>
+                </div>
+                <div>
+                  <ImageUploader lang={lang} value={editing.badge_footer_image_1} onChange={url => setEditing(x => ({ ...x, badge_footer_image_1: url }))} folder="badges" />
+                  <div className="cb-label mt-1">{t("badge_footer_image_label", lang)}</div>
+                </div>
               </div>
-              <div>
-                <ImageUploader lang={lang} value={editing.badge_body_image} onChange={url => setEditing(x => ({ ...x, badge_body_image: url }))} folder="badges" />
-                <div className="cb-label mt-1">{editing.badge_layout === "landscape" ? t("badge_body_image_label_landscape", lang) : t("badge_body_image_label", lang)}</div>
-              </div>
-              <div>
-                <ImageUploader lang={lang} value={editing.badge_footer_image} onChange={url => setEditing(x => ({ ...x, badge_footer_image: url }))} folder="badges" />
-                <div className="cb-label mt-1">{t("badge_footer_image_label", lang)}</div>
+            </div>
+
+            {/* MODÈLE 2 — Paysage */}
+            <div className="mb-4 border p-3" style={{ borderColor: editing.badge_active_model === "2" ? "var(--vert-fonce)" : "#E7DCC2" }}>
+              <div className="text-sm font-semibold mb-3" style={{ color: "var(--vert-fonce)" }}>{t("badge_model_2_title", lang)}</div>
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div>
+                  <ImageUploader lang={lang} value={editing.badge_header_image_2} onChange={url => setEditing(x => ({ ...x, badge_header_image_2: url }))} folder="badges" />
+                  <div className="cb-label mt-1">{t("badge_header_image_label", lang)}</div>
+                </div>
+                <div>
+                  <ImageUploader lang={lang} value={editing.badge_body_image_2} onChange={url => setEditing(x => ({ ...x, badge_body_image_2: url }))} folder="badges" />
+                  <div className="cb-label mt-1">{t("badge_body_image_label_landscape", lang)}</div>
+                </div>
+                <div>
+                  <ImageUploader lang={lang} value={editing.badge_footer_image_2} onChange={url => setEditing(x => ({ ...x, badge_footer_image_2: url }))} folder="badges" />
+                  <div className="cb-label mt-1">{t("badge_footer_image_label", lang)}</div>
+                </div>
               </div>
             </div>
             <div>
