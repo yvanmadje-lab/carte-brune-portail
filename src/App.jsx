@@ -247,6 +247,7 @@ const T = {
   draft: { fr: "Brouillon", en: "Draft", pt: "Rascunho" },
   image: { fr: "Image", en: "Image", pt: "Imagem" },
   upload_image: { fr: "Choisir une image", en: "Choose image", pt: "Escolher imagem" },
+  remove_image: { fr: "Retirer l'image", en: "Remove image", pt: "Remover imagem" },
   uploading: { fr: "Envoi de l'image…", en: "Uploading image…", pt: "A enviar imagem…" },
   display_order: { fr: "Ordre d'affichage", en: "Display order", pt: "Ordem de exibição" },
   amenities_help: { fr: "Séparées par des virgules, ex: Wi-Fi, Piscine, Parking", en: "Comma-separated, e.g. Wi-Fi, Pool, Parking", pt: "Separadas por vírgulas, ex: Wi-Fi, Piscina, Estacionamento" },
@@ -575,8 +576,8 @@ function pickBadgePdfLink(event, lang) {
 const BADGE_W = 100, BADGE_H = 150;
 const BADGE_HEADER_H = 22;   // logos + 1ère rangée de drapeaux (image admin)
 const BADGE_FOOTER_H = 10;   // 2ème rangée de drapeaux (image admin)
-const BADGE_NAME_BANNER_H = 20; // bandeau vert nom/fonction (dessiné dynamiquement)
-const BADGE_BOTTOM_H = 26;   // ligne lieu + dates (dessinée dynamiquement)
+const BADGE_NAME_BANNER_H = 24; // bandeau vert nom/fonction (dessiné dynamiquement)
+const BADGE_BOTTOM_H = 22;   // ligne lieu + dates (dessinée dynamiquement)
 const BADGE_BODY_H = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H - BADGE_NAME_BANNER_H - BADGE_BOTTOM_H;
 
 // Badge complet, inspiré du modèle officiel : logos + drapeaux en
@@ -656,13 +657,33 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.setFillColor(...GREEN);
   doc.rect(0, bannerY, BADGE_W, BADGE_NAME_BANNER_H, "F");
   const fullName = `${p.lastName || ""} ${p.firstName || ""}`.trim().toUpperCase();
+  const nameMaxW = BADGE_W - 12;
   doc.setTextColor(255, 255, 255);
   doc.setFont(undefined, "bold");
-  doc.setFontSize(14);
-  doc.text(fullName, BADGE_W / 2, bannerY + 10, { align: "center", maxWidth: BADGE_W - 10 });
+  // Réduit la taille du nom s'il est trop long, pour limiter le
+  // nombre de lignes et éviter tout chevauchement avec la ligne du
+  // pays juste en dessous.
+  let nameFontSize = 14;
+  doc.setFontSize(nameFontSize);
+  let nameLines = doc.splitTextToSize(fullName, nameMaxW);
+  if (nameLines.length > 2) {
+    nameFontSize = 10.5;
+    doc.setFontSize(nameFontSize);
+    nameLines = doc.splitTextToSize(fullName, nameMaxW);
+  }
+  nameLines = nameLines.slice(0, 2); // jamais plus de 2 lignes affichées
+  const nameLineH = nameFontSize * 0.42;
+  let cursorY = bannerY + (nameLines.length === 1 ? 10 : 7.5);
+  nameLines.forEach(line => {
+    doc.text(line, BADGE_W / 2, cursorY, { align: "center" });
+    cursorY += nameLineH;
+  });
+
+  // Ligne du pays (ou libellé personnalisé) : toujours positionnée
+  // dynamiquement après la dernière ligne du nom, jamais superposée.
   doc.setTextColor(...YELLOW);
   doc.setFontSize(10);
-  doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), BADGE_W / 2, bannerY + 17, { align: "center", maxWidth: BADGE_W - 10 });
+  doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), BADGE_W / 2, cursorY + 2.5, { align: "center", maxWidth: nameMaxW });
 
   // ---------- Ligne du bas : Lieu + Dates (dynamique) ----------
   const bottomY = bannerY + BADGE_NAME_BANNER_H;
@@ -2087,10 +2108,15 @@ function ImageUploader({ lang, value, onChange, folder }) {
       {value && (
         <div className="mb-2 w-full" style={{ height: "320px", backgroundImage: `url(${value})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center", backgroundColor: "#F1EEE4", border: "1px solid #CFC4A3" }} />
       )}
-      <label className="cb-btn-outline text-sm cursor-pointer inline-flex">
-        <ImageIcon size={14} /> {uploading ? t("uploading", lang) : t("upload_image", lang)}
-        <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
-      </label>
+      <div className="flex items-center gap-3">
+        <label className="cb-btn-outline text-sm cursor-pointer inline-flex">
+          <ImageIcon size={14} /> {uploading ? t("uploading", lang) : t("upload_image", lang)}
+          <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
+        </label>
+        {value && (
+          <button type="button" onClick={() => onChange("")} className="text-xs underline" style={{ color: "#8A2A2A" }}>{t("remove_image", lang)}</button>
+        )}
+      </div>
       {error && <div className="text-xs mt-1" style={{ color: "#8A2A2A" }}>{error}</div>}
     </div>
   );
