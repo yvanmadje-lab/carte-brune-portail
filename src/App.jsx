@@ -319,6 +319,11 @@ const T = {
   badge_header_tab: { fr: "Images du badge (en-tête / corps / pied de page)", en: "Badge images (header / body / footer)", pt: "Imagens do crachá (cabeçalho / corpo / rodapé)" },
   badge_header_image_label: { fr: "Image d'en-tête (logos + 1ère rangée de drapeaux) — pleine largeur", en: "Header image (logos + 1st flag row) — full width", pt: "Imagem do cabeçalho (logótipos + 1ª fila de bandeiras) — largura total" },
   badge_body_image_label: { fr: "Photo (lieu emblématique) — format portrait recommandé (ratio environ 3:4). Occupe la colonne de gauche ; le titre de l'événement et le QR code s'affichent automatiquement à droite.", en: "Photo (landmark) — portrait format recommended (ratio approx. 3:4). Fills the left column; the event title and QR code are drawn automatically on the right.", pt: "Foto (local emblemático) — formato retrato recomendado (proporção aprox. 3:4). Ocupa a coluna esquerda; o título do evento e o QR code são exibidos automaticamente à direita." },
+  badge_body_image_label_landscape: { fr: "Photo (lieu emblématique) — format paysage recommandé (large, peu haute). S'affiche en bandeau pleine largeur en haut ; le titre et le QR code s'affichent automatiquement juste en dessous.", en: "Photo (landmark) — landscape format recommended (wide, short). Displayed as a full-width banner at the top; the title and QR code are drawn automatically just below.", pt: "Foto (local emblemático) — formato paisagem recomendado (larga, baixa). Exibida como faixa em largura total no topo; o título e o QR code são exibidos automaticamente logo abaixo." },
+  badge_layout_label: { fr: "Format du badge", en: "Badge layout", pt: "Formato do crachá" },
+  badge_layout_portrait: { fr: "Photo en portrait (colonne)", en: "Portrait photo (column)", pt: "Foto em retrato (coluna)" },
+  badge_layout_landscape: { fr: "Photo en paysage (bandeau)", en: "Landscape photo (banner)", pt: "Foto em paisagem (faixa)" },
+  badge_layout_help: { fr: "Choisis le format selon l'orientation de ta photo. Change simplement l'agencement — tout le reste (nom, QR, drapeaux...) reste identique.", en: "Choose the layout matching your photo's orientation. This only changes the arrangement — everything else (name, QR, flags...) stays the same.", pt: "Escolhe o formato de acordo com a orientação da tua foto. Isto só altera a disposição — tudo o resto (nome, QR, bandeiras...) mantém-se igual." },
   badge_footer_image_label: { fr: "Image (2ème rangée de drapeaux) — pleine largeur, sous la photo. Le Nom, la Fonction, le lieu et les dates s'affichent automatiquement en dessous.", en: "Image (2nd flag row) — full width, below the photo. Name, position, venue and dates are drawn automatically below.", pt: "Imagem (2ª fila de bandeiras) — largura total, abaixo da foto. Nome, função, local e datas são exibidos automaticamente abaixo." },
   badge_pdf_label: { fr: "Document PDF (le QR code du badge y renverra)", en: "PDF document (the badge QR code will link to it)", pt: "Documento PDF (o QR code do crachá remeterá para ele)" },
   upload_pdf: { fr: "Choisir un PDF", en: "Choose PDF", pt: "Escolher PDF" },
@@ -633,40 +638,64 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
     doc.rect(X(0), Y(0), S(BADGE_W), S(BADGE_HEADER_H), "F");
   }
 
-  // ---------- Photo (bandeau paysage, pleine largeur, en haut du corps) ----------
+  // ---------- Photo + Titre + QR : deux mises en page possibles ----------
+  // "portrait" : photo en colonne haute à gauche, titre + QR empilés
+  //              à droite (mise en page historique)
+  // "landscape" : photo en bandeau large en haut, titre + QR côte à
+  //               côte juste en dessous
   const bodyY = BADGE_HEADER_H;
-  const photoH = 36;
+  const isLandscape = eventData.badgeLayout === "landscape";
   const photoRadius = 4;
+
+  let photoX, photoY, photoW2, photoH2, textX, textW, qrBoxX, qrBoxY, qrBoxSize;
+  if (isLandscape) {
+    photoX = 0; photoY = bodyY; photoW2 = BADGE_W; photoH2 = 36;
+    const belowY = bodyY + photoH2 + 2;
+    const belowH = BADGE_BODY_H - photoH2 - 2;
+    qrBoxSize = Math.min(belowH - 4, 32);
+    qrBoxX = BADGE_W - qrBoxSize - 4;
+    qrBoxY = belowY;
+    textX = 4;
+    textW = qrBoxX - textX - 4;
+  } else {
+    photoX = 0; photoY = bodyY; photoW2 = 56; photoH2 = BADGE_BODY_H;
+    qrBoxSize = 0; // non utilisé : le portrait garde un encart rectangulaire dédié plus bas
+    textX = photoW2 + 4;
+    textW = BADGE_W - photoW2 - 8;
+  }
+
+  // ---------- Photo (coins arrondis automatiques, quelle que soit l'image) ----------
   if (bodyImg) {
-    // Coins arrondis appliqués automatiquement par le code (via un
-    // masque de découpe), quelle que soit l'image chargée par
-    // l'admin — pas besoin de la préparer soi-même avec des coins
-    // déjà arrondis.
     try {
       doc.saveGraphicsState();
-      doc.roundedRect(X(0), Y(bodyY), S(BADGE_W), S(photoH), S(photoRadius), S(photoRadius), null);
+      doc.roundedRect(X(photoX), Y(photoY), S(photoW2), S(photoH2), S(photoRadius), S(photoRadius), null);
       doc.clip();
       doc.discardPath();
-      doc.addImage(bodyImg, imgFormat(bodyImg), X(0), Y(bodyY), S(BADGE_W), S(photoH));
+      doc.addImage(bodyImg, imgFormat(bodyImg), X(photoX), Y(photoY), S(photoW2), S(photoH2));
       doc.restoreGraphicsState();
     } catch (e) { /* skip */ }
   } else {
     doc.setFillColor(...SAND);
-    doc.roundedRect(X(0), Y(bodyY), S(BADGE_W), S(photoH), S(photoRadius), S(photoRadius), "F");
+    doc.roundedRect(X(photoX), Y(photoY), S(photoW2), S(photoH2), S(photoRadius), S(photoRadius), "F");
   }
 
-  // ---------- Sous la photo : titre événement (gauche) + QR (droite) ----------
-  const belowY = bodyY + photoH + 2;
-  const belowH = BADGE_BODY_H - photoH - 2;
-  const qrBoxSize = Math.min(belowH - 4, 32);
-  const qrBoxX = BADGE_W - qrBoxSize - 4;
-  const textX = 4;
-  const textW = qrBoxX - textX - 4;
+  // Position et taille de l'encart QR (rectangulaire en portrait,
+  // carré en paysage) et de la zone de titre, selon le format choisi.
+  let qrBoxW, qrBoxH, titleY, titleAvailH;
+  if (isLandscape) {
+    qrBoxW = qrBoxSize; qrBoxH = qrBoxSize;
+    titleY = qrBoxY + 7;
+    titleAvailH = qrBoxH - 7;
+  } else {
+    qrBoxH = 34; qrBoxW = textW;
+    qrBoxY = photoY + BADGE_BODY_H - qrBoxH;
+    qrBoxX = textX;
+    titleY = bodyY + 12;
+    titleAvailH = qrBoxY - titleY - 2;
+  }
+
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
-
-  const titleY = belowY + 7;
-  const titleAvailH = belowH - 7;
   const ordinalSuffix = lang === "fr" ? "ème" : (eventData.ordinal?.[lang] || "");
   const titleText = `${(eventData.title?.[lang] || "").toUpperCase()} DU SYSTÈME D'ASSURANCE CARTE BRUNE CEDEAO`;
 
@@ -674,7 +703,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // le texte manuellement (mot par mot), en réservant sur la 1ère
   // ligne seulement la place prise par "42ème ", puis on réduit la
   // police tant que tout ne tient pas dans la hauteur disponible
-  // sous la photo (pour ne jamais rien faire déborder).
+  // (pour ne jamais rien faire déborder, quel que soit le format).
   // Toutes les tailles ci-dessous sont exprimées "à taille normale"
   // (100x150mm) puis converties via S() au moment de les appliquer.
   let titleFontSize = 11.5;
@@ -723,14 +752,14 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
     doc.text(line, X(textX), Y(titleY + lineH * (i + 1)));
   });
 
-  // ---------- Encart QR (vert), à droite du titre ----------
+  // ---------- Encart QR (vert) ----------
   doc.setFillColor(...GREEN);
-  doc.roundedRect(X(qrBoxX), Y(belowY), S(qrBoxSize), S(qrBoxSize), S(2), S(2), "F");
+  doc.roundedRect(X(qrBoxX), Y(qrBoxY), S(qrBoxW), S(qrBoxH), S(2), S(2), "F");
   const pdfLink = pickBadgePdfLink(eventData, lang);
   const qrValue = pdfLink || p.regNumber || p.id || "";
   const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 220 });
-  const qrSize = qrBoxSize - 6;
-  doc.addImage(qrDataUrl, "PNG", X(qrBoxX + (qrBoxSize - qrSize) / 2), Y(belowY + (qrBoxSize - qrSize) / 2), S(qrSize), S(qrSize));
+  const qrSize = Math.min(qrBoxW - 6, qrBoxH - 6);
+  doc.addImage(qrDataUrl, "PNG", X(qrBoxX + (qrBoxW - qrSize) / 2), Y(qrBoxY + (qrBoxH - qrSize) / 2), S(qrSize), S(qrSize));
 
   // ---------- Pied : 2ème rangée de drapeaux (image admin) ----------
   const footerY = bodyY + BADGE_BODY_H;
@@ -939,6 +968,7 @@ export default function App() {
       badgeHeaderImage: r.badge_header_image || "",
       badgeBodyImage: r.badge_body_image || "",
       badgeFooterImage: r.badge_footer_image || "",
+      badgeLayout: r.badge_layout || "portrait",
       badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
       programPdf: r.program_pdf || { fr: "", en: "", pt: "" },
       participationFee: r.participation_fee || { fr: "", en: "", pt: "" },
@@ -3662,7 +3692,7 @@ function emptyEventDraft() {
     title: { ...EMPTY_LANG3 }, theme: { ...EMPTY_LANG3 }, subtitle: { ...EMPTY_LANG3 },
     date_short: { ...EMPTY_LANG3 }, month_year: { ...EMPTY_LANG3 }, venue: { ...EMPTY_LANG3 },
     city: "", country: "", status: "draft",
-    badge_header_image: "", badge_body_image: "", badge_footer_image: "", badge_pdf: { ...EMPTY_LANG3 },
+    badge_header_image: "", badge_body_image: "", badge_footer_image: "", badge_layout: "portrait", badge_pdf: { ...EMPTY_LANG3 },
     program_pdf: { ...EMPTY_LANG3 },
     participation_fee: { ...EMPTY_LANG3 },
   };
@@ -3820,6 +3850,20 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
 
           <div className="border-t pt-5" style={{ borderColor: "#E7DCC2" }}>
             <div className="cb-label mb-3">{t("badge_header_tab", lang)}</div>
+            <div className="mb-4">
+              <label className="cb-label mb-2 block">{t("badge_layout_label", lang)}</label>
+              <div className="flex gap-3">
+                <label className="flex items-center gap-2 text-sm bg-white px-3 py-2 border" style={{ borderColor: editing.badge_layout !== "landscape" ? "var(--vert-fonce)" : "#CFC4A3" }}>
+                  <input type="radio" name="badge_layout" checked={editing.badge_layout !== "landscape"} onChange={() => setEditing(x => ({ ...x, badge_layout: "portrait" }))} />
+                  {t("badge_layout_portrait", lang)}
+                </label>
+                <label className="flex items-center gap-2 text-sm bg-white px-3 py-2 border" style={{ borderColor: editing.badge_layout === "landscape" ? "var(--vert-fonce)" : "#CFC4A3" }}>
+                  <input type="radio" name="badge_layout" checked={editing.badge_layout === "landscape"} onChange={() => setEditing(x => ({ ...x, badge_layout: "landscape" }))} />
+                  {t("badge_layout_landscape", lang)}
+                </label>
+              </div>
+              <p className="text-xs text-black/50 mt-1">{t("badge_layout_help", lang)}</p>
+            </div>
             <div className="grid sm:grid-cols-3 gap-4 mb-4">
               <div>
                 <ImageUploader lang={lang} value={editing.badge_header_image} onChange={url => setEditing(x => ({ ...x, badge_header_image: url }))} folder="badges" />
@@ -3827,7 +3871,7 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
               </div>
               <div>
                 <ImageUploader lang={lang} value={editing.badge_body_image} onChange={url => setEditing(x => ({ ...x, badge_body_image: url }))} folder="badges" />
-                <div className="cb-label mt-1">{t("badge_body_image_label", lang)}</div>
+                <div className="cb-label mt-1">{editing.badge_layout === "landscape" ? t("badge_body_image_label_landscape", lang) : t("badge_body_image_label", lang)}</div>
               </div>
               <div>
                 <ImageUploader lang={lang} value={editing.badge_footer_image} onChange={url => setEditing(x => ({ ...x, badge_footer_image: url }))} folder="badges" />
