@@ -1634,7 +1634,7 @@ function PublicSite({ lang, setView, hotels, tourism, heroSlides, logoUrl, speak
           {speakers.map((s, i) => (
             <div key={s.id || i} className="flex items-start gap-4 bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
               {s.image ? (
-                <img src={s.image} alt={s.name} className="w-32 h-32 rounded-full object-cover flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
+                <img src={s.image} alt={s.name} className="w-32 h-32 rounded-full object-cover object-[center_20%] flex-shrink-0" style={{ border: "2px solid var(--vert)" }} />
               ) : (
                 <div className="seal w-32 h-32 flex-shrink-0"><div className="seal-ring" /><div style={{ position:"absolute", inset:6, background:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}><Quote size={36} color="var(--vert-fonce)" /></div></div>
               )}
@@ -2914,7 +2914,7 @@ function SpeakersManager({ lang , canEdit, eventId }) {
         {items.map(it => (
           <div key={it.id} className="flex items-start gap-3 bg-white border p-4" style={{ borderColor: "#CFC4A3" }}>
             {it.image_url ? (
-              <img src={it.image_url} alt={it.name} className="w-32 h-32 rounded-full object-cover flex-shrink-0" />
+              <img src={it.image_url} alt={it.name} className="w-32 h-32 rounded-full object-cover object-[center_20%] flex-shrink-0" />
             ) : (
               <div className="w-32 h-32 rounded-full flex-shrink-0" style={{ background: "var(--sable-deep)" }} />
             )}
