@@ -776,7 +776,13 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // ---------- Encart QR (vert) ----------
   doc.setFillColor(...GREEN);
   doc.roundedRect(X(qrBoxX), Y(qrBoxY), S(qrBoxW), S(qrBoxH), S(2), S(2), "F");
-  const pdfLink = pickBadgePdfLink(eventData, lang);
+  // Le document lié au QR code suit la langue choisie par CE
+  // participant à son inscription (pas la langue actuelle de
+  // l'admin) — un Ghanéen inscrit en anglais aura un QR vers la
+  // version anglaise du document, même si le lot de badges est
+  // généré pendant que l'admin est en français.
+  const docLang = p.registrationLang || lang;
+  const pdfLink = pickBadgePdfLink(eventData, docLang);
   const qrValue = pdfLink || p.regNumber || p.id || "";
   const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 220 });
   const qrSize = Math.min(qrBoxW - 6, qrBoxH - 6);
@@ -1209,6 +1215,7 @@ export default function App() {
       confirmationEmailSent: row.confirmation_email_sent,
       confirmationEmailError: row.confirmation_email_error,
       badgeCountryLabel: row.badge_country_label,
+      registrationLang: row.registration_lang || "fr",
     };
   }
 
@@ -1277,6 +1284,7 @@ export default function App() {
       orgType: finalOrgType,
       hotelName: form.wantsHotel === "yes" ? (selectedHotel.name[lang] || selectedHotel.name.fr) : "",
       roomType: form.wantsHotel === "yes" ? (selectedRoom.type[lang] || selectedRoom.type.fr) : "",
+      lang,
     };
     const { data, error } = await supabase.rpc("register_participant", { payload });
     setSubmitting(false);
