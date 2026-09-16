@@ -777,20 +777,27 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const qrSize = Math.min(qrBoxW - 6, qrBoxH - 6);
   doc.addImage(qrDataUrl, "PNG", X(qrBoxX + (qrBoxW - qrSize) / 2), Y(qrBoxY + (qrBoxH - qrSize) / 2), S(qrSize), S(qrSize));
 
-  // ---------- Pied : 2ème rangée de drapeaux (image admin, optionnelle) ----------
+  // ---------- Pied : 2ème rangée de drapeaux (image admin) ----------
+  // Modèle 1 (portrait) : comportement historique inchangé — bande
+  // toujours affichée (image, ou fond neutre si rien n'est chargé).
+  // Modèle 2 (paysage) : si aucune image n'est configurée, cet
+  // espace est absorbé par le bandeau Nom/Pays juste en dessous
+  // plutôt que de rester vide.
   const footerY = bodyY + bodyH;
   const hasFooterImg = !!footerImg;
   if (hasFooterImg) {
     try { doc.addImage(footerImg, imgFormat(footerImg), X(0), Y(footerY), S(BADGE_W), S(BADGE_FOOTER_H)); } catch (e) { /* skip */ }
+  } else if (!isLandscape) {
+    doc.setFillColor(...SAND);
+    doc.rect(X(0), Y(footerY), S(BADGE_W), S(BADGE_FOOTER_H), "F");
   }
-  // Si aucune image de pied de page n'est configurée, on ne laisse
-  // pas cet espace vide : le bandeau Nom/Pays remonte pour l'occuper
-  // entièrement (d'où le "+ BADGE_FOOTER_H" ci-dessous).
-  const effectiveBannerH = nameBannerH + (hasFooterImg ? 0 : BADGE_FOOTER_H);
+  const mergeFooterIntoBanner = isLandscape && !hasFooterImg;
+  const effectiveBannerH = nameBannerH + (mergeFooterIntoBanner ? BADGE_FOOTER_H : 0);
 
-  // ---------- Bandeau Nom + Fonction (dynamique), en brun ----------
-  const bannerY = hasFooterImg ? footerY + BADGE_FOOTER_H : footerY;
-  doc.setFillColor(...BROWN);
+  // ---------- Bandeau Nom + Fonction (dynamique) ----------
+  // Vert pour le Modèle 1 (comme d'origine), brun pour le Modèle 2.
+  const bannerY = mergeFooterIntoBanner ? footerY : footerY + BADGE_FOOTER_H;
+  doc.setFillColor(...(isLandscape ? BROWN : GREEN));
   doc.rect(X(0), Y(bannerY), S(BADGE_W), S(effectiveBannerH), "F");
   const fullName = `${p.lastName || ""} ${p.firstName || ""}`.trim().toUpperCase();
   const nameMaxW = BADGE_W - 12;
