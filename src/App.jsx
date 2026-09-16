@@ -603,7 +603,12 @@ function imgFormat(dataUrl) {
 
 function pickBadgePdfLink(event, lang) {
   const pdf = event.badgePdf || {};
-  return pdf[lang] || pdf.fr || pdf.en || pdf.pt || "";
+  const hasAny = pdf.fr || pdf.en || pdf.pt;
+  if (!hasAny) return "";
+  // Le QR code pointe vers notre propre domaine (qui retransmet le
+  // fichier lui-même), jamais directement vers l'adresse de stockage
+  // Supabase — et s'ouvre directement, sans téléchargement préalable.
+  return `${window.location.origin}/api/badge-pdf?lang=${lang}`;
 }
 
 const BADGE_W = 100, BADGE_H = 150;
