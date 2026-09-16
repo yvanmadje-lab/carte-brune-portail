@@ -777,19 +777,21 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const qrSize = Math.min(qrBoxW - 6, qrBoxH - 6);
   doc.addImage(qrDataUrl, "PNG", X(qrBoxX + (qrBoxW - qrSize) / 2), Y(qrBoxY + (qrBoxH - qrSize) / 2), S(qrSize), S(qrSize));
 
-  // ---------- Pied : 2ème rangée de drapeaux (image admin) ----------
+  // ---------- Pied : 2ème rangée de drapeaux (image admin, optionnelle) ----------
   const footerY = bodyY + bodyH;
-  if (footerImg) {
+  const hasFooterImg = !!footerImg;
+  if (hasFooterImg) {
     try { doc.addImage(footerImg, imgFormat(footerImg), X(0), Y(footerY), S(BADGE_W), S(BADGE_FOOTER_H)); } catch (e) { /* skip */ }
-  } else {
-    doc.setFillColor(...SAND);
-    doc.rect(X(0), Y(footerY), S(BADGE_W), S(BADGE_FOOTER_H), "F");
   }
+  // Si aucune image de pied de page n'est configurée, on ne laisse
+  // pas cet espace vide : le bandeau Nom/Pays remonte pour l'occuper
+  // entièrement (d'où le "+ BADGE_FOOTER_H" ci-dessous).
+  const effectiveBannerH = nameBannerH + (hasFooterImg ? 0 : BADGE_FOOTER_H);
 
-  // ---------- Bandeau vert : Nom + Fonction (dynamique) ----------
-  const bannerY = footerY + BADGE_FOOTER_H;
-  doc.setFillColor(...GREEN);
-  doc.rect(X(0), Y(bannerY), S(BADGE_W), S(nameBannerH), "F");
+  // ---------- Bandeau Nom + Fonction (dynamique), en brun ----------
+  const bannerY = hasFooterImg ? footerY + BADGE_FOOTER_H : footerY;
+  doc.setFillColor(...BROWN);
+  doc.rect(X(0), Y(bannerY), S(BADGE_W), S(effectiveBannerH), "F");
   const fullName = `${p.lastName || ""} ${p.firstName || ""}`.trim().toUpperCase();
   const nameMaxW = BADGE_W - 12;
   doc.setTextColor(255, 255, 255);
@@ -812,9 +814,12 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // une marge haute minimale — ce qui empêche tout débordement du
   // pays hors du bandeau vert, y compris avec un nom sur 2 lignes et
   // un bandeau plus compact (Modèle 2).
-  const countryY = nameBannerH - 5;
+  const countryY = effectiveBannerH - 6;
   const nameBlockH = nameLines.length * nameLineH;
-  let cursorY = bannerY + Math.max(6, countryY - 2 - nameBlockH + nameLineH);
+  // Espace toujours réservé (5mm) entre la dernière ligne du nom et
+  // la ligne du pays, quel que soit le nombre de lignes du nom —
+  // c'est ce calcul précis qui manquait et causait le chevauchement.
+  let cursorY = bannerY + Math.max(6, countryY - 5 - (nameLines.length - 1) * nameLineH);
   nameLines.forEach(line => {
     doc.text(line, X(BADGE_W / 2), Y(cursorY), { align: "center" });
     cursorY += nameLineH;
@@ -830,7 +835,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // Icônes alignées dans une même colonne verticale (calculée sur le
   // texte le plus large des 3 lignes), au lieu d'être centrées
   // indépendamment ligne par ligne.
-  const bottomY = bannerY + nameBannerH;
+  const bottomY = bannerY + effectiveBannerH;
   doc.setFillColor(255, 255, 255);
   doc.rect(X(0), Y(bottomY), S(BADGE_W), S(bottomH), "F");
   doc.setTextColor(...BROWN);
