@@ -326,6 +326,8 @@ const T = {
   badge_layout_help: { fr: "Choisis le format selon l'orientation de ta photo. Change simplement l'agencement — tout le reste (nom, QR, drapeaux...) reste identique.", en: "Choose the layout matching your photo's orientation. This only changes the arrangement — everything else (name, QR, flags...) stays the same.", pt: "Escolhe o formato de acordo com a orientação da tua foto. Isto só altera a disposição — tudo o resto (nome, QR, bandeiras...) mantém-se igual." },
   badge_active_model_label: { fr: "Modèle actuellement utilisé pour les badges", en: "Currently active badge model", pt: "Modelo de crachá atualmente ativo" },
   badge_active_model_help: { fr: "Chaque modèle garde ses propres images en mémoire — bascule librement de l'un à l'autre sans jamais perdre ce que tu as déjà configuré.", en: "Each model keeps its own images saved — switch freely between them without ever losing what you've already set up.", pt: "Cada modelo guarda as suas próprias imagens — muda livremente entre eles sem nunca perder o que já configuraste." },
+  badge_format_label: { fr: "Format du badge (taille d'impression)", en: "Badge format (print size)", pt: "Formato do crachá (tamanho de impressão)" },
+  badge_format_help: { fr: "Détermine la taille réelle du badge imprimé, et combien tiennent sur une feuille A4. Les images d'en-tête, de photo et de pied de page s'adaptent automatiquement à ce format.", en: "Determines the actual printed badge size, and how many fit on an A4 sheet. Header, photo, and footer images adapt automatically to this format.", pt: "Determina o tamanho real do crachá impresso, e quantos cabem numa folha A4. As imagens de cabeçalho, foto e rodapé adaptam-se automaticamente a este formato." },
   badge_model_1_label: { fr: "Modèle 1 (portrait)", en: "Model 1 (portrait)", pt: "Modelo 1 (retrato)" },
   badge_model_2_label: { fr: "Modèle 2 (paysage)", en: "Model 2 (landscape)", pt: "Modelo 2 (paisagem)" },
   badge_model_1_title: { fr: "Modèle 1 — Photo en portrait (colonne)", en: "Model 1 — Portrait photo (column)", pt: "Modelo 1 — Foto em retrato (coluna)" },
@@ -611,7 +613,7 @@ function pickBadgePdfLink(event, lang) {
   return `${window.location.origin}/api/badge-pdf?lang=${lang}`;
 }
 
-const BADGE_W = 100, BADGE_H = 150;
+const BADGE_W = 105, BADGE_H = 148;
 const BADGE_HEADER_H = 22;   // logos + 1ère rangée de drapeaux (image admin)
 const BADGE_FOOTER_H = 5;    // 2ème rangée de drapeaux (image admin) — réduite de moitié
 // La hauteur du bandeau nom/pays et de la ligne lieu+dates (et donc
@@ -626,17 +628,20 @@ const BADGE_FOOTER_H = 5;    // 2ème rangée de drapeaux (image admin) — réd
 // Lieu + Dates tout en bas. Tout, sauf les 2 images de drapeaux et
 // la photo, est généré dynamiquement à partir des données réelles
 // de l'événement et du participant.
-async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, lang, offsetX = 0, offsetY = 0, scale = 1) {
+async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, lang, offsetX = 0, offsetY = 0, scale = 1, formatW = null, formatH = null) {
   const GREEN = [20, 83, 45];
   const BROWN = [107, 58, 31];
   const SAND = [245, 242, 234];
   const YELLOW = [230, 200, 60];
-  // X/Y convertissent une coordonnée du badge "à taille normale"
-  // (100x150mm) en coordonnée réelle sur la page ; S convertit de la
-  // même façon une largeur, une hauteur ou une taille de police.
-  // Cela permet de dessiner plusieurs badges, réduits et côte à
-  // côte, sur une même page A4 (4 par page) sans dupliquer toute la
-  // logique de mise en page.
+  // bw/bh : dimensions réelles du badge choisies dans l'admin (par
+  // défaut 105x148mm si rien n'est configuré). X/Y convertissent une
+  // coordonnée du badge "à taille normale" en coordonnée réelle sur
+  // la page ; S convertit de la même façon une largeur, une hauteur
+  // ou une taille de police. Cela permet de dessiner plusieurs
+  // badges, réduits et côte à côte, sur une même page A4 (4 par
+  // page) sans dupliquer toute la logique de mise en page.
+  const bw = formatW || BADGE_W;
+  const bh = formatH || BADGE_H;
   const X = v => offsetX + v * scale;
   const Y = v => offsetY + v * scale;
   const S = v => v * scale;
@@ -648,14 +653,14 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // proportions historiques, inchangées.
   const nameBannerH = isLandscape ? 18 : 24;
   const bottomH = isLandscape ? 17 : 24;
-  const bodyH = BADGE_H - BADGE_HEADER_H - BADGE_FOOTER_H - nameBannerH - bottomH;
+  const bodyH = bh - BADGE_HEADER_H - BADGE_FOOTER_H - nameBannerH - bottomH;
 
   // ---------- En-tête : logos + drapeaux (image admin) ----------
   if (headerImg) {
-    try { doc.addImage(headerImg, imgFormat(headerImg), X(0), Y(0), S(BADGE_W), S(BADGE_HEADER_H)); } catch (e) { /* skip */ }
+    try { doc.addImage(headerImg, imgFormat(headerImg), X(0), Y(0), S(bw), S(BADGE_HEADER_H)); } catch (e) { /* skip */ }
   } else {
     doc.setFillColor(...GREEN);
-    doc.rect(X(0), Y(0), S(BADGE_W), S(BADGE_HEADER_H), "F");
+    doc.rect(X(0), Y(0), S(bw), S(BADGE_HEADER_H), "F");
   }
 
   // ---------- Photo + Titre + QR : deux mises en page possibles ----------
@@ -668,11 +673,11 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
 
   let photoX, photoY, photoW2, photoH2, textX, textW, qrBoxX, qrBoxY, qrBoxSize;
   if (isLandscape) {
-    photoX = 0; photoY = bodyY; photoW2 = BADGE_W; photoH2 = 48;
+    photoX = 0; photoY = bodyY; photoW2 = bw; photoH2 = 48;
     const belowY = bodyY + photoH2 + 2;
     const belowH = bodyH - photoH2 - 2;
     qrBoxSize = Math.min(belowH - 4, 40);
-    qrBoxX = BADGE_W - qrBoxSize - 4;
+    qrBoxX = bw - qrBoxSize - 4;
     qrBoxY = belowY;
     textX = 4;
     textW = qrBoxX - textX - 4;
@@ -680,7 +685,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
     photoX = 0; photoY = bodyY; photoW2 = 56; photoH2 = bodyH;
     qrBoxSize = 0; // non utilisé : le portrait garde un encart rectangulaire dédié plus bas
     textX = photoW2 + 4;
-    textW = BADGE_W - photoW2 - 8;
+    textW = bw - photoW2 - 8;
   }
 
   // ---------- Photo (coins arrondis automatiques, quelle que soit l'image) ----------
@@ -797,10 +802,10 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const footerY = bodyY + bodyH;
   const hasFooterImg = !!footerImg;
   if (hasFooterImg) {
-    try { doc.addImage(footerImg, imgFormat(footerImg), X(0), Y(footerY), S(BADGE_W), S(BADGE_FOOTER_H)); } catch (e) { /* skip */ }
+    try { doc.addImage(footerImg, imgFormat(footerImg), X(0), Y(footerY), S(bw), S(BADGE_FOOTER_H)); } catch (e) { /* skip */ }
   } else if (!isLandscape) {
     doc.setFillColor(...SAND);
-    doc.rect(X(0), Y(footerY), S(BADGE_W), S(BADGE_FOOTER_H), "F");
+    doc.rect(X(0), Y(footerY), S(bw), S(BADGE_FOOTER_H), "F");
   }
   const mergeFooterIntoBanner = isLandscape && !hasFooterImg;
   const effectiveBannerH = nameBannerH + (mergeFooterIntoBanner ? BADGE_FOOTER_H : 0);
@@ -809,9 +814,9 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // Vert pour le Modèle 1 (comme d'origine), brun pour le Modèle 2.
   const bannerY = mergeFooterIntoBanner ? footerY : footerY + BADGE_FOOTER_H;
   doc.setFillColor(...(isLandscape ? BROWN : GREEN));
-  doc.rect(X(0), Y(bannerY), S(BADGE_W), S(effectiveBannerH), "F");
+  doc.rect(X(0), Y(bannerY), S(bw), S(effectiveBannerH), "F");
   const fullName = `${p.lastName || ""} ${p.firstName || ""}`.trim().toUpperCase();
-  const nameMaxW = BADGE_W - 12;
+  const nameMaxW = bw - 12;
   doc.setTextColor(255, 255, 255);
   doc.setFont(undefined, "bold");
   // Réduit la taille du nom s'il est trop long, pour limiter le
@@ -839,7 +844,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // c'est ce calcul précis qui manquait et causait le chevauchement.
   let cursorY = bannerY + Math.max(6, countryY - 5 - (nameLines.length - 1) * nameLineH);
   nameLines.forEach(line => {
-    doc.text(line, X(BADGE_W / 2), Y(cursorY), { align: "center" });
+    doc.text(line, X(bw / 2), Y(cursorY), { align: "center" });
     cursorY += nameLineH;
   });
 
@@ -847,7 +852,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // bas du bandeau (countryY), donc jamais en dehors de celui-ci.
   doc.setTextColor(...YELLOW);
   doc.setFontSize(S(10));
-  doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), X(BADGE_W / 2), Y(bannerY + countryY), { align: "center", maxWidth: nameMaxW * scale });
+  doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), X(bw / 2), Y(bannerY + countryY), { align: "center", maxWidth: nameMaxW * scale });
 
   // ---------- Ligne du bas : Lieu (hôtel + ville-pays) + Dates ----------
   // Icônes alignées dans une même colonne verticale (calculée sur le
@@ -855,7 +860,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // indépendamment ligne par ligne.
   const bottomY = bannerY + effectiveBannerH;
   doc.setFillColor(255, 255, 255);
-  doc.rect(X(0), Y(bottomY), S(BADGE_W), S(bottomH), "F");
+  doc.rect(X(0), Y(bottomY), S(bw), S(bottomH), "F");
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
   doc.setFontSize(S(8));
@@ -869,10 +874,10 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const cityW = doc.getTextWidth(cityCountryLine) / scale;
   const dateW = doc.getTextWidth(dateLine) / scale;
   const blockW = Math.max(venueW, cityW, dateW) + iconSize + iconGap;
-  const groupStartX = BADGE_W / 2 - blockW / 2;
+  const groupStartX = bw / 2 - blockW / 2;
   const iconCx = groupStartX + iconSize / 2;
   const textX2 = groupStartX + iconSize + iconGap;
-  const maxTextW = S(BADGE_W - 6);
+  const maxTextW = S(bw - 6);
 
   const line1Y = bottomY + 5.5, line2Y = bottomY + 9, line3Y = bottomY + (isLandscape ? 14 : 16);
   drawPinIcon(doc, X(iconCx), Y((line1Y + line2Y) / 2 - iconSize * 0.55), S(iconSize), BROWN);
@@ -894,47 +899,53 @@ async function downloadBadges(participants, eventData, lang, filename) {
     loadImageAsDataURL(useModel2 ? eventData.badgeFooterImage2 : eventData.badgeFooterImage1),
   ]);
 
+  // Format choisi dans l'admin (par défaut 105x148mm si rien n'est
+  // configuré pour cet événement).
+  const fw = eventData.badgeFormatW || BADGE_W;
+  const fh = eventData.badgeFormatH || BADGE_H;
+
   if (participants.length <= 1) {
-    // Téléchargement d'un seul badge : on garde la taille réelle
-    // (100x150mm), idéale pour une imprimante à badges dédiée.
-    const doc = new jsPDF({ unit: "mm", format: [BADGE_W, BADGE_H] });
+    // Téléchargement d'un seul badge : on garde la taille réelle,
+    // idéale pour une imprimante à badges dédiée.
+    const doc = new jsPDF({ unit: "mm", format: [fw, fh] });
     for (let i = 0; i < participants.length; i++) {
-      if (i > 0) doc.addPage([BADGE_W, BADGE_H]);
-      await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang);
+      if (i > 0) doc.addPage([fw, fh]);
+      await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang, 0, 0, 1, fw, fh);
     }
     await saveOrShareBlob(doc.output("blob"), filename);
     return;
   }
 
-  // Téléchargement de la liste complète : 4 badges par page A4
-  // (2 colonnes x 2 lignes), légèrement réduits, avec des repères de
-  // découpe en pointillés — prêt à imprimer sur une imprimante
-  // classique et à découper aux ciseaux.
+  // Téléchargement de la liste complète : autant de badges que
+  // possible par page A4, à leur taille réelle (aucune réduction),
+  // calculé automatiquement à partir du format choisi. Pour
+  // 105x148mm, cela donne exactement 4 par page (2 colonnes x 2
+  // lignes). Des repères de découpe en pointillés délimitent chaque
+  // badge — prêt à imprimer sur une imprimante classique et à
+  // découper aux ciseaux.
   const A4_W = 210, A4_H = 297;
-  const margin = 5, gutter = 4;
-  const cellW = (A4_W - margin * 2 - gutter) / 2;
-  const cellH = (A4_H - margin * 2 - gutter) / 2;
-  const scale = Math.min(cellW / BADGE_W, cellH / BADGE_H);
-  const scaledW = BADGE_W * scale, scaledH = BADGE_H * scale;
+  const cols = Math.max(1, Math.floor(A4_W / fw));
+  const rows = Math.max(1, Math.floor(A4_H / fh));
+  const perPage = cols * rows;
+  const marginX = (A4_W - cols * fw) / 2;
+  const marginY = (A4_H - rows * fh) / 2;
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   for (let i = 0; i < participants.length; i++) {
-    const posOnPage = i % 4;
+    const posOnPage = i % perPage;
     if (i > 0 && posOnPage === 0) doc.addPage("a4");
-    const col = posOnPage % 2, row = Math.floor(posOnPage / 2);
-    const cellX = margin + col * (cellW + gutter);
-    const cellY = margin + row * (cellH + gutter);
-    const offsetX = cellX + (cellW - scaledW) / 2;
-    const offsetY = cellY + (cellH - scaledH) / 2;
+    const col = posOnPage % cols, row = Math.floor(posOnPage / cols);
+    const offsetX = marginX + col * fw;
+    const offsetY = marginY + row * fh;
 
-    await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang, offsetX, offsetY, scale);
+    await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang, offsetX, offsetY, 1, fw, fh);
 
     // Repère de découpe en pointillés léger autour du badge — dessiné
     // APRÈS le badge, pour ne pas être recouvert par ses aplats de
     // couleur (ce qui effaçait les traits horizontaux auparavant).
     doc.setDrawColor(180, 180, 180);
     doc.setLineDashPattern([1, 1], 0);
-    doc.rect(offsetX, offsetY, scaledW, scaledH);
+    doc.rect(offsetX, offsetY, fw, fh);
     doc.setLineDashPattern([], 0);
   }
   await saveOrShareBlob(doc.output("blob"), filename);
@@ -1022,6 +1033,8 @@ export default function App() {
       badgeBodyImage2: r.badge_body_image_2 || "",
       badgeFooterImage2: r.badge_footer_image_2 || "",
       badgeActiveModel: r.badge_active_model || "1",
+      badgeFormatW: r.badge_format_w || null,
+      badgeFormatH: r.badge_format_h || null,
       badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
       programPdf: r.program_pdf || { fr: "", en: "", pt: "" },
       participationFee: r.participation_fee || { fr: "", en: "", pt: "" },
@@ -3749,7 +3762,7 @@ function emptyEventDraft() {
     city: "", country: "", status: "draft",
     badge_header_image_1: "", badge_body_image_1: "", badge_footer_image_1: "",
     badge_header_image_2: "", badge_body_image_2: "", badge_footer_image_2: "",
-    badge_active_model: "1", badge_pdf: { ...EMPTY_LANG3 },
+    badge_active_model: "1", badge_format_w: null, badge_format_h: null, badge_pdf: { ...EMPTY_LANG3 },
     program_pdf: { ...EMPTY_LANG3 },
     participation_fee: { ...EMPTY_LANG3 },
   };
@@ -3921,6 +3934,24 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
                 </label>
               </div>
               <p className="text-xs text-black/50 mt-1">{t("badge_active_model_help", lang)}</p>
+            </div>
+
+            <div className="mb-5 p-3" style={{ background: "var(--sable-deep)" }}>
+              <label className="cb-label mb-2 block">{t("badge_format_label", lang)}</label>
+              <select
+                className="cb-input bg-white"
+                value={editing.badge_format_w && editing.badge_format_h ? `${editing.badge_format_w}x${editing.badge_format_h}` : "105x148"}
+                onChange={e => {
+                  const [w, h] = e.target.value.split("x").map(Number);
+                  setEditing(x => ({ ...x, badge_format_w: w, badge_format_h: h }));
+                }}
+              >
+                <option value="105x148">105 × 148 mm (A6 — 4 par page A4)</option>
+                <option value="100x150">100 × 150 mm (4 par page A4, léger ajustement)</option>
+                <option value="90x130">90 × 130 mm (6 par page A4)</option>
+                <option value="85x120">85 × 120 mm (format carte, 8 par page A4)</option>
+              </select>
+              <p className="text-xs text-black/50 mt-1">{t("badge_format_help", lang)}</p>
             </div>
 
             {/* MODÈLE 1 — Portrait */}
