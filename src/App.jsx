@@ -915,8 +915,11 @@ async function downloadBadges(participants, eventData, lang, filename) {
 
   // Format choisi dans l'admin (par défaut 105x148mm si rien n'est
   // configuré pour cet événement).
-  const fw = eventData.badgeFormatW || BADGE_W;
-  const fh = eventData.badgeFormatH || BADGE_H;
+  // Format choisi dans l'admin, propre à chaque modèle (par défaut
+  // 105x148mm si rien n'est configuré pour le modèle actif).
+  const useModel2Format = eventData.badgeActiveModel === "2";
+  const fw = (useModel2Format ? eventData.badgeFormatW2 : eventData.badgeFormatW1) || BADGE_W;
+  const fh = (useModel2Format ? eventData.badgeFormatH2 : eventData.badgeFormatH1) || BADGE_H;
 
   if (participants.length <= 1) {
     // Téléchargement d'un seul badge : on garde la taille réelle,
@@ -1053,8 +1056,10 @@ export default function App() {
       badgeBodyImage2: r.badge_body_image_2 || "",
       badgeFooterImage2: r.badge_footer_image_2 || "",
       badgeActiveModel: r.badge_active_model || "1",
-      badgeFormatW: r.badge_format_w || null,
-      badgeFormatH: r.badge_format_h || null,
+      badgeFormatW1: r.badge_format_w_1 || r.badge_format_w || null,
+      badgeFormatH1: r.badge_format_h_1 || r.badge_format_h || null,
+      badgeFormatW2: r.badge_format_w_2 || null,
+      badgeFormatH2: r.badge_format_h_2 || null,
       badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
       programPdf: r.program_pdf || { fr: "", en: "", pt: "" },
       participationFee: r.participation_fee || { fr: "", en: "", pt: "" },
@@ -3782,7 +3787,7 @@ function emptyEventDraft() {
     city: "", country: "", status: "draft",
     badge_header_image_1: "", badge_body_image_1: "", badge_footer_image_1: "",
     badge_header_image_2: "", badge_body_image_2: "", badge_footer_image_2: "",
-    badge_active_model: "1", badge_format_w: null, badge_format_h: null, badge_pdf: { ...EMPTY_LANG3 },
+    badge_active_model: "1", badge_format_w_1: null, badge_format_h_1: null, badge_format_w_2: null, badge_format_h_2: null, badge_pdf: { ...EMPTY_LANG3 },
     program_pdf: { ...EMPTY_LANG3 },
     participation_fee: { ...EMPTY_LANG3 },
   };
@@ -3964,28 +3969,28 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
               <p className="text-xs text-black/50 mt-1">{t("badge_active_model_help", lang)}</p>
             </div>
 
-            <div className="mb-5 p-3" style={{ background: "var(--sable-deep)" }}>
-              <label className="cb-label mb-2 block">{t("badge_format_label", lang)}</label>
-              <select
-                className="cb-input bg-white"
-                value={editing.badge_format_w && editing.badge_format_h ? `${editing.badge_format_w}x${editing.badge_format_h}` : "105x148"}
-                onChange={e => {
-                  const [w, h] = e.target.value.split("x").map(Number);
-                  setEditing(x => ({ ...x, badge_format_w: w, badge_format_h: h }));
-                }}
-              >
-                <option value="105x148">105 × 148 mm (A6 — 4 par page A4)</option>
-                <option value="100x150">100 × 150 mm (2 par page A4, taille réelle)</option>
-                <option value="90x130">90 × 130 mm (4 par page A4)</option>
-                <option value="85x120">85 × 120 mm (format carte, 4 par page A4)</option>
-                <option value="75x105">75 × 105 mm (4 par page A4)</option>
-              </select>
-              <p className="text-xs text-black/50 mt-1">{t("badge_format_help", lang)}</p>
-            </div>
-
             {/* MODÈLE 1 — Portrait */}
             <div className="mb-5 border p-3" style={{ borderColor: editing.badge_active_model !== "2" ? "var(--vert-fonce)" : "#E7DCC2" }}>
               <div className="text-sm font-semibold mb-3" style={{ color: "var(--vert-fonce)" }}>{t("badge_model_1_title", lang)}</div>
+              <div className="mb-4">
+                <label className="cb-label mb-2 block">{t("badge_format_label", lang)}</label>
+                <select
+                  className="cb-input bg-white"
+                  value={editing.badge_format_w_1 && editing.badge_format_h_1 ? `${editing.badge_format_w_1}x${editing.badge_format_h_1}` : "105x148"}
+                  onChange={e => {
+                    const [w, h] = e.target.value.split("x").map(Number);
+                    setEditing(x => ({ ...x, badge_format_w_1: w, badge_format_h_1: h }));
+                  }}
+                >
+                  <option value="105x148">105 × 148 mm (A6 — 4 par page A4)</option>
+                  <option value="100x150">100 × 150 mm (2 par page A4, taille réelle)</option>
+                  <option value="90x130">90 × 130 mm (4 par page A4)</option>
+                  <option value="85x120">85 × 120 mm (format carte, 4 par page A4)</option>
+                  <option value="75x105">75 × 105 mm (4 par page A4)</option>
+                  <option value="63x93">63 × 93 mm (9 par page A4)</option>
+                </select>
+                <p className="text-xs text-black/50 mt-1">{t("badge_format_help", lang)}</p>
+              </div>
               <div className="grid sm:grid-cols-3 gap-4">
                 <div>
                   <ImageUploader lang={lang} value={editing.badge_header_image_1} onChange={url => setEditing(x => ({ ...x, badge_header_image_1: url }))} folder="badges" />
@@ -4005,6 +4010,25 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
             {/* MODÈLE 2 — Paysage */}
             <div className="mb-4 border p-3" style={{ borderColor: editing.badge_active_model === "2" ? "var(--vert-fonce)" : "#E7DCC2" }}>
               <div className="text-sm font-semibold mb-3" style={{ color: "var(--vert-fonce)" }}>{t("badge_model_2_title", lang)}</div>
+              <div className="mb-4">
+                <label className="cb-label mb-2 block">{t("badge_format_label", lang)}</label>
+                <select
+                  className="cb-input bg-white"
+                  value={editing.badge_format_w_2 && editing.badge_format_h_2 ? `${editing.badge_format_w_2}x${editing.badge_format_h_2}` : "105x148"}
+                  onChange={e => {
+                    const [w, h] = e.target.value.split("x").map(Number);
+                    setEditing(x => ({ ...x, badge_format_w_2: w, badge_format_h_2: h }));
+                  }}
+                >
+                  <option value="105x148">105 × 148 mm (A6 — 4 par page A4)</option>
+                  <option value="100x150">100 × 150 mm (2 par page A4, taille réelle)</option>
+                  <option value="90x130">90 × 130 mm (4 par page A4)</option>
+                  <option value="85x120">85 × 120 mm (format carte, 4 par page A4)</option>
+                  <option value="75x105">75 × 105 mm (4 par page A4)</option>
+                  <option value="63x93">63 × 93 mm (9 par page A4)</option>
+                </select>
+                <p className="text-xs text-black/50 mt-1">{t("badge_format_help", lang)}</p>
+              </div>
               <div className="grid sm:grid-cols-3 gap-4">
                 <div>
                   <ImageUploader lang={lang} value={editing.badge_header_image_2} onChange={url => setEditing(x => ({ ...x, badge_header_image_2: url }))} folder="badges" />
