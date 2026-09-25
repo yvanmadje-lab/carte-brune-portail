@@ -647,20 +647,34 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const S = v => v * scale;
   const isLandscape = eventData.badgeActiveModel === "2";
 
+  // fmtScale : facteur qui adapte toutes les proportions internes
+  // (hauteurs des bandeaux, tailles de police, marges...) au format
+  // réellement choisi dans l'admin, par rapport au format de
+  // référence (105x148mm) sur lequel tout le reste du design a été
+  // calculé. Sans ça, un tout petit format (ex: 75x105mm) garderait
+  // un en-tête ou des textes bien trop grands, et les images
+  // d'en-tête/photo se retrouveraient étirées de travers. F() applique
+  // ce facteur à une constante ; S() reste inchangé pour bw/bh
+  // eux-mêmes, qui sont déjà la bonne taille finale.
+  const fmtScale = Math.min(bw / BADGE_W, bh / BADGE_H);
+  const F = v => v * fmtScale;
+  const headerH = F(BADGE_HEADER_H);
+  const footerH = F(BADGE_FOOTER_H);
+
   // Le bandeau nom/pays et la ligne lieu+dates sont plus compacts en
   // Modèle 2 (paysage), pour redonner de la hauteur à la photo et au
   // bloc titre+QR juste en dessous. Le Modèle 1 (portrait) garde ses
   // proportions historiques, inchangées.
-  const nameBannerH = isLandscape ? 18 : 24;
-  const bottomH = isLandscape ? 17 : 24;
-  const bodyH = bh - BADGE_HEADER_H - BADGE_FOOTER_H - nameBannerH - bottomH;
+  const nameBannerH = F(isLandscape ? 18 : 24);
+  const bottomH = F(isLandscape ? 17 : 24);
+  const bodyH = bh - headerH - footerH - nameBannerH - bottomH;
 
   // ---------- En-tête : logos + drapeaux (image admin) ----------
   if (headerImg) {
-    try { doc.addImage(headerImg, imgFormat(headerImg), X(0), Y(0), S(bw), S(BADGE_HEADER_H)); } catch (e) { /* skip */ }
+    try { doc.addImage(headerImg, imgFormat(headerImg), X(0), Y(0), S(bw), S(headerH)); } catch (e) { /* skip */ }
   } else {
     doc.setFillColor(...GREEN);
-    doc.rect(X(0), Y(0), S(bw), S(BADGE_HEADER_H), "F");
+    doc.rect(X(0), Y(0), S(bw), S(headerH), "F");
   }
 
   // ---------- Photo + Titre + QR : deux mises en page possibles ----------
@@ -668,24 +682,24 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   //              à droite (mise en page historique)
   // "landscape" : photo en bandeau large en haut, titre + QR côte à
   //               côte juste en dessous
-  const bodyY = BADGE_HEADER_H;
-  const photoRadius = 4;
+  const bodyY = headerH;
+  const photoRadius = F(4);
 
   let photoX, photoY, photoW2, photoH2, textX, textW, qrBoxX, qrBoxY, qrBoxSize;
   if (isLandscape) {
-    photoX = 0; photoY = bodyY; photoW2 = bw; photoH2 = 48;
-    const belowY = bodyY + photoH2 + 2;
-    const belowH = bodyH - photoH2 - 2;
-    qrBoxSize = Math.min(belowH - 4, 40);
-    qrBoxX = bw - qrBoxSize - 4;
+    photoX = 0; photoY = bodyY; photoW2 = bw; photoH2 = F(48);
+    const belowY = bodyY + photoH2 + F(2);
+    const belowH = bodyH - photoH2 - F(2);
+    qrBoxSize = Math.min(belowH - F(4), F(40));
+    qrBoxX = bw - qrBoxSize - F(4);
     qrBoxY = belowY;
-    textX = 4;
-    textW = qrBoxX - textX - 4;
+    textX = F(4);
+    textW = qrBoxX - textX - F(4);
   } else {
-    photoX = 0; photoY = bodyY; photoW2 = 56; photoH2 = bodyH;
+    photoX = 0; photoY = bodyY; photoW2 = F(56); photoH2 = bodyH;
     qrBoxSize = 0; // non utilisé : le portrait garde un encart rectangulaire dédié plus bas
-    textX = photoW2 + 4;
-    textW = bw - photoW2 - 8;
+    textX = photoW2 + F(4);
+    textW = bw - photoW2 - F(8);
   }
 
   // ---------- Photo (coins arrondis automatiques, quelle que soit l'image) ----------
@@ -708,14 +722,14 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   let qrBoxW, qrBoxH, titleY, titleAvailH;
   if (isLandscape) {
     qrBoxW = qrBoxSize; qrBoxH = qrBoxSize;
-    titleY = qrBoxY + 8;
-    titleAvailH = qrBoxH - 8;
+    titleY = qrBoxY + F(8);
+    titleAvailH = qrBoxH - F(8);
   } else {
-    qrBoxH = 34; qrBoxW = textW;
+    qrBoxH = F(34); qrBoxW = textW;
     qrBoxY = photoY + bodyH - qrBoxH;
     qrBoxX = textX;
-    titleY = bodyY + 12;
-    titleAvailH = qrBoxY - titleY - 2;
+    titleY = bodyY + F(12);
+    titleAvailH = qrBoxY - titleY - F(2);
   }
 
   doc.setTextColor(...BROWN);
@@ -729,10 +743,10 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // police tant que tout ne tient pas dans la hauteur disponible
   // (pour ne jamais rien faire déborder, quel que soit le format).
   // Le Modèle 2 (paysage) dispose de plus d'espace : on part d'une
-  // police plus grande que le Modèle 1.
-  // Toutes les tailles ci-dessous sont exprimées "à taille normale"
-  // (100x150mm) puis converties via S() au moment de les appliquer.
-  let titleFontSize = isLandscape ? 14 : 11.5;
+  // police plus grande que le Modèle 1. Tailles de référence (105x
+  // 148mm) adaptées via F() au format réellement choisi.
+  let titleFontSize = F(isLandscape ? 14 : 11.5);
+  const titleFontMin = F(7);
   let wrapped;
   do {
     doc.setFontSize(S(titleFontSize));
@@ -753,8 +767,8 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
     }
     if (line) wrapped.push(line);
     const neededH = wrapped.length * titleFontSize * 0.42;
-    if (neededH <= titleAvailH || titleFontSize <= 7) break;
-    titleFontSize -= 0.5;
+    if (neededH <= titleAvailH || titleFontSize <= titleFontMin) break;
+    titleFontSize -= F(0.5);
   } while (true);
 
   // Ligne 1 : "42" + "ème" en exposant, suivis du début du titre —
@@ -765,11 +779,11 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.text(editionStr, X(textX), Y(titleY));
   const editionNumW = doc.getTextWidth(editionStr) / scale;
   doc.setFontSize(S(titleFontSize * 0.7));
-  doc.text(ordinalSuffix, X(textX + editionNumW + 0.4), Y(titleY - titleFontSize * 0.13));
+  doc.text(ordinalSuffix, X(textX + editionNumW + F(0.4)), Y(titleY - titleFontSize * 0.13));
   const ordinalW = doc.getTextWidth(ordinalSuffix) / scale;
   doc.setFontSize(S(titleFontSize));
   const spaceW = doc.getTextWidth(" ") / scale;
-  const prefixW = editionNumW + 0.4 + ordinalW + spaceW + 0.8;
+  const prefixW = editionNumW + F(0.4) + ordinalW + spaceW + F(0.8);
   doc.text(wrapped[0] || "", X(textX + prefixW), Y(titleY));
 
   // Lignes suivantes, alignées normalement
@@ -780,7 +794,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
 
   // ---------- Encart QR (vert) ----------
   doc.setFillColor(...GREEN);
-  doc.roundedRect(X(qrBoxX), Y(qrBoxY), S(qrBoxW), S(qrBoxH), S(2), S(2), "F");
+  doc.roundedRect(X(qrBoxX), Y(qrBoxY), S(qrBoxW), S(qrBoxH), S(F(2)), S(F(2)), "F");
   // Le document lié au QR code suit la langue choisie par CE
   // participant à son inscription (pas la langue actuelle de
   // l'admin) — un Ghanéen inscrit en anglais aura un QR vers la
@@ -790,7 +804,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const pdfLink = pickBadgePdfLink(eventData, docLang);
   const qrValue = pdfLink || p.regNumber || p.id || "";
   const qrDataUrl = await QRCode.toDataURL(qrValue, { margin: 1, width: 220 });
-  const qrSize = Math.min(qrBoxW - 6, qrBoxH - 6);
+  const qrSize = Math.min(qrBoxW - F(6), qrBoxH - F(6));
   doc.addImage(qrDataUrl, "PNG", X(qrBoxX + (qrBoxW - qrSize) / 2), Y(qrBoxY + (qrBoxH - qrSize) / 2), S(qrSize), S(qrSize));
 
   // ---------- Pied : 2ème rangée de drapeaux (image admin) ----------
@@ -802,31 +816,31 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const footerY = bodyY + bodyH;
   const hasFooterImg = !!footerImg;
   if (hasFooterImg) {
-    try { doc.addImage(footerImg, imgFormat(footerImg), X(0), Y(footerY), S(bw), S(BADGE_FOOTER_H)); } catch (e) { /* skip */ }
+    try { doc.addImage(footerImg, imgFormat(footerImg), X(0), Y(footerY), S(bw), S(footerH)); } catch (e) { /* skip */ }
   } else if (!isLandscape) {
     doc.setFillColor(...SAND);
-    doc.rect(X(0), Y(footerY), S(bw), S(BADGE_FOOTER_H), "F");
+    doc.rect(X(0), Y(footerY), S(bw), S(footerH), "F");
   }
   const mergeFooterIntoBanner = isLandscape && !hasFooterImg;
-  const effectiveBannerH = nameBannerH + (mergeFooterIntoBanner ? BADGE_FOOTER_H : 0);
+  const effectiveBannerH = nameBannerH + (mergeFooterIntoBanner ? footerH : 0);
 
   // ---------- Bandeau Nom + Fonction (dynamique) ----------
   // Vert pour le Modèle 1 (comme d'origine), brun pour le Modèle 2.
-  const bannerY = mergeFooterIntoBanner ? footerY : footerY + BADGE_FOOTER_H;
+  const bannerY = mergeFooterIntoBanner ? footerY : footerY + footerH;
   doc.setFillColor(...(isLandscape ? BROWN : GREEN));
   doc.rect(X(0), Y(bannerY), S(bw), S(effectiveBannerH), "F");
   const fullName = `${p.lastName || ""} ${p.firstName || ""}`.trim().toUpperCase();
-  const nameMaxW = bw - 12;
+  const nameMaxW = bw - F(12);
   doc.setTextColor(255, 255, 255);
   doc.setFont(undefined, "bold");
   // Réduit la taille du nom s'il est trop long, pour limiter le
   // nombre de lignes et éviter tout chevauchement avec la ligne du
   // pays juste en dessous.
-  let nameFontSize = 14;
+  let nameFontSize = F(14);
   doc.setFontSize(S(nameFontSize));
   let nameLines = doc.splitTextToSize(fullName, nameMaxW * scale);
   if (nameLines.length > 2) {
-    nameFontSize = 10.5;
+    nameFontSize = F(10.5);
     doc.setFontSize(S(nameFontSize));
     nameLines = doc.splitTextToSize(fullName, nameMaxW * scale);
   }
@@ -837,12 +851,12 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // une marge haute minimale — ce qui empêche tout débordement du
   // pays hors du bandeau vert, y compris avec un nom sur 2 lignes et
   // un bandeau plus compact (Modèle 2).
-  const countryY = effectiveBannerH - 6;
+  const countryY = effectiveBannerH - F(6);
   const nameBlockH = nameLines.length * nameLineH;
-  // Espace toujours réservé (5mm) entre la dernière ligne du nom et
-  // la ligne du pays, quel que soit le nombre de lignes du nom —
-  // c'est ce calcul précis qui manquait et causait le chevauchement.
-  let cursorY = bannerY + Math.max(6, countryY - 5 - (nameLines.length - 1) * nameLineH);
+  // Espace toujours réservé entre la dernière ligne du nom et la
+  // ligne du pays, quel que soit le nombre de lignes du nom — c'est
+  // ce calcul précis qui manquait et causait le chevauchement.
+  let cursorY = bannerY + Math.max(F(6), countryY - F(5) - (nameLines.length - 1) * nameLineH);
   nameLines.forEach(line => {
     doc.text(line, X(bw / 2), Y(cursorY), { align: "center" });
     cursorY += nameLineH;
@@ -851,7 +865,7 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // Ligne du pays (ou libellé personnalisé) : toujours ancrée près du
   // bas du bandeau (countryY), donc jamais en dehors de celui-ci.
   doc.setTextColor(...YELLOW);
-  doc.setFontSize(S(10));
+  doc.setFontSize(S(F(10)));
   doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), X(bw / 2), Y(bannerY + countryY), { align: "center", maxWidth: nameMaxW * scale });
 
   // ---------- Ligne du bas : Lieu (hôtel + ville-pays) + Dates ----------
@@ -863,12 +877,12 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   doc.rect(X(0), Y(bottomY), S(bw), S(bottomH), "F");
   doc.setTextColor(...BROWN);
   doc.setFont(undefined, "bold");
-  doc.setFontSize(S(8));
+  doc.setFontSize(S(F(8)));
   const venueLine = (eventData.venue?.[lang] || "").toUpperCase();
   const cityCountryLine = `${(eventData.city || "").toUpperCase()} - ${(eventData.country || "").toUpperCase()}`;
   const dateLine = `${eventData.dateShort?.[lang] || ""} ${eventData.monthYear?.[lang] || ""}`;
-  const iconSize = 3.6;
-  const iconGap = 1.8;
+  const iconSize = F(3.6);
+  const iconGap = F(1.8);
 
   const venueW = doc.getTextWidth(venueLine) / scale;
   const cityW = doc.getTextWidth(cityCountryLine) / scale;
@@ -877,9 +891,9 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const groupStartX = bw / 2 - blockW / 2;
   const iconCx = groupStartX + iconSize / 2;
   const textX2 = groupStartX + iconSize + iconGap;
-  const maxTextW = S(bw - 6);
+  const maxTextW = S(bw - F(6));
 
-  const line1Y = bottomY + 5.5, line2Y = bottomY + 9, line3Y = bottomY + (isLandscape ? 14 : 16);
+  const line1Y = bottomY + F(5.5), line2Y = bottomY + F(9), line3Y = bottomY + F(isLandscape ? 14 : 16);
   drawPinIcon(doc, X(iconCx), Y((line1Y + line2Y) / 2 - iconSize * 0.55), S(iconSize), BROWN);
   doc.text(venueLine, X(textX2), Y(line1Y), { maxWidth: maxTextW });
   doc.text(cityCountryLine, X(textX2), Y(line2Y), { maxWidth: maxTextW });
@@ -3782,10 +3796,18 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
 
   async function save() {
     if (!editing.code) return;
-    await upsertRow("events", editing);
-    setEditing(null);
-    await load();
-    if (editing.id === activeEventId) onActiveEventChanged();
+    setError("");
+    try {
+      await upsertRow("events", editing);
+      setEditing(null);
+      await load();
+      if (editing.id === activeEventId) onActiveEventChanged();
+    } catch (e) {
+      // Sans ce catch, une erreur ici (ex: une colonne pas encore
+      // créée en base) échouait en silence — le bouton "Enregistrer"
+      // semblait ne rien faire, sans aucun message.
+      setError(String(e.message || e));
+    }
   }
 
   async function remove(id) {
@@ -3947,9 +3969,10 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
                 }}
               >
                 <option value="105x148">105 × 148 mm (A6 — 4 par page A4)</option>
-                <option value="100x150">100 × 150 mm (4 par page A4, léger ajustement)</option>
-                <option value="90x130">90 × 130 mm (6 par page A4)</option>
-                <option value="85x120">85 × 120 mm (format carte, 8 par page A4)</option>
+                <option value="100x150">100 × 150 mm (2 par page A4, taille réelle)</option>
+                <option value="90x130">90 × 130 mm (4 par page A4)</option>
+                <option value="85x120">85 × 120 mm (format carte, 4 par page A4)</option>
+                <option value="75x105">75 × 105 mm (4 par page A4)</option>
               </select>
               <p className="text-xs text-black/50 mt-1">{t("badge_format_help", lang)}</p>
             </div>
