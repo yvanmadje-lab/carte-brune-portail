@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Globe2, MapPin, Calendar, Hotel as HotelIcon, Plane, ShieldCheck, Search, Download, LayoutDashboard, Users, ChevronRight, ChevronLeft, Check, X, Menu, Building2, Landmark, Quote, Lock, LogOut, RefreshCw, Plus, Trash2, Pencil, Image as ImageIcon, Eye, EyeOff, QrCode } from "lucide-react";
 import { supabase, fetchPublished, fetchAll, upsertRow, deleteRow, uploadMedia, getSetting, setSetting, getAllSettings, getMyProfile, listAdminProfiles, updateAdminRole, removeAdminProfile, fetchPublishedForEvent, fetchAllForEvent, getActiveEvent, listAllEvents, setActiveEvent, duplicateEvent, listArchivedEvents, listHotelManagerLinks, addHotelManager, removeHotelManager, listMyManagedHotels, listCountryManagerLinks, addCountryManager, removeCountryManager, listMyManagedCountries, clearParticipantsForActiveEvent } from "./lib/supabaseClient";
 import jsPDF from "jspdf";
@@ -403,6 +403,8 @@ const T = {
   participants_list_title: { fr: "Liste des participants", en: "Participants list", pt: "Lista de participantes" },
   users_tab: { fr: "Utilisateurs", en: "Users", pt: "Utilizadores" },
   role_viewer: { fr: "Lecture seule", en: "Read-only", pt: "Apenas leitura" },
+  presence_title: { fr: "Connectés en ce moment", en: "Currently online", pt: "Ligados neste momento" },
+  presence_none: { fr: "Personne d'autre connecté", en: "No one else online", pt: "Ninguém mais ligado" },
   role_super_admin: { fr: "Super administrateur", en: "Super admin", pt: "Super administrador" },
   role_manager: { fr: "Gestionnaire", en: "Manager", pt: "Gestor" },
   role_hotel: { fr: "Accès hôtel", en: "Hotel access", pt: "Acesso hotel" },
@@ -2128,6 +2130,79 @@ function BadgeCountryLabelInput({ participant, onSave, lang }) {
   );
 }
 
+function PresenceIndicator({ lang, adminUser, myRole }) {
+  const [presence, setPresence] = useState({}); // { key: [{email, role, at}] }
+  const [open, setOpen] = useState(false);
+  const sessionKeyRef = useRef(null);
+  if (!sessionKeyRef.current) {
+    sessionKeyRef.current = `${adminUser?.id || "anon"}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  useEffect(() => {
+    if (!adminUser) return;
+    const channel = supabase.channel("admin-presence", {
+      config: { presence: { key: sessionKeyRef.current } },
+    });
+    channel
+      .on("presence", { event: "sync" }, () => {
+        setPresence(channel.presenceState());
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            email: adminUser.email,
+            role: myRole,
+            at: new Date().toISOString(),
+          });
+        }
+      });
+    return () => { supabase.removeChannel(channel); };
+  }, [adminUser?.id, myRole]);
+
+  // Regroupe les sessions actives par compte (un même compte peut
+  // avoir plusieurs sessions ouvertes : plusieurs onglets, téléphone
+  // + ordinateur, etc.)
+  const byEmail = {};
+  Object.values(presence).forEach(sessions => {
+    sessions.forEach(s => {
+      if (!byEmail[s.email]) byEmail[s.email] = { role: s.role, count: 0 };
+      byEmail[s.email].count += 1;
+    });
+  });
+  const entries = Object.entries(byEmail).sort((a, b) => a[0].localeCompare(b[0]));
+  const totalSessions = entries.reduce((sum, [, v]) => sum + v.count, 0);
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} className="text-sm flex items-center gap-1.5 py-1.5 px-3" style={{ border: "1px solid #CFC4A3" }} title={t("presence_title", lang)}>
+        <Users size={14} color="var(--vert-fonce)" />
+        <span className="w-2 h-2 rounded-full" style={{ background: "#2ecc71" }} />
+        {totalSessions}
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 bg-white border shadow-lg z-30" style={{ borderColor: "#CFC4A3", width: "260px" }}>
+          <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide border-b" style={{ borderColor: "#E7DCC2", color: "#8a8168" }}>{t("presence_title", lang)}</div>
+          {entries.length === 0 ? (
+            <div className="px-3 py-3 text-sm text-black/40">{t("presence_none", lang)}</div>
+          ) : (
+            <div className="max-h-64 overflow-y-auto">
+              {entries.map(([email, v]) => (
+                <div key={email} className="px-3 py-2 text-sm border-b flex items-center justify-between" style={{ borderColor: "#F1EEE4" }}>
+                  <div className="min-w-0">
+                    <div className="truncate">{email}</div>
+                    <div className="text-xs text-black/40">{v.role || "—"}</div>
+                  </div>
+                  <span className="text-xs font-semibold px-2 py-0.5 flex-shrink-0" style={{ background: "#EAF6EE", color: "var(--vert-fonce)" }}>{v.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
@@ -2193,6 +2268,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
             </button>
           )}
           {tab === "participants" && <button onClick={onRefresh} className="cb-btn-outline text-sm py-1.5 px-3"><RefreshCw size={14} className={participantsLoading ? "animate-spin" : ""} /> {t("refresh", lang)}</button>}
+          <PresenceIndicator lang={lang} adminUser={adminUser} myRole={myRole} />
           <button onClick={() => supabase.auth.signOut()} className="text-sm flex items-center gap-1 text-black/60 hover:text-black"><LogOut size={14} /> {t("admin_logout", lang)}</button>
         </div>
       </div>
