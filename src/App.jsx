@@ -920,11 +920,17 @@ async function downloadBadges(participants, eventData, lang, filename) {
 
   if (participants.length <= 1) {
     // Téléchargement d'un seul badge : on garde la taille réelle,
-    // idéale pour une imprimante à badges dédiée.
+    // idéale pour une imprimante à badges dédiée. Le repère de
+    // découpe en pointillés reste utile si ce badge est imprimé sur
+    // une feuille plus grande (ex: A4) par l'imprimante.
     const doc = new jsPDF({ unit: "mm", format: [fw, fh] });
     for (let i = 0; i < participants.length; i++) {
       if (i > 0) doc.addPage([fw, fh]);
       await drawBadgePage(doc, participants[i], eventData, headerImg, bodyImg, footerImg, lang, 0, 0, 1, fw, fh);
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineDashPattern([1, 1], 0);
+      doc.rect(0, 0, fw, fh);
+      doc.setLineDashPattern([], 0);
     }
     await saveOrShareBlob(doc.output("blob"), filename);
     return;
