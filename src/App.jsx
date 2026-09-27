@@ -2262,7 +2262,11 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           {isCountryRole && <span className="text-[11px] px-2 py-1 flex items-center gap-1" style={{ background: "#F1EEE4", color: "#8a8168" }}><Globe2 size={11}/> {t("role_country", lang)}</span>}
         </div>
         <div className="flex items-center gap-3">
-          {tab === "participants" && isSuperAdmin && (
+          {/* Bouton masqué en production (site déjà en live) — repasser
+              la condition à `tab === "participants" && isSuperAdmin`
+              pour le réactiver temporairement si besoin (ex: avant une
+              prochaine édition de l'événement). */}
+          {false && tab === "participants" && isSuperAdmin && (
             <button onClick={handleClearParticipants} disabled={clearing} className="text-sm py-1.5 px-3 flex items-center gap-1.5" style={{ border: "1px solid #8A2A2A", color: "#8A2A2A", opacity: clearing ? 0.6 : 1 }}>
               <Trash2 size={14} /> {t("clear_participants_btn", lang)}
             </button>
