@@ -888,10 +888,12 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   const nameMaxW = bw - F(12);
   doc.setTextColor(255, 255, 255);
   doc.setFont(undefined, "bold");
-  // Réduit la taille du nom s'il est trop long, pour limiter le
-  // nombre de lignes et éviter tout chevauchement avec la ligne du
-  // pays juste en dessous. Tailles minimales pour rester lisible.
-  let nameFontSize = Math.max(F(14), 9);
+  // Un nom simple (prénom + nom, 2 mots) est agrandi pour marquer
+  // davantage à l'impression. Un nom composé de plus de 2 mots garde
+  // la taille d'origine, pour rester sûr de tenir sur 2 lignes max.
+  const nameWordCount = fullName.split(/\s+/).filter(Boolean).length;
+  const isShortName = nameWordCount <= 2;
+  let nameFontSize = Math.max(F(isShortName ? 19 : 14), 9);
   doc.setFontSize(S(nameFontSize));
   let nameLines = doc.splitTextToSize(fullName, nameMaxW * scale);
   if (nameLines.length > 2) {
@@ -918,8 +920,9 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
 
   // Ligne du pays (ou libellé personnalisé) : toujours ancrée près du
   // bas du bandeau (countryY), donc jamais en dehors de celui-ci.
+  // Elle suit la même règle que le nom : agrandie pour un nom simple.
   doc.setTextColor(...YELLOW);
-  doc.setFontSize(S(Math.max(F(10), 7)));
+  doc.setFontSize(S(Math.max(F(isShortName ? 13.5 : 10), 7)));
   doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), X(bw / 2), Y(bannerY + countryY), { align: "center", maxWidth: nameMaxW * scale });
 
   // ---------- Ligne du bas : Lieu (hôtel + ville-pays) + Dates ----------
