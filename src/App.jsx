@@ -329,6 +329,12 @@ const T = {
   badge_format_label: { fr: "Format du badge (taille d'impression)", en: "Badge format (print size)", pt: "Formato do crachá (tamanho de impressão)" },
   badge_margin_label: { fr: "Marge de sécurité (protège du cadre de la pochette)", en: "Safe margin (protects from the badge holder frame)", pt: "Margem de segurança (protege da moldura do porta-crachá)" },
   badge_margin_help: { fr: "Les logos, textes et QR code restent à cette distance du bord, pour ne pas être cachés par le plastique de la pochette. Les couleurs pleines (bandeaux, fonds) vont toujours jusqu'au bord. Mesure la fenêtre visible de tes pochettes pour ajuster.", en: "Logos, text and QR code stay this far from the edge so the holder's plastic doesn't hide them. Solid colours (banners, backgrounds) always run to the edge. Measure your holders' visible window to fine-tune.", pt: "Logótipos, texto e QR code ficam a esta distância da borda para não serem escondidos pelo plástico do porta-crachá. As cores sólidas (faixas, fundos) vão sempre até à borda. Mede a janela visível dos teus porta-crachás para ajustar." },
+  badge_fonts_label: { fr: "Taille du texte Nom / Pays", en: "Name / Country text size", pt: "Tamanho do texto Nome / País" },
+  badge_fonts_help: { fr: "\"2 mots ou moins\" s'applique aux noms simples (ex: prénom + nom) ; \"plus de 2 mots\" aux noms composés. Télécharge un badge pour voir le résultat exact à l'impression.", en: "\"2 words or fewer\" applies to simple names (e.g. first + last name); \"more than 2 words\" to compound names. Download a badge to see the exact printed result.", pt: "\"2 palavras ou menos\" aplica-se a nomes simples (ex: nome + apelido); \"mais de 2 palavras\" a nomes compostos. Descarrega um crachá para ver o resultado exato na impressão." },
+  badge_font_name_short: { fr: "Nom — 2 mots ou moins", en: "Name — 2 words or fewer", pt: "Nome — 2 palavras ou menos" },
+  badge_font_name_long: { fr: "Nom — plus de 2 mots", en: "Name — more than 2 words", pt: "Nome — mais de 2 palavras" },
+  badge_font_country_short: { fr: "Pays — nom 2 mots ou moins", en: "Country — name 2 words or fewer", pt: "País — nome 2 palavras ou menos" },
+  badge_font_country_long: { fr: "Pays — nom plus de 2 mots", en: "Country — name more than 2 words", pt: "País — nome mais de 2 palavras" },
   badge_format_help: { fr: "Détermine la taille réelle du badge imprimé, et combien tiennent sur une feuille A4. Les images d'en-tête, de photo et de pied de page s'adaptent automatiquement à ce format.", en: "Determines the actual printed badge size, and how many fit on an A4 sheet. Header, photo, and footer images adapt automatically to this format.", pt: "Determina o tamanho real do crachá impresso, e quantos cabem numa folha A4. As imagens de cabeçalho, foto e rodapé adaptam-se automaticamente a este formato." },
   badge_model_1_label: { fr: "Modèle 1 (portrait)", en: "Model 1 (portrait)", pt: "Modelo 1 (retrato)" },
   badge_model_2_label: { fr: "Modèle 2 (paysage)", en: "Model 2 (landscape)", pt: "Modelo 2 (paisagem)" },
@@ -893,7 +899,12 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // la taille d'origine, pour rester sûr de tenir sur 2 lignes max.
   const nameWordCount = fullName.split(/\s+/).filter(Boolean).length;
   const isShortName = nameWordCount <= 2;
-  let nameFontSize = Math.max(F(isShortName ? 19 : 14), 9);
+  // Tailles réglables depuis l'admin (curseurs), avec des valeurs par
+  // défaut si rien n'est configuré. "Court" = nom en 2 mots ou moins,
+  // "long" = nom en plus de 2 mots.
+  const nameFontShort = opts.nameFontShort ?? 19;
+  const nameFontLong = opts.nameFontLong ?? 14;
+  let nameFontSize = Math.max(F(isShortName ? nameFontShort : nameFontLong), 9);
   doc.setFontSize(S(nameFontSize));
   let nameLines = doc.splitTextToSize(fullName, nameMaxW * scale);
   if (nameLines.length > 2) {
@@ -922,7 +933,9 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // bas du bandeau (countryY), donc jamais en dehors de celui-ci.
   // Elle suit la même règle que le nom : agrandie pour un nom simple.
   doc.setTextColor(...YELLOW);
-  doc.setFontSize(S(Math.max(F(isShortName ? 13.5 : 10), 7)));
+  const countryFontShort = opts.countryFontShort ?? 13.5;
+  const countryFontLong = opts.countryFontLong ?? 10;
+  doc.setFontSize(S(Math.max(F(isShortName ? countryFontShort : countryFontLong), 7)));
   doc.text((p.badgeCountryLabel || p.country || "").toUpperCase(), X(bw / 2), Y(bannerY + countryY), { align: "center", maxWidth: nameMaxW * scale });
 
   // ---------- Ligne du bas : Lieu (hôtel + ville-pays) + Dates ----------
@@ -986,7 +999,13 @@ async function downloadBadges(participants, eventData, lang, filename) {
     getImageEdgeColor(headerImg),
     getImageEdgeColor(footerImg),
   ]);
-  const drawOpts = { safeMargin, headerBleed, footerBleed };
+  const drawOpts = {
+    safeMargin, headerBleed, footerBleed,
+    nameFontShort: useModel2Format ? eventData.badgeNameFontShort2 : eventData.badgeNameFontShort1,
+    nameFontLong: useModel2Format ? eventData.badgeNameFontLong2 : eventData.badgeNameFontLong1,
+    countryFontShort: useModel2Format ? eventData.badgeCountryFontShort2 : eventData.badgeCountryFontShort1,
+    countryFontLong: useModel2Format ? eventData.badgeCountryFontLong2 : eventData.badgeCountryFontLong1,
+  };
 
   if (participants.length <= 1) {
     // Téléchargement d'un seul badge : on garde la taille réelle,
@@ -1129,6 +1148,14 @@ export default function App() {
       badgeFormatH2: r.badge_format_h_2 || null,
       badgeMargin1: r.badge_margin_1 ?? 4,
       badgeMargin2: r.badge_margin_2 ?? 4,
+      badgeNameFontShort1: r.badge_name_font_short_1 ?? 19,
+      badgeNameFontLong1: r.badge_name_font_long_1 ?? 14,
+      badgeCountryFontShort1: r.badge_country_font_short_1 ?? 13.5,
+      badgeCountryFontLong1: r.badge_country_font_long_1 ?? 10,
+      badgeNameFontShort2: r.badge_name_font_short_2 ?? 19,
+      badgeNameFontLong2: r.badge_name_font_long_2 ?? 14,
+      badgeCountryFontShort2: r.badge_country_font_short_2 ?? 13.5,
+      badgeCountryFontLong2: r.badge_country_font_long_2 ?? 10,
       badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
       programPdf: r.program_pdf || { fr: "", en: "", pt: "" },
       participationFee: r.participation_fee || { fr: "", en: "", pt: "" },
@@ -2194,6 +2221,18 @@ function BadgeCountryLabelInput({ participant, onSave, lang }) {
       onChange={e => setValue(e.target.value)}
       onBlur={() => { if ((participant.badgeCountryLabel || "") !== value) onSave(participant.id, value); }}
     />
+  );
+}
+
+function BadgeFontSlider({ label, value, onChange, min = 6, max = 30 }) {
+  return (
+    <div className="mb-3">
+      <label className="cb-label mb-1 block flex items-center justify-between">
+        <span>{label}</span>
+        <span className="font-mono text-xs px-1.5" style={{ background: "var(--sable-deep)" }}>{value} pt</span>
+      </label>
+      <input type="range" min={min} max={max} step="0.5" value={value} onChange={e => onChange(Number(e.target.value))} className="w-full" />
+    </div>
   );
 }
 
@@ -3934,7 +3973,10 @@ function emptyEventDraft() {
     city: "", country: "", status: "draft",
     badge_header_image_1: "", badge_body_image_1: "", badge_footer_image_1: "",
     badge_header_image_2: "", badge_body_image_2: "", badge_footer_image_2: "",
-    badge_active_model: "1", badge_format_w_1: null, badge_format_h_1: null, badge_format_w_2: null, badge_format_h_2: null, badge_margin_1: 4, badge_margin_2: 4, badge_pdf: { ...EMPTY_LANG3 },
+    badge_active_model: "1", badge_format_w_1: null, badge_format_h_1: null, badge_format_w_2: null, badge_format_h_2: null, badge_margin_1: 4, badge_margin_2: 4,
+    badge_name_font_short_1: 19, badge_name_font_long_1: 14, badge_country_font_short_1: 13.5, badge_country_font_long_1: 10,
+    badge_name_font_short_2: 19, badge_name_font_long_2: 14, badge_country_font_short_2: 13.5, badge_country_font_long_2: 10,
+    badge_pdf: { ...EMPTY_LANG3 },
     program_pdf: { ...EMPTY_LANG3 },
     participation_fee: { ...EMPTY_LANG3 },
   };
@@ -4153,6 +4195,16 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
                 </select>
                 <p className="text-xs text-black/50 mt-1">{t("badge_margin_help", lang)}</p>
               </div>
+              <div className="mb-4 p-3" style={{ background: "var(--sable-deep)" }}>
+                <label className="cb-label mb-2 block">{t("badge_fonts_label", lang)}</label>
+                <div className="grid sm:grid-cols-2 gap-x-4">
+                  <BadgeFontSlider label={t("badge_font_name_short", lang)} value={editing.badge_name_font_short_1 ?? 19} onChange={v => setEditing(x => ({ ...x, badge_name_font_short_1: v }))} />
+                  <BadgeFontSlider label={t("badge_font_name_long", lang)} value={editing.badge_name_font_long_1 ?? 14} onChange={v => setEditing(x => ({ ...x, badge_name_font_long_1: v }))} />
+                  <BadgeFontSlider label={t("badge_font_country_short", lang)} value={editing.badge_country_font_short_1 ?? 13.5} onChange={v => setEditing(x => ({ ...x, badge_country_font_short_1: v }))} />
+                  <BadgeFontSlider label={t("badge_font_country_long", lang)} value={editing.badge_country_font_long_1 ?? 10} onChange={v => setEditing(x => ({ ...x, badge_country_font_long_1: v }))} />
+                </div>
+                <p className="text-xs text-black/50 mt-1">{t("badge_fonts_help", lang)}</p>
+              </div>
               <div className="grid sm:grid-cols-3 gap-4">
                 <div>
                   <ImageUploader lang={lang} value={editing.badge_header_image_1} onChange={url => setEditing(x => ({ ...x, badge_header_image_1: url }))} folder="badges" />
@@ -4205,6 +4257,16 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
                   <option value="6">6 mm</option>
                 </select>
                 <p className="text-xs text-black/50 mt-1">{t("badge_margin_help", lang)}</p>
+              </div>
+              <div className="mb-4 p-3" style={{ background: "var(--sable-deep)" }}>
+                <label className="cb-label mb-2 block">{t("badge_fonts_label", lang)}</label>
+                <div className="grid sm:grid-cols-2 gap-x-4">
+                  <BadgeFontSlider label={t("badge_font_name_short", lang)} value={editing.badge_name_font_short_2 ?? 19} onChange={v => setEditing(x => ({ ...x, badge_name_font_short_2: v }))} />
+                  <BadgeFontSlider label={t("badge_font_name_long", lang)} value={editing.badge_name_font_long_2 ?? 14} onChange={v => setEditing(x => ({ ...x, badge_name_font_long_2: v }))} />
+                  <BadgeFontSlider label={t("badge_font_country_short", lang)} value={editing.badge_country_font_short_2 ?? 13.5} onChange={v => setEditing(x => ({ ...x, badge_country_font_short_2: v }))} />
+                  <BadgeFontSlider label={t("badge_font_country_long", lang)} value={editing.badge_country_font_long_2 ?? 10} onChange={v => setEditing(x => ({ ...x, badge_country_font_long_2: v }))} />
+                </div>
+                <p className="text-xs text-black/50 mt-1">{t("badge_fonts_help", lang)}</p>
               </div>
               <div className="grid sm:grid-cols-3 gap-4">
                 <div>
