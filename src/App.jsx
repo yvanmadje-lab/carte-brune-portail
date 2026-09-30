@@ -209,6 +209,8 @@ const T = {
   email_body_label: { fr: "Corps de l'email", en: "Email body", pt: "Corpo do email" },
   email_vars_help: { fr: "Variables disponibles : {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}", en: "Available variables: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}", pt: "Variáveis disponíveis: {{firstName}} {{lastName}} {{regNumber}} {{editLink}} {{eventTitle}} {{whatsappGroupLink}}" },
   download_badge: { fr: "Télécharger le badge", en: "Download badge", pt: "Descarregar crachá" },
+  my_badge_title: { fr: "Mon badge de participation", en: "My participation badge", pt: "O meu crachá de participação" },
+  my_badge_help: { fr: "Téléchargez votre badge personnalisé à tout moment — il peut servir de preuve de participation.", en: "Download your personalized badge at any time — it can serve as proof of participation.", pt: "Descarregue o seu crachá personalizado a qualquer momento — pode servir como prova de participação." },
   scan_for_documents: { fr: "Scanner pour consulter les documents", en: "Scan to view documents", pt: "Digitalizar para consultar os documentos" },
   badge_country_col: { fr: "Badge — Pays affiché", en: "Badge — Country shown", pt: "Crachá — País exibido" },
   badge_country_placeholder: { fr: "(pays par défaut)", en: "(default: country)", pt: "(padrão: país)" },
@@ -1620,7 +1622,7 @@ export default function App() {
       )}
 
       {view === "update" && (
-        <UpdateRegistration lang={lang} token={editToken} hotels={hotels} orgTypes={orgTypes} formFields={formFields} setView={setView} />
+        <UpdateRegistration lang={lang} token={editToken} hotels={hotels} orgTypes={orgTypes} formFields={formFields} setView={setView} eventData={eventData} />
       )}
 
       {view === "admin" && (
@@ -2168,6 +2170,24 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
 }
 
 function Confirmation({ lang, record, onDone, eventData }) {
+  const [downloadingBadge, setDownloadingBadge] = useState(false);
+
+  async function handleDownloadBadge() {
+    setDownloadingBadge(true);
+    try {
+      const badgeParticipant = {
+        regNumber: record.regNumber,
+        lastName: record.lastName,
+        firstName: record.firstName,
+        country: record.country,
+        badgeCountryLabel: "",
+        registrationLang: lang,
+      };
+      await downloadBadges([badgeParticipant], eventData, lang, `badge-${record.regNumber || "participant"}.pdf`);
+    } catch (e) { /* best effort */ }
+    setDownloadingBadge(false);
+  }
+
   return (
     <div className="max-w-xl mx-auto px-5 py-16 text-center">
       <div className="stamp mx-auto mb-8" style={{ color: "var(--argile)" }}>
@@ -2180,9 +2200,15 @@ function Confirmation({ lang, record, onDone, eventData }) {
         <div className="cb-label mb-1">{t("reg_number", lang)}</div>
         <div className="font-mono font-semibold text-lg" style={{ color: "var(--argile)" }}>{record.regNumber}</div>
       </div>
-      <p className="text-sm text-black/60 mb-8 max-w-sm mx-auto leading-relaxed">{t("email_sent_notice", lang)}</p>
+      <p className="text-sm text-black/60 mb-6 max-w-sm mx-auto leading-relaxed">{t("email_sent_notice", lang)}</p>
+      <div className="mb-8">
+        <button onClick={handleDownloadBadge} disabled={downloadingBadge} className="cb-btn">
+          <QrCode size={15} /> {downloadingBadge ? t("uploading", lang) : t("download_badge", lang)}
+        </button>
+        <p className="text-xs text-black/40 mt-2 max-w-sm mx-auto">{t("my_badge_help", lang)}</p>
+      </div>
       <div>
-        <button onClick={onDone} className="cb-btn">{t("back_home", lang)}</button>
+        <button onClick={onDone} className="cb-btn-outline">{t("back_home", lang)}</button>
       </div>
     </div>
   );
@@ -3761,11 +3787,13 @@ function UsersManager({ lang, currentUserId, eventId }) {
   );
 }
 
-function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView }) {
+function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView, eventData }) {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [expired, setExpired] = useState(false);
   const [form, setForm] = useState(null);
+  const [badgeInfo, setBadgeInfo] = useState(null);
+  const [downloadingBadge, setDownloadingBadge] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -3785,9 +3813,28 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
         flightNumber: data.flight_number || "", airline: data.airline || "", arrivalDate: data.arrival_date || "", arrivalTime: data.arrival_time || "",
         departureDate: data.departure_date || "", departureTime: data.departure_time || "", departureFlightNumber: data.departure_flight_number || "",
       });
+      // Champs nécessaires uniquement pour générer le badge personnel
+      // (preuve de participation) — pas affichés dans le formulaire.
+      setBadgeInfo({
+        regNumber: data.reg_number,
+        lastName: data.last_name || "",
+        firstName: data.first_name || "",
+        country: data.country || "",
+        badgeCountryLabel: data.badge_country_label || "",
+        registrationLang: data.registration_lang || lang,
+      });
       setLoading(false);
     })();
   }, [token]);
+
+  async function handleDownloadBadge() {
+    if (!badgeInfo || !eventData) return;
+    setDownloadingBadge(true);
+    try {
+      await downloadBadges([badgeInfo], eventData, badgeInfo.registrationLang || lang, `badge-${badgeInfo.regNumber || "participant"}.pdf`);
+    } catch (e) { /* best effort */ }
+    setDownloadingBadge(false);
+  }
 
   function update(field, value) { setForm(f => ({ ...f, [field]: value })); setSaved(false); }
 
@@ -3830,7 +3877,19 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
   return (
     <div className="max-w-3xl mx-auto px-5 py-12">
       <h2 className="font-display font-semibold text-2xl mb-2" style={{ color: "var(--navy)" }}>{t("update_title", lang)}</h2>
-      <p className="text-sm text-black/50 mb-8">{t("update_intro", lang)}</p>
+      <p className="text-sm text-black/50 mb-6">{t("update_intro", lang)}</p>
+
+      {badgeInfo?.regNumber && (
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-8 p-4" style={{ background: "var(--sable-deep)", border: "1px solid #CFC4A3" }}>
+          <div>
+            <div className="text-sm font-semibold" style={{ color: "var(--vert-fonce)" }}>{t("my_badge_title", lang)}</div>
+            <div className="text-xs text-black/50">{t("my_badge_help", lang)}</div>
+          </div>
+          <button onClick={handleDownloadBadge} disabled={downloadingBadge} className="cb-btn text-sm whitespace-nowrap">
+            <QrCode size={15} /> {downloadingBadge ? t("uploading", lang) : t("download_badge", lang)}
+          </button>
+        </div>
+      )}
 
       <div className="space-y-8">
         <div>
