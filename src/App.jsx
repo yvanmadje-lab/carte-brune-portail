@@ -463,6 +463,7 @@ const T = {
   read_only_notice: { fr: "Vous êtes en lecture seule : consultation uniquement, aucune modification possible.", en: "You are in read-only mode: viewing only, no changes possible.", pt: "Está em modo de apenas leitura: apenas consulta, sem alterações possíveis." },
   filter_hotel: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
   filter_arrival: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
+  filter_registration_date: { fr: "Date d'inscription", en: "Registration date", pt: "Data de inscrição" },
   filter_departure: { fr: "Date de départ", en: "Departure date", pt: "Data de saída" },
   reset_filters: { fr: "Réinitialiser les filtres", en: "Reset filters", pt: "Repor filtros" },
   view_site: { fr: "Voir le site public", en: "View public site", pt: "Ver site público" },
@@ -515,6 +516,7 @@ function buildExportTitle(lang, filters) {
   if (filters.hotelFilter) parts.push(`${t("hotel_label", lang)} : ${filters.hotelFilter}`);
   if (filters.arrivalFilter) parts.push(`${t("arrival_date", lang)} : ${filters.arrivalFilter}`);
   if (filters.departureFilter) parts.push(`${t("departure_date", lang)} : ${filters.departureFilter}`);
+  if (filters.registrationDateFilter) parts.push(`${t("filter_registration_date", lang)} : ${filters.registrationDateFilter}`);
   if (filters.search) parts.push(`${t("search_label", lang)} : ${filters.search}`);
   const base = t("participants_list_title", lang);
   const title = parts.length ? `${base} - ${parts.join(" - ")}` : base;
@@ -1078,6 +1080,7 @@ export default function App() {
   const [countryFilter, setCountryFilter] = useState("");
   const [hotelFilter, setHotelFilter] = useState("");
   const [arrivalFilter, setArrivalFilter] = useState("");
+  const [registrationDateFilter, setRegistrationDateFilter] = useState("");
   const [departureFilter, setDepartureFilter] = useState("");
   const [showBootSplash, setShowBootSplash] = useState(() => Capacitor.isNativePlatform());
 
@@ -1355,6 +1358,7 @@ export default function App() {
       confirmationEmailError: row.confirmation_email_error,
       badgeCountryLabel: row.badge_country_label,
       registrationLang: row.registration_lang || "fr",
+      registeredAt: row.created_at,
     };
   }
 
@@ -1494,9 +1498,10 @@ export default function App() {
       const matchesHotel = !hotelFilter || p.hotelName === hotelFilter;
       const matchesArrival = !arrivalFilter || norm(p.arrivalDate) === arrivalFilter;
       const matchesDeparture = !departureFilter || norm(p.departureDate) === departureFilter;
-      return matchesSearch && matchesCountry && matchesHotel && matchesArrival && matchesDeparture;
+      const matchesRegistrationDate = !registrationDateFilter || norm(p.registeredAt) === registrationDateFilter;
+      return matchesSearch && matchesCountry && matchesHotel && matchesArrival && matchesDeparture && matchesRegistrationDate;
     });
-  }, [participants, search, countryFilter, hotelFilter, arrivalFilter, departureFilter]);
+  }, [participants, search, countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter]);
 
   const hotelOptions = useMemo(() => Array.from(new Set(participants.map(p => p.hotelName).filter(Boolean))), [participants]);
 
@@ -1619,7 +1624,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} registrationDateFilter={registrationDateFilter} setRegistrationDateFilter={setRegistrationDateFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
       )}
 
       {view === "archives" && (
@@ -2314,7 +2319,7 @@ function PresenceIndicator({ lang, adminUser, myRole }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, registrationDateFilter, setRegistrationDateFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const [myHotels, setMyHotels] = useState([]);
@@ -2445,8 +2450,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
           <input className="cb-input pl-9" placeholder={t("search_ph", lang)} value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
-        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
-        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
+        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
+        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
         {!isHotelRole && !isCountryRole && <button onClick={handleDownloadBadges} disabled={generatingBadges || filtered.length === 0} className="cb-btn-outline whitespace-nowrap" style={{ opacity: generatingBadges ? 0.7 : 1 }}><Download size={15} /> {generatingBadges ? t("generating_badges", lang) : t("download_all_badges", lang)}</button>}
       </div>
       <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
@@ -2466,8 +2471,12 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <label className="cb-label">{t("filter_departure", lang)}</label>
           <input type="date" className="cb-input" value={departureFilter} onChange={e=>setDepartureFilter(e.target.value)} />
         </div>
-        {(countryFilter || hotelFilter || arrivalFilter || departureFilter) && (
-          <button onClick={() => { setCountryFilter(""); setHotelFilter(""); setArrivalFilter(""); setDepartureFilter(""); }} className="text-xs text-black/50 underline">{t("reset_filters", lang)}</button>
+        <div className="sm:w-44">
+          <label className="cb-label">{t("filter_registration_date", lang)}</label>
+          <input type="date" className="cb-input" value={registrationDateFilter} onChange={e=>setRegistrationDateFilter(e.target.value)} />
+        </div>
+        {(countryFilter || hotelFilter || arrivalFilter || departureFilter || registrationDateFilter) && (
+          <button onClick={() => { setCountryFilter(""); setHotelFilter(""); setArrivalFilter(""); setDepartureFilter(""); setRegistrationDateFilter(""); }} className="text-xs text-black/50 underline">{t("reset_filters", lang)}</button>
         )}
       </div>
 
@@ -2475,7 +2484,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         <table className="w-full text-sm" style={{ minWidth: "1400px" }}>
           <thead style={{ background: "var(--sable-deep)", position: "sticky", top: 0, zIndex: 1 }}>
             <tr className="text-left">
-              {["#", t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("badge_country_col",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
+              {["#", t("filter_registration_date", lang), t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("badge_country_col",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
                 <th key={h} className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
               <th className="px-3 py-2"></th>
@@ -2484,11 +2493,12 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={18} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
+              <tr><td colSpan={19} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
             )}
             {filtered.map(p => (
               <tr key={p.id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
                 <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.regNumber}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-xs">{p.registeredAt ? new Date(p.registeredAt).toLocaleString(lang === "fr" ? "fr-FR" : lang === "pt" ? "pt-PT" : "en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.lastName}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.firstName}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.organization}</td>
