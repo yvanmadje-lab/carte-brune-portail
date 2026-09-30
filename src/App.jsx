@@ -337,7 +337,8 @@ const T = {
   badge_font_name_long: { fr: "Nom — plus de 2 mots", en: "Name — more than 2 words", pt: "Nome — mais de 2 palavras" },
   badge_font_country_short: { fr: "Pays — nom 2 mots ou moins", en: "Country — name 2 words or fewer", pt: "País — nome 2 palavras ou menos" },
   badge_font_country_long: { fr: "Pays — nom plus de 2 mots", en: "Country — name more than 2 words", pt: "País — nome mais de 2 palavras" },
-  badge_name_country_gap: { fr: "Écart entre le nom et le pays", en: "Gap between name and country", pt: "Espaço entre o nome e o país" },
+  badge_name_country_gap_short: { fr: "Écart nom/pays — noms 2 mots ou moins", en: "Name/country gap — names 2 words or fewer", pt: "Espaço nome/país — nomes 2 palavras ou menos" },
+  badge_name_country_gap_long: { fr: "Écart nom/pays — noms plus de 2 mots", en: "Name/country gap — names more than 2 words", pt: "Espaço nome/país — nomes mais de 2 palavras" },
   badge_banner_top_margin: { fr: "Marge haute du bandeau (noms > 2 mots)", en: "Banner top margin (names > 2 words)", pt: "Margem superior da faixa (nomes > 2 palavras)" },
   badge_banner_bottom_margin: { fr: "Marge basse du bandeau (noms > 2 mots)", en: "Banner bottom margin (names > 2 words)", pt: "Margem inferior da faixa (nomes > 2 palavras)" },
   badge_format_help: { fr: "Détermine la taille réelle du badge imprimé, et combien tiennent sur une feuille A4. Les images d'en-tête, de photo et de pied de page s'adaptent automatiquement à ce format.", en: "Determines the actual printed badge size, and how many fit on an A4 sheet. Header, photo, and footer images adapt automatically to this format.", pt: "Determina o tamanho real do crachá impresso, e quantos cabem numa folha A4. As imagens de cabeçalho, foto e rodapé adaptam-se automaticamente a este formato." },
@@ -941,7 +942,11 @@ async function drawBadgePage(doc, p, eventData, headerImg, bodyImg, footerImg, l
   // Espace toujours réservé entre la dernière ligne du nom et la
   // ligne du pays, quel que soit le nombre de lignes du nom — c'est
   // ce calcul précis qui manquait et causait le chevauchement.
-  const nameCountryGap = opts.nameCountryGap ?? 5;
+  // Écart nom/pays totalement indépendant selon le nombre de mots du
+  // nom : modifier l'un ne change jamais l'autre.
+  const nameCountryGapShort = opts.nameCountryGap ?? 5;
+  const nameCountryGapLong = opts.nameCountryGapLong ?? 5;
+  const nameCountryGap = isShortName ? nameCountryGapShort : nameCountryGapLong;
   let cursorY = bannerY + Math.max(F(bannerTopMargin), countryY - F(nameCountryGap) - (nameLines.length - 1) * nameLineH);
   nameLines.forEach(line => {
     doc.text(line, X(bw / 2), Y(cursorY), { align: "center" });
@@ -1025,6 +1030,7 @@ async function downloadBadges(participants, eventData, lang, filename) {
     countryFontShort: useModel2Format ? eventData.badgeCountryFontShort2 : eventData.badgeCountryFontShort1,
     countryFontLong: useModel2Format ? eventData.badgeCountryFontLong2 : eventData.badgeCountryFontLong1,
     nameCountryGap: useModel2Format ? eventData.badgeNameCountryGap2 : eventData.badgeNameCountryGap1,
+    nameCountryGapLong: useModel2Format ? eventData.badgeNameCountryGapLong2 : eventData.badgeNameCountryGapLong1,
     bannerTopMarginLong: useModel2Format ? eventData.badgeBannerTopMarginLong2 : eventData.badgeBannerTopMarginLong1,
     bannerBottomMarginLong: useModel2Format ? eventData.badgeBannerBottomMarginLong2 : eventData.badgeBannerBottomMarginLong1,
   };
@@ -1176,6 +1182,7 @@ export default function App() {
       badgeCountryFontShort1: r.badge_country_font_short_1 ?? 13.5,
       badgeCountryFontLong1: r.badge_country_font_long_1 ?? 10,
       badgeNameCountryGap1: r.badge_name_country_gap_1 ?? 5,
+      badgeNameCountryGapLong1: r.badge_name_country_gap_long_1 ?? 5,
       badgeBannerTopMarginLong1: r.badge_banner_top_margin_long_1 ?? 6,
       badgeBannerBottomMarginLong1: r.badge_banner_bottom_margin_long_1 ?? 6,
       badgeNameFontShort2: r.badge_name_font_short_2 ?? 19,
@@ -1183,6 +1190,7 @@ export default function App() {
       badgeCountryFontShort2: r.badge_country_font_short_2 ?? 13.5,
       badgeCountryFontLong2: r.badge_country_font_long_2 ?? 10,
       badgeNameCountryGap2: r.badge_name_country_gap_2 ?? 5,
+      badgeNameCountryGapLong2: r.badge_name_country_gap_long_2 ?? 5,
       badgeBannerTopMarginLong2: r.badge_banner_top_margin_long_2 ?? 6,
       badgeBannerBottomMarginLong2: r.badge_banner_bottom_margin_long_2 ?? 6,
       badgePdf: r.badge_pdf || { fr: "", en: "", pt: "" },
@@ -4067,8 +4075,8 @@ function emptyEventDraft() {
     badge_header_image_1: "", badge_body_image_1: "", badge_footer_image_1: "",
     badge_header_image_2: "", badge_body_image_2: "", badge_footer_image_2: "",
     badge_active_model: "1", badge_format_w_1: null, badge_format_h_1: null, badge_format_w_2: null, badge_format_h_2: null, badge_margin_1: 4, badge_margin_2: 4,
-    badge_name_font_short_1: 19, badge_name_font_long_1: 14, badge_country_font_short_1: 13.5, badge_country_font_long_1: 10, badge_name_country_gap_1: 5, badge_banner_top_margin_long_1: 6, badge_banner_bottom_margin_long_1: 6,
-    badge_name_font_short_2: 19, badge_name_font_long_2: 14, badge_country_font_short_2: 13.5, badge_country_font_long_2: 10, badge_name_country_gap_2: 5, badge_banner_top_margin_long_2: 6, badge_banner_bottom_margin_long_2: 6,
+    badge_name_font_short_1: 19, badge_name_font_long_1: 14, badge_country_font_short_1: 13.5, badge_country_font_long_1: 10, badge_name_country_gap_1: 5, badge_name_country_gap_long_1: 5, badge_banner_top_margin_long_1: 6, badge_banner_bottom_margin_long_1: 6,
+    badge_name_font_short_2: 19, badge_name_font_long_2: 14, badge_country_font_short_2: 13.5, badge_country_font_long_2: 10, badge_name_country_gap_2: 5, badge_name_country_gap_long_2: 5, badge_banner_top_margin_long_2: 6, badge_banner_bottom_margin_long_2: 6,
     badge_pdf: { ...EMPTY_LANG3 },
     program_pdf: { ...EMPTY_LANG3 },
     participation_fee: { ...EMPTY_LANG3 },
@@ -4295,7 +4303,8 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
                   <BadgeFontSlider label={t("badge_font_name_long", lang)} value={editing.badge_name_font_long_1 ?? 14} onChange={v => setEditing(x => ({ ...x, badge_name_font_long_1: v }))} />
                   <BadgeFontSlider label={t("badge_font_country_short", lang)} value={editing.badge_country_font_short_1 ?? 13.5} onChange={v => setEditing(x => ({ ...x, badge_country_font_short_1: v }))} />
                   <BadgeFontSlider label={t("badge_font_country_long", lang)} value={editing.badge_country_font_long_1 ?? 10} onChange={v => setEditing(x => ({ ...x, badge_country_font_long_1: v }))} />
-                  <BadgeFontSlider label={t("badge_name_country_gap", lang)} value={editing.badge_name_country_gap_1 ?? 5} onChange={v => setEditing(x => ({ ...x, badge_name_country_gap_1: v }))} min={0} max={15} />
+                  <BadgeFontSlider label={t("badge_name_country_gap_short", lang)} value={editing.badge_name_country_gap_1 ?? 5} onChange={v => setEditing(x => ({ ...x, badge_name_country_gap_1: v }))} min={0} max={15} />
+                  <BadgeFontSlider label={t("badge_name_country_gap_long", lang)} value={editing.badge_name_country_gap_long_1 ?? 5} onChange={v => setEditing(x => ({ ...x, badge_name_country_gap_long_1: v }))} min={0} max={15} />
                   <BadgeFontSlider label={t("badge_banner_top_margin", lang)} value={editing.badge_banner_top_margin_long_1 ?? 6} onChange={v => setEditing(x => ({ ...x, badge_banner_top_margin_long_1: v }))} min={0} max={15} />
                   <BadgeFontSlider label={t("badge_banner_bottom_margin", lang)} value={editing.badge_banner_bottom_margin_long_1 ?? 6} onChange={v => setEditing(x => ({ ...x, badge_banner_bottom_margin_long_1: v }))} min={0} max={15} />
                 </div>
@@ -4361,7 +4370,8 @@ function EventsManager({ lang, activeEventId, onActiveEventChanged, eventData })
                   <BadgeFontSlider label={t("badge_font_name_long", lang)} value={editing.badge_name_font_long_2 ?? 14} onChange={v => setEditing(x => ({ ...x, badge_name_font_long_2: v }))} />
                   <BadgeFontSlider label={t("badge_font_country_short", lang)} value={editing.badge_country_font_short_2 ?? 13.5} onChange={v => setEditing(x => ({ ...x, badge_country_font_short_2: v }))} />
                   <BadgeFontSlider label={t("badge_font_country_long", lang)} value={editing.badge_country_font_long_2 ?? 10} onChange={v => setEditing(x => ({ ...x, badge_country_font_long_2: v }))} />
-                  <BadgeFontSlider label={t("badge_name_country_gap", lang)} value={editing.badge_name_country_gap_2 ?? 5} onChange={v => setEditing(x => ({ ...x, badge_name_country_gap_2: v }))} min={0} max={15} />
+                  <BadgeFontSlider label={t("badge_name_country_gap_short", lang)} value={editing.badge_name_country_gap_2 ?? 5} onChange={v => setEditing(x => ({ ...x, badge_name_country_gap_2: v }))} min={0} max={15} />
+                  <BadgeFontSlider label={t("badge_name_country_gap_long", lang)} value={editing.badge_name_country_gap_long_2 ?? 5} onChange={v => setEditing(x => ({ ...x, badge_name_country_gap_long_2: v }))} min={0} max={15} />
                   <BadgeFontSlider label={t("badge_banner_top_margin", lang)} value={editing.badge_banner_top_margin_long_2 ?? 6} onChange={v => setEditing(x => ({ ...x, badge_banner_top_margin_long_2: v }))} min={0} max={15} />
                   <BadgeFontSlider label={t("badge_banner_bottom_margin", lang)} value={editing.badge_banner_bottom_margin_long_2 ?? 6} onChange={v => setEditing(x => ({ ...x, badge_banner_bottom_margin_long_2: v }))} min={0} max={15} />
                 </div>
