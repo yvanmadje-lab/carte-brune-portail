@@ -1454,6 +1454,13 @@ export default function App() {
     const payload = {
       ...form,
       orgType: finalOrgType,
+      // Utilise l'hôtel/chambre réellement résolus (jamais l'identifiant
+      // brut du formulaire, qui peut être resté sur une valeur de
+      // secours si la vraie liste d'hôtels n'avait pas fini de se
+      // charger) — évite tout écart entre le nom affiché et
+      // l'identifiant réellement enregistré en base.
+      hotelId: form.wantsHotel === "yes" ? selectedHotel.id : "",
+      roomId: form.wantsHotel === "yes" ? selectedRoom.id : "",
       hotelName: form.wantsHotel === "yes" ? (selectedHotel.name[lang] || selectedHotel.name.fr) : "",
       roomType: form.wantsHotel === "yes" ? (selectedRoom.type[lang] || selectedRoom.type.fr) : "",
       lang,
@@ -3873,6 +3880,11 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
     const payload = {
       ...form,
       orgType: finalOrgType,
+      // Même correctif que sur le formulaire d'inscription initial :
+      // toujours envoyer l'identifiant réellement résolu, jamais la
+      // valeur brute du formulaire.
+      hotelId: form.wantsHotel === "yes" && selectedHotel ? selectedHotel.id : "",
+      roomId: form.wantsHotel === "yes" && selectedRoom ? selectedRoom.id : "",
       hotelName: form.wantsHotel === "yes" ? (selectedHotel?.name ? (selectedHotel.name[lang] || selectedHotel.name.fr) : "") : "",
       roomType: form.wantsHotel === "yes" ? (selectedRoom?.type ? (selectedRoom.type[lang] || selectedRoom.type.fr) : "") : "",
     };
