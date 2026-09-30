@@ -466,6 +466,7 @@ const T = {
   filter_hotel: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
   filter_arrival: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
   filter_registration_date: { fr: "Date d'inscription", en: "Registration date", pt: "Data de inscrição" },
+  participants_count_label: { fr: "participants", en: "participants", pt: "participantes" },
   filter_departure: { fr: "Date de départ", en: "Departure date", pt: "Data de saída" },
   reset_filters: { fr: "Réinitialiser les filtres", en: "Reset filters", pt: "Repor filtros" },
   view_site: { fr: "Voir le site public", en: "View public site", pt: "Ver site público" },
@@ -512,16 +513,19 @@ function exportRows(rows) {
 
 // Construit un titre du type "LISTE DES PARTICIPANTS - DATE D'ARRIVÉE : 2026-10-19"
 // à partir des filtres actuellement actifs, pour l'en-tête des exports.
-function buildExportTitle(lang, filters) {
+function buildExportTitle(lang, filters, participants, totalCount) {
   const parts = [];
-  if (filters.countryFilter) parts.push(`${t("country", lang)} : ${filters.countryFilter}`);
-  if (filters.hotelFilter) parts.push(`${t("hotel_label", lang)} : ${filters.hotelFilter}`);
-  if (filters.arrivalFilter) parts.push(`${t("arrival_date", lang)} : ${filters.arrivalFilter}`);
-  if (filters.departureFilter) parts.push(`${t("departure_date", lang)} : ${filters.departureFilter}`);
-  if (filters.registrationDateFilter) parts.push(`${t("filter_registration_date", lang)} : ${filters.registrationDateFilter}`);
+  const countFor = (pred) => (participants || []).filter(pred).length;
+  const dateStr = (v) => (v ? String(v).slice(0, 10) : "");
+  if (filters.countryFilter) parts.push(`${t("country", lang)} : ${filters.countryFilter} (${countFor(p => p.country === filters.countryFilter)})`);
+  if (filters.hotelFilter) parts.push(`${t("hotel_label", lang)} : ${filters.hotelFilter} (${countFor(p => p.hotelName === filters.hotelFilter)})`);
+  if (filters.arrivalFilter) parts.push(`${t("arrival_date", lang)} : ${filters.arrivalFilter} (${countFor(p => dateStr(p.arrivalDate) === filters.arrivalFilter)})`);
+  if (filters.departureFilter) parts.push(`${t("departure_date", lang)} : ${filters.departureFilter} (${countFor(p => dateStr(p.departureDate) === filters.departureFilter)})`);
+  if (filters.registrationDateFilter) parts.push(`${t("filter_registration_date", lang)} : ${filters.registrationDateFilter} (${countFor(p => dateStr(p.registeredAt) === filters.registrationDateFilter)})`);
   if (filters.search) parts.push(`${t("search_label", lang)} : ${filters.search}`);
   const base = t("participants_list_title", lang);
-  const title = parts.length ? `${base} - ${parts.join(" - ")}` : base;
+  let title = parts.length ? `${base} - ${parts.join(" - ")}` : base;
+  title += ` (${totalCount ?? 0} ${t("participants_count_label", lang)})`;
   return title.toUpperCase();
 }
 
@@ -2476,8 +2480,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
           <input className="cb-input pl-9" placeholder={t("search_ph", lang)} value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
-        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
-        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, search }), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
+        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, search }, participants, filtered.length), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
+        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, search }, participants, filtered.length), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
         {!isHotelRole && !isCountryRole && <button onClick={handleDownloadBadges} disabled={generatingBadges || filtered.length === 0} className="cb-btn-outline whitespace-nowrap" style={{ opacity: generatingBadges ? 0.7 : 1 }}><Download size={15} /> {generatingBadges ? t("generating_badges", lang) : t("download_all_badges", lang)}</button>}
       </div>
       <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
