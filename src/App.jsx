@@ -2574,7 +2574,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         </div>
         <div className="bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
           <div className="cb-label mb-2">{t("by_org", lang)}</div>
-          <div className="space-y-1 text-sm">
+          <div className="space-y-1 text-sm max-h-60 overflow-auto">
             {Object.entries(stats.byOrg).length === 0 && <span className="text-black/40">—</span>}
             {Object.entries(stats.byOrg).map(([o,n]) => (
               <div key={o} className="flex justify-between"><span>{o}</span><span className="font-mono">{n}</span></div>
