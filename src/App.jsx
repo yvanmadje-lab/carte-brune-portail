@@ -2482,7 +2482,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         </div>
         <div className="bg-white border p-5" style={{ borderColor: "#CFC4A3" }}>
           <div className="cb-label mb-2">{t("by_country", lang)}</div>
-          <div className="space-y-1 text-sm max-h-24 overflow-auto">
+          <div className="space-y-1 text-sm">
             {Object.entries(stats.byCountry).length === 0 && <span className="text-black/40">—</span>}
             {Object.entries(stats.byCountry).map(([c,n]) => (
               <div key={c} className="flex justify-between"><span>{c}</span><span className="font-mono">{n}</span></div>
