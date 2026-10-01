@@ -2583,7 +2583,9 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         </div>
       </div>
 
-      <ExcursionGroupsPanel lang={lang} participants={participants} hotelOptions={hotelOptions} eventData={eventData} />
+      {(isSuperAdmin || myRole === "viewer") && (
+        <ExcursionGroupsPanel lang={lang} participants={participants} hotelOptions={hotelOptions} eventData={eventData} />
+      )}
 
       <div className="flex items-center gap-2 mb-4">
         <Users size={18} color="var(--navy)" />
