@@ -221,6 +221,14 @@ const T = {
   participants: { fr: "Participants", en: "Participants", pt: "Participantes" },
   total_reg: { fr: "Inscriptions", en: "Registrations", pt: "Inscrições" },
   by_country: { fr: "Par pays", en: "By country", pt: "Por país" },
+  excursion_groups_title: { fr: "Groupes pour l'excursion", en: "Excursion groups", pt: "Grupos para a excursão" },
+  excursion_groups_help: { fr: "Coche un ou plusieurs hôtels et choisis une langue pour constituer des groupes homogènes en vue de l'excursion, puis exporte la liste.", en: "Check one or more hotels and choose a language to build homogeneous groups for the excursion, then export the list.", pt: "Marca um ou vários hotéis e escolhe um idioma para formar grupos homogéneos para a excursão, depois exporta a lista." },
+  excursion_lang_label: { fr: "Langue d'inscription", en: "Registration language", pt: "Idioma de inscrição" },
+  lang_fr: { fr: "Français", en: "French", pt: "Francês" },
+  lang_en: { fr: "Anglais", en: "English", pt: "Inglês" },
+  lang_mixte: { fr: "Mixte (toutes langues)", en: "Mixed (all languages)", pt: "Misto (todos os idiomas)" },
+  all_hotels: { fr: "Tous les hôtels", en: "All hotels", pt: "Todos os hotéis" },
+  matching_participants: { fr: "Participants correspondants", en: "Matching participants", pt: "Participantes correspondentes" },
   by_org: { fr: "Par type d'organisme", en: "By organization type", pt: "Por tipo de organização" },
   export_excel: { fr: "Exporter Excel", en: "Export Excel", pt: "Exportar Excel" },
   search_ph: { fr: "Rechercher nom, email, organisme…", en: "Search name, email, organization…", pt: "Pesquisar nome, email, organização…" },
@@ -2379,6 +2387,81 @@ function PresenceIndicator({ lang, adminUser, myRole }) {
   );
 }
 
+function ExcursionGroupsPanel({ lang, participants, hotelOptions, eventData }) {
+  const [open, setOpen] = useState(false);
+  const [selectedHotels, setSelectedHotels] = useState([]);
+  const [excLang, setExcLang] = useState("mixte"); // "fr" | "en" | "mixte"
+
+  const list = useMemo(() => {
+    return participants.filter(p => {
+      const hotelOk = selectedHotels.length === 0 || selectedHotels.includes(p.hotelName);
+      const langOk = excLang === "mixte" || (p.registrationLang || "fr") === excLang;
+      return hotelOk && langOk;
+    });
+  }, [participants, selectedHotels, excLang]);
+
+  function toggleHotel(h) {
+    setSelectedHotels(s => s.includes(h) ? s.filter(x => x !== h) : [...s, h]);
+  }
+
+  const langLabel = excLang === "fr" ? t("lang_fr", lang) : excLang === "en" ? t("lang_en", lang) : t("lang_mixte", lang);
+
+  function buildTitle() {
+    const base = t("excursion_groups_title", lang);
+    const hotelsPart = selectedHotels.length ? selectedHotels.join(", ") : t("all_hotels", lang);
+    return `${base} - ${hotelsPart} - ${langLabel} (${list.length})`.toUpperCase();
+  }
+
+  return (
+    <div className="bg-white border p-5 mb-10" style={{ borderColor: "#CFC4A3" }}>
+      <button onClick={() => setOpen(o => !o)} className="flex items-center justify-between w-full text-left">
+        <span className="flex items-center gap-2 font-display font-semibold text-lg" style={{ color: "var(--navy)" }}>
+          <Plane size={17} color="var(--vert-fonce)" /> {t("excursion_groups_title", lang)}
+        </span>
+        <ChevronRight size={18} color="var(--navy)" style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+      </button>
+      {open && (
+        <div className="mt-4">
+          <p className="text-xs text-black/50 mb-4">{t("excursion_groups_help", lang)}</p>
+
+          <div className="mb-4">
+            <div className="cb-label mb-2">{t("nav_hotels", lang)}</div>
+            <div className="flex flex-wrap gap-2">
+              {hotelOptions.length === 0 && <span className="text-xs text-black/40">—</span>}
+              {hotelOptions.map(h => (
+                <label key={h} className="flex items-center gap-1.5 text-sm px-2.5 py-1.5 border cursor-pointer" style={{ borderColor: selectedHotels.includes(h) ? "var(--vert-fonce)" : "#CFC4A3", background: selectedHotels.includes(h) ? "var(--sable-deep)" : "#fff" }}>
+                  <input type="checkbox" checked={selectedHotels.includes(h)} onChange={() => toggleHotel(h)} />
+                  {h}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-5">
+            <div className="cb-label mb-2">{t("excursion_lang_label", lang)}</div>
+            <div className="flex flex-wrap gap-2">
+              {["fr", "en", "mixte"].map(v => (
+                <label key={v} className="flex items-center gap-1.5 text-sm px-3 py-1.5 border cursor-pointer" style={{ borderColor: excLang === v ? "var(--vert-fonce)" : "#CFC4A3", background: excLang === v ? "var(--sable-deep)" : "#fff" }}>
+                  <input type="radio" name="excursion-lang" checked={excLang === v} onChange={() => setExcLang(v)} />
+                  {v === "fr" ? t("lang_fr", lang) : v === "en" ? t("lang_en", lang) : t("lang_mixte", lang)}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between flex-wrap gap-3 pt-3 border-t" style={{ borderColor: "#E7DCC2" }}>
+            <div className="text-sm">{t("matching_participants", lang)} : <span className="font-semibold">{list.length}</span></div>
+            <div className="flex gap-2">
+              <button onClick={() => downloadExcel(list, `groupes-excursion-${eventData.code || DEFAULT_EVENT.code}.xlsx`, buildTitle(), lang)} disabled={list.length === 0} className="cb-btn-outline text-sm"><Download size={14} /> {t("export_excel", lang)}</button>
+              <button onClick={() => downloadPDF(list, `groupes-excursion-${eventData.code || DEFAULT_EVENT.code}.pdf`, buildTitle(), lang)} disabled={list.length === 0} className="cb-btn-outline text-sm"><Download size={14} /> {t("export_pdf", lang)}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, registrationDateFilter, setRegistrationDateFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
@@ -2499,6 +2582,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           </div>
         </div>
       </div>
+
+      <ExcursionGroupsPanel lang={lang} participants={participants} hotelOptions={hotelOptions} eventData={eventData} />
 
       <div className="flex items-center gap-2 mb-4">
         <Users size={18} color="var(--navy)" />
