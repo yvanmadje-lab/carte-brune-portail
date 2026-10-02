@@ -3954,7 +3954,14 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
         const unavailableLabel = t("hotel_no_longer_available", regLang);
         setRemovedHotelSnapshot({
           id: data.hotel_id,
+          // "name" (avec l'étiquette) ne sert qu'à l'affichage dans le
+          // menu déroulant. "rawName"/"rawRoomType" (sans étiquette)
+          // sont ce qui doit TOUJOURS être enregistré, pour que ce
+          // participant reste regroupé avec les autres ayant choisi le
+          // même hôtel — jamais une catégorie à part.
           name: { fr: `${nameSnap} (${unavailableLabel})`, en: `${nameSnap} (${unavailableLabel})`, pt: `${nameSnap} (${unavailableLabel})` },
+          rawName: nameSnap,
+          rawRoomType: typeSnap,
           rooms: [{ id: data.room_id || "room-archive", type: { fr: typeSnap, en: typeSnap, pt: typeSnap }, price: 0, cur: "" }],
         });
       }
@@ -3996,8 +4003,20 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
       // valeur brute du formulaire.
       hotelId: form.wantsHotel === "yes" && selectedHotel ? selectedHotel.id : "",
       roomId: form.wantsHotel === "yes" && selectedRoom ? selectedRoom.id : "",
-      hotelName: form.wantsHotel === "yes" ? (selectedHotel?.name ? (selectedHotel.name[lang] || selectedHotel.name.fr) : "") : "",
-      roomType: form.wantsHotel === "yes" ? (selectedRoom?.type ? (selectedRoom.type[lang] || selectedRoom.type.fr) : "") : "",
+      // Pour l'hôtel retiré conservé dans ce formulaire, on enregistre
+      // toujours son nom D'ORIGINE (sans l'étiquette "plus disponible",
+      // qui n'est qu'un affichage) — pour ne jamais créer une
+      // deuxième catégorie d'hôtel dans les statistiques/groupes.
+      hotelName: form.wantsHotel === "yes"
+        ? (selectedHotel?.id === removedHotelSnapshot?.id
+            ? removedHotelSnapshot.rawName
+            : (selectedHotel?.name ? (selectedHotel.name[lang] || selectedHotel.name.fr) : ""))
+        : "",
+      roomType: form.wantsHotel === "yes"
+        ? (selectedHotel?.id === removedHotelSnapshot?.id
+            ? removedHotelSnapshot.rawRoomType
+            : (selectedRoom?.type ? (selectedRoom.type[lang] || selectedRoom.type.fr) : ""))
+        : "",
     };
     const { data, error } = await supabase.rpc("update_participant_by_token", { p_token: token, payload });
     setSaving(false);
