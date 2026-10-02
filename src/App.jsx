@@ -421,6 +421,7 @@ const T = {
   hotel_room_col: { fr: "Hôtel & Chambre", en: "Hotel & Room", pt: "Hotel & Quarto" },
   export_pdf: { fr: "Exporter PDF", en: "Export PDF", pt: "Exportar PDF" },
   hotel_label: { fr: "Hôtel", en: "Hotel", pt: "Hotel" },
+  hotel_no_longer_available: { fr: "plus disponible", en: "no longer available", pt: "já não disponível" },
   search_label: { fr: "Recherche", en: "Search", pt: "Pesquisa" },
   participants_list_title: { fr: "Liste des participants", en: "Participants list", pt: "Lista de participantes" },
   users_tab: { fr: "Utilisateurs", en: "Users", pt: "Utilizadores" },
@@ -3914,6 +3915,11 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
   const [expired, setExpired] = useState(false);
   const [form, setForm] = useState(null);
   const [badgeInfo, setBadgeInfo] = useState(null);
+  // Si l'hôtel choisi par ce participant a depuis été retiré de la
+  // liste (ex: plus de chambres disponibles), on le garde quand même
+  // disponible dans SON formulaire à lui — sinon la sélection retombe
+  // silencieusement sur un autre hôtel dès qu'il enregistre.
+  const [removedHotelSnapshot, setRemovedHotelSnapshot] = useState(null);
   const [downloadingBadge, setDownloadingBadge] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -3934,6 +3940,19 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
         flightNumber: data.flight_number || "", airline: data.airline || "", arrivalDate: data.arrival_date || "", arrivalTime: data.arrival_time || "",
         departureDate: data.departure_date || "", departureTime: data.departure_time || "", departureFlightNumber: data.departure_flight_number || "",
       });
+      // L'hôtel initialement choisi n'existe plus dans la liste actuelle
+      // (retiré par l'admin) : on recrée une entrée pour lui, à partir
+      // de ce qui avait été enregistré, pour qu'il reste modifiable
+      // sans que le choix ne change tout seul.
+      if (data.wants_hotel === "yes" && data.hotel_id && !hotels.some(h => h.id === data.hotel_id)) {
+        const nameSnap = data.hotel_name || "";
+        const typeSnap = data.room_type || "";
+        setRemovedHotelSnapshot({
+          id: data.hotel_id,
+          name: { fr: `${nameSnap} (${t("hotel_no_longer_available", lang)})`, en: `${nameSnap} (${t("hotel_no_longer_available", lang)})`, pt: `${nameSnap} (${t("hotel_no_longer_available", lang)})` },
+          rooms: [{ id: data.room_id || "room-archive", type: { fr: typeSnap, en: typeSnap, pt: typeSnap }, price: 0, cur: "" }],
+        });
+      }
       // Champs nécessaires uniquement pour générer le badge personnel
       // (preuve de participation) — pas affichés dans le formulaire.
       setBadgeInfo({
@@ -3996,7 +4015,13 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
     </div>
   );
 
-  const selectedHotel = hotels.find(h => h.id === form.hotelId) || hotels[0];
+  // Liste réellement utilisée dans ce formulaire : les hôtels actifs,
+  // plus — s'il y en a un — l'ancien hôtel du participant, retiré
+  // depuis mais toujours nécessaire pour ne pas perdre son choix.
+  const effectiveHotels = (removedHotelSnapshot && !hotels.some(h => h.id === removedHotelSnapshot.id))
+    ? [removedHotelSnapshot, ...hotels]
+    : hotels;
+  const selectedHotel = effectiveHotels.find(h => h.id === form.hotelId) || effectiveHotels[0];
   const selectedRoom = selectedHotel?.rooms.find(r => r.id === form.roomId) || selectedHotel?.rooms[0];
   const fieldsForStep = (n) => formFields.filter(f => f.step === n).sort((a,b) => a.display_order - b.display_order);
 
@@ -4063,8 +4088,8 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
             {form.wantsHotel === "yes" && selectedHotel && (
               <>
                 <Field label={t("nav_hotels", lang)}>
-                  <select className="cb-input" value={form.hotelId} onChange={e=>{ const h = hotels.find(x=>x.id===e.target.value); update("hotelId", e.target.value); update("roomId", h.rooms[0].id); }}>
-                    {hotels.map(h => <option key={h.id} value={h.id}>{h.name[lang] || h.name.fr}</option>)}
+                  <select className="cb-input" value={form.hotelId} onChange={e=>{ const h = effectiveHotels.find(x=>x.id===e.target.value); update("hotelId", e.target.value); update("roomId", h.rooms[0].id); }}>
+                    {effectiveHotels.map(h => <option key={h.id} value={h.id}>{h.name[lang] || h.name.fr}</option>)}
                   </select>
                 </Field>
                 <Field label={t("room_type", lang)}>
