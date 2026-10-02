@@ -3953,7 +3953,22 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
       // de ce qui avait été enregistré, pour qu'il reste modifiable
       // sans que le choix ne change tout seul.
       if (data.wants_hotel === "yes" && data.hotel_id && !hotels.some(h => h.id === data.hotel_id)) {
-        const nameSnap = data.hotel_name || "";
+        // Le nom enregistré peut déjà contenir une ou plusieurs
+        // étiquettes "(plus disponible)" collées par erreur lors d'une
+        // sauvegarde précédente (bug désormais corrigé, mais la donnée
+        // existante peut encore en porter la trace). On les retire
+        // TOUJOURS avant de reconstruire le nom "propre" de référence —
+        // sinon l'étiquette s'empile un peu plus à chaque sauvegarde.
+        const stripLabels = (s) => {
+          let out = (s || "").trim();
+          let prev;
+          do {
+            prev = out;
+            out = out.replace(/\s*\((plus disponible|non disponible|no longer available|já não disponível)\)\s*$/i, "").trim();
+          } while (out !== prev);
+          return out;
+        };
+        const nameSnap = stripLabels(data.hotel_name);
         const typeSnap = data.room_type || "";
         // Le libellé "plus disponible" est toujours traduit dans la
         // langue choisie par CE participant à son inscription — pas
