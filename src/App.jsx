@@ -285,6 +285,7 @@ const T = {
   desc_en: { fr: "Description (Anglais)", en: "Description (English)", pt: "Descrição (Inglês)" },
   desc_pt: { fr: "Description (Portugais)", en: "Description (Portuguese)", pt: "Descrição (Português)" },
   confirm_delete: { fr: "Supprimer cet élément ?", en: "Delete this item?", pt: "Eliminar este item?" },
+  confirm_delete_hotel: { fr: "Supprimer cet hôtel ? Si des participants l'ont déjà choisi ou qu'un compte hôtel y est lié, la suppression casse ces liens définitivement. Pour simplement le retirer du formulaire d'inscription sans rien casser, préfère plutôt passer son statut en \"Brouillon\" via le bouton modifier.", en: "Delete this hotel? If participants have already chosen it or a hotel account is linked to it, deleting will permanently break those links. To simply remove it from the registration form without breaking anything, set its status to \"Draft\" instead, via the edit button.", pt: "Eliminar este hotel? Se já houver participantes que o escolheram ou uma conta de hotel associada, eliminar quebra esses vínculos definitivamente. Para simplesmente retirá-lo do formulário de inscrição sem quebrar nada, define antes o estado como \"Rascunho\" através do botão editar." },
   confirm_delete_participant: { fr: "Supprimer définitivement cette inscription (utile en cas de doublon) ?", en: "Permanently delete this registration (useful for duplicates)?", pt: "Eliminar definitivamente esta inscrição (útil em caso de duplicado)?" },
   visit_website: { fr: "Visiter le site", en: "Visit website", pt: "Visitar site" },
   gallery_label: { fr: "Galerie photos de l'hôtel", en: "Hotel photo gallery", pt: "Galeria de fotos do hotel" },
@@ -3160,7 +3161,11 @@ function HotelsManager({ lang , canEdit, eventId }) {
     load();
   }
   async function remove(id) {
-    if (!window.confirm(t("confirm_delete", lang))) return;
+    // Avertissement spécifique aux hôtels : supprimer casse le lien
+    // vers un éventuel compte hôtel déjà lié (hotel_managers), même
+    // si des participants l'ont déjà choisi. Passer en "Brouillon"
+    // évite ce problème tout en retirant l'hôtel du formulaire public.
+    if (!window.confirm(t("confirm_delete_hotel", lang))) return;
     await deleteRow("cms_hotels", id);
     load();
   }
