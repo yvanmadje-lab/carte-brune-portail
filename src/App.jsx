@@ -3947,9 +3947,14 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
       if (data.wants_hotel === "yes" && data.hotel_id && !hotels.some(h => h.id === data.hotel_id)) {
         const nameSnap = data.hotel_name || "";
         const typeSnap = data.room_type || "";
+        // Le libellé "plus disponible" est toujours traduit dans la
+        // langue choisie par CE participant à son inscription — pas
+        // forcément la langue actuellement affichée sur la page.
+        const regLang = data.registration_lang || lang;
+        const unavailableLabel = t("hotel_no_longer_available", regLang);
         setRemovedHotelSnapshot({
           id: data.hotel_id,
-          name: { fr: `${nameSnap} (${t("hotel_no_longer_available", lang)})`, en: `${nameSnap} (${t("hotel_no_longer_available", lang)})`, pt: `${nameSnap} (${t("hotel_no_longer_available", lang)})` },
+          name: { fr: `${nameSnap} (${unavailableLabel})`, en: `${nameSnap} (${unavailableLabel})`, pt: `${nameSnap} (${unavailableLabel})` },
           rooms: [{ id: data.room_id || "room-archive", type: { fr: typeSnap, en: typeSnap, pt: typeSnap }, price: 0, cur: "" }],
         });
       }
