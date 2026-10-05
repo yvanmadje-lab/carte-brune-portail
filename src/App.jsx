@@ -480,6 +480,9 @@ const T = {
   filter_arrival: { fr: "Date d'arrivée à l'hôtel", en: "Hotel arrival date", pt: "Data de chegada ao hotel" },
   filter_arrival_flight: { fr: "Date d'arrivée", en: "Arrival date", pt: "Data de chegada" },
   filter_registration_date: { fr: "Date d'inscription", en: "Registration date", pt: "Data de inscrição" },
+  filter_registration_from: { fr: "Inscription — du", en: "Registered — from", pt: "Inscrição — de" },
+  filter_registration_to: { fr: "Inscription — au", en: "Registered — to", pt: "Inscrição — até" },
+  filter_registration_hint: { fr: "Une seule date : uniquement ce jour-là. Deux dates : toute la période (bornes incluses).", en: "One date only: that day only. Two dates: the whole period (both ends included).", pt: "Apenas uma data: somente esse dia. Duas datas: todo o período (extremos incluídos)." },
   participants_count_label: { fr: "participants", en: "participants", pt: "participantes" },
   filter_departure: { fr: "Date de départ de l'hôtel", en: "Hotel departure date", pt: "Data de saída do hotel" },
   filter_departure_flight: { fr: "Date de départ", en: "Departure date", pt: "Data de saída" },
@@ -526,6 +529,33 @@ function exportRows(rows) {
   ]);
 }
 
+// Jour d'inscription (AAAA-MM-JJ) d'un participant, calculé dans le
+// fuseau horaire de l'écran — le même que l'heure affichée dans la
+// colonne "Date d'inscription" du tableau, pour que le filtre
+// corresponde toujours à ce que l'admin voit.
+function localDateKey(v) {
+  if (!v) return "";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v).slice(0, 10);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Filtre par date ou par période :
+// - aucune date saisie        -> tout passe
+// - une seule date saisie     -> uniquement ce jour-là
+// - deux dates saisies        -> toute la période, bornes incluses
+//   (l'ordre n'a pas d'importance : "du 15 au 10" = "du 10 au 15")
+function matchesDateOrRange(dateKey, from, to) {
+  if (!from && !to) return true;
+  if (from && to) {
+    const lo = from <= to ? from : to;
+    const hi = from <= to ? to : from;
+    return dateKey >= lo && dateKey <= hi;
+  }
+  return dateKey === (from || to);
+}
+
 // Construit un titre du type "LISTE DES PARTICIPANTS - DATE D'ARRIVÉE : 2026-10-19"
 // à partir des filtres actuellement actifs, pour l'en-tête des exports.
 function buildExportTitle(lang, filters, participants, totalCount, myRole) {
@@ -537,7 +567,13 @@ function buildExportTitle(lang, filters, participants, totalCount, myRole) {
   if (filters.hotelFilter) parts.push(`${t("hotel_label", lang)} : ${filters.hotelFilter} (${countFor(p => p.hotelName === filters.hotelFilter)})`);
   if (filters.arrivalFilter) parts.push(`${t(isHotelRole ? "check_in" : "arrival_date", lang)} : ${filters.arrivalFilter} (${countFor(p => dateStr(isHotelRole ? p.checkIn : p.arrivalDate) === filters.arrivalFilter)})`);
   if (filters.departureFilter) parts.push(`${t(isHotelRole ? "check_out" : "departure_date", lang)} : ${filters.departureFilter} (${countFor(p => dateStr(isHotelRole ? p.checkOut : p.departureDate) === filters.departureFilter)})`);
-  if (filters.registrationDateFilter) parts.push(`${t("filter_registration_date", lang)} : ${filters.registrationDateFilter} (${countFor(p => dateStr(p.registeredAt) === filters.registrationDateFilter)})`);
+  if (filters.registrationDateFilter || filters.registrationDateFilterTo) {
+    const from = filters.registrationDateFilter, to = filters.registrationDateFilterTo;
+    const label = (from && to)
+      ? `${from <= to ? from : to} → ${from <= to ? to : from}`
+      : (from || to);
+    parts.push(`${t("filter_registration_date", lang)} : ${label} (${countFor(p => matchesDateOrRange(localDateKey(p.registeredAt), from, to))})`);
+  }
   if (filters.search) parts.push(`${t("search_label", lang)} : ${filters.search}`);
   const base = t("participants_list_title", lang);
   let title = parts.length ? `${base} - ${parts.join(" - ")}` : base;
@@ -1117,6 +1153,7 @@ export default function App() {
   const [hotelFilter, setHotelFilter] = useState("");
   const [arrivalFilter, setArrivalFilter] = useState("");
   const [registrationDateFilter, setRegistrationDateFilter] = useState("");
+  const [registrationDateFilterTo, setRegistrationDateFilterTo] = useState("");
   const [departureFilter, setDepartureFilter] = useState("");
   const [showBootSplash, setShowBootSplash] = useState(() => Capacitor.isNativePlatform());
 
@@ -1552,10 +1589,11 @@ export default function App() {
       const isHotelRoleFilter = myRole === "hotel";
       const matchesArrival = !arrivalFilter || norm(isHotelRoleFilter ? p.checkIn : p.arrivalDate) === arrivalFilter;
       const matchesDeparture = !departureFilter || norm(isHotelRoleFilter ? p.checkOut : p.departureDate) === departureFilter;
-      const matchesRegistrationDate = !registrationDateFilter || norm(p.registeredAt) === registrationDateFilter;
+      // Une seule date = ce jour-là ; deux dates = période complète.
+      const matchesRegistrationDate = matchesDateOrRange(localDateKey(p.registeredAt), registrationDateFilter, registrationDateFilterTo);
       return matchesSearch && matchesCountry && matchesHotel && matchesArrival && matchesDeparture && matchesRegistrationDate;
     });
-  }, [participants, search, countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, myRole]);
+  }, [participants, search, countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, myRole]);
 
   const hotelOptions = useMemo(() => Array.from(new Set(participants.map(p => p.hotelName).filter(Boolean))), [participants]);
 
@@ -1678,7 +1716,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} registrationDateFilter={registrationDateFilter} setRegistrationDateFilter={setRegistrationDateFilter} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} registrationDateFilter={registrationDateFilter} setRegistrationDateFilter={setRegistrationDateFilter} registrationDateFilterTo={registrationDateFilterTo} setRegistrationDateFilterTo={setRegistrationDateFilterTo} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
       )}
 
       {view === "archives" && (
@@ -2472,7 +2510,7 @@ function ExcursionGroupsPanel({ lang, participants, hotelOptions, eventData }) {
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, registrationDateFilter, setRegistrationDateFilter, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, registrationDateFilter, setRegistrationDateFilter, registrationDateFilterTo, setRegistrationDateFilterTo, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const [myHotels, setMyHotels] = useState([]);
@@ -2607,8 +2645,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
           <input className="cb-input pl-9" placeholder={t("search_ph", lang)} value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
-        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, search }, participants, filtered.length, myRole), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
-        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, search }, participants, filtered.length, myRole), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
+        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, search }, participants, filtered.length, myRole), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
+        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, search }, participants, filtered.length, myRole), lang)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
         {!isHotelRole && !isCountryRole && <button onClick={handleDownloadBadges} disabled={generatingBadges || filtered.length === 0} className="cb-btn-outline whitespace-nowrap" style={{ opacity: generatingBadges ? 0.7 : 1 }}><Download size={15} /> {generatingBadges ? t("generating_badges", lang) : t("download_all_badges", lang)}</button>}
       </div>
       <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
@@ -2628,12 +2666,16 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <label className="cb-label">{t(myRole === "hotel" ? "filter_departure" : "filter_departure_flight", lang)}</label>
           <input type="date" className="cb-input" value={departureFilter} onChange={e=>setDepartureFilter(e.target.value)} />
         </div>
-        <div className="sm:w-44">
-          <label className="cb-label">{t("filter_registration_date", lang)}</label>
+        <div className="sm:w-44" title={t("filter_registration_hint", lang)}>
+          <label className="cb-label">{t("filter_registration_from", lang)}</label>
           <input type="date" className="cb-input" value={registrationDateFilter} onChange={e=>setRegistrationDateFilter(e.target.value)} />
         </div>
-        {(countryFilter || hotelFilter || arrivalFilter || departureFilter || registrationDateFilter) && (
-          <button onClick={() => { setCountryFilter(""); setHotelFilter(""); setArrivalFilter(""); setDepartureFilter(""); setRegistrationDateFilter(""); }} className="text-xs text-black/50 underline">{t("reset_filters", lang)}</button>
+        <div className="sm:w-44" title={t("filter_registration_hint", lang)}>
+          <label className="cb-label">{t("filter_registration_to", lang)}</label>
+          <input type="date" className="cb-input" value={registrationDateFilterTo} min={registrationDateFilter || undefined} onChange={e=>setRegistrationDateFilterTo(e.target.value)} />
+        </div>
+        {(countryFilter || hotelFilter || arrivalFilter || departureFilter || registrationDateFilter || registrationDateFilterTo) && (
+          <button onClick={() => { setCountryFilter(""); setHotelFilter(""); setArrivalFilter(""); setDepartureFilter(""); setRegistrationDateFilter(""); setRegistrationDateFilterTo(""); }} className="text-xs text-black/50 underline">{t("reset_filters", lang)}</button>
         )}
       </div>
 
