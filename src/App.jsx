@@ -484,6 +484,7 @@ const T = {
   filter_registration_to: { fr: "Inscription — au", en: "Registered — to", pt: "Inscrição — até" },
   filter_registration_hint: { fr: "Une seule date : uniquement ce jour-là. Deux dates : toute la période (bornes incluses).", en: "One date only: that day only. Two dates: the whole period (both ends included).", pt: "Apenas uma data: somente esse dia. Duas datas: todo o período (extremos incluídos)." },
   participants_count_label: { fr: "participants", en: "participants", pt: "participantes" },
+  export_include_label: { fr: "Inclure dans l'export :", en: "Include in export:", pt: "Incluir na exportação:" },
   filter_departure: { fr: "Date de départ de l'hôtel", en: "Hotel departure date", pt: "Data de saída do hotel" },
   filter_departure_flight: { fr: "Date de départ", en: "Departure date", pt: "Data de saída" },
   reset_filters: { fr: "Réinitialiser les filtres", en: "Reset filters", pt: "Repor filtros" },
@@ -510,17 +511,19 @@ function regNumber(seq) {
   return `CB-${DEFAULT_EVENT.year}-${DEFAULT_EVENT.code}-${String(seq).padStart(6, "0")}`;
 }
 
-// withContacts : ajoute les colonnes Email et Téléphone (juste après le
-// nom). Réservé au super admin et au rôle pays — les autres exports
+// contacts = { email, phone } : chaque colonne est ajoutée (ou non)
+// juste après le nom. Le super admin choisit par cases à cocher ; le
+// rôle pays reçoit les deux ; les autres rôles aucune — leurs exports
 // restent strictement identiques à avant.
-function exportHeaders(lang, withContacts = false) {
-  return [t("name_col",lang), ...(withContacts ? [t("email",lang), t("phone_label",lang)] : []), t("org_type_col",lang), t("country",lang), t("hotel_room_col",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)];
+function exportHeaders(lang, contacts = {}) {
+  return [t("name_col",lang), ...(contacts.email ? [t("email",lang)] : []), ...(contacts.phone ? [t("phone_label",lang)] : []), t("org_type_col",lang), t("country",lang), t("hotel_room_col",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)];
 }
 
-function exportRows(rows, withContacts = false) {
+function exportRows(rows, contacts = {}) {
   return rows.map(r => [
     `${r.lastName || ""} ${r.firstName || ""}`.trim(),
-    ...(withContacts ? [r.email || "", r.phone || ""] : []),
+    ...(contacts.email ? [r.email || ""] : []),
+    ...(contacts.phone ? [r.phone || ""] : []),
     r.orgType || "",
     r.country,
     [r.hotelName, r.roomType].filter(Boolean).join(" - "),
@@ -585,9 +588,9 @@ function buildExportTitle(lang, filters, participants, totalCount, myRole) {
   return title.toUpperCase();
 }
 
-async function downloadExcel(rows, filename, titleText, lang, withContacts = false) {
-  const headers = exportHeaders(lang, withContacts);
-  const body = exportRows(rows, withContacts);
+async function downloadExcel(rows, filename, titleText, lang, contacts = {}) {
+  const headers = exportHeaders(lang, contacts);
+  const body = exportRows(rows, contacts);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Participants");
 
@@ -613,34 +616,46 @@ async function downloadExcel(rows, filename, titleText, lang, withContacts = fal
   });
 
   ws.columns.forEach(col => { col.width = 20; });
-  if (withContacts) {
-    // Colonnes 2 et 3 = Email et Téléphone (un email ne tient pas dans 20 caractères).
-    ws.getColumn(2).width = 34;
-    ws.getColumn(3).width = 18;
-  }
+  // Colonnes de contact (juste après le nom), plus larges : un email ne
+  // tient pas dans 20 caractères.
+  let contactCol = 2;
+  if (contacts.email) ws.getColumn(contactCol++).width = 34;
+  if (contacts.phone) ws.getColumn(contactCol++).width = 18;
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   await saveOrShareBlob(blob, filename);
 }
 
-async function downloadPDF(rows, filename, titleText, lang, withContacts = false) {
-  const cols = exportHeaders(lang, withContacts);
-  const body = exportRows(rows, withContacts);
+async function downloadPDF(rows, filename, titleText, lang, contacts = {}) {
+  const cols = exportHeaders(lang, contacts);
+  const body = exportRows(rows, contacts);
+  const hasContacts = !!(contacts.email || contacts.phone);
   const doc = new jsPDF({ orientation: "landscape" });
   doc.setFontSize(11);
-  doc.text(titleText, withContacts ? 8 : 14, 12);
-  // Avec les contacts, 2 colonnes de plus : marges réduites, texte un
-  // peu plus petit et largeurs fixées pour l'email, le téléphone, le
-  // nom et l'hôtel (colonnes 0, 1, 2 et 5 dans ce cas).
+  doc.text(titleText, hasContacts ? 8 : 14, 12);
+  // Ordre des colonnes : nom (0), [email], [téléphone], type d'organisme,
+  // pays, hôtel/chambre... On calcule la position de chacune pour fixer
+  // les bonnes largeurs, quelle que soit la combinaison choisie. Avec des
+  // contacts : marges réduites et texte un peu plus petit.
+  let next = 1;
+  const emailIdx = contacts.email ? next++ : -1;
+  const phoneIdx = contacts.phone ? next++ : -1;
+  const hotelIdx = next + 2; // après "type d'organisme" et "pays"
+  const columnStyles = hasContacts
+    ? {
+        0: { cellWidth: 36 },
+        ...(emailIdx >= 0 ? { [emailIdx]: { cellWidth: 46 } } : {}),
+        ...(phoneIdx >= 0 ? { [phoneIdx]: { cellWidth: 25 } } : {}),
+        [hotelIdx]: { cellWidth: 40 },
+      }
+    : { 0: { cellWidth: 45 }, 3: { cellWidth: 45 } };
   autoTable(doc, {
     head: [cols], body, startY: 17,
-    margin: withContacts ? { left: 8, right: 8 } : undefined,
-    styles: { fontSize: withContacts ? 6.5 : 7, cellPadding: withContacts ? 1.5 : 2 },
-    headStyles: { fillColor: [20, 83, 45], fontSize: withContacts ? 7 : 7.5, fontStyle: "bold" },
-    columnStyles: withContacts
-      ? { 0: { cellWidth: 36 }, 1: { cellWidth: 46 }, 2: { cellWidth: 25 }, 5: { cellWidth: 40 } }
-      : { 0: { cellWidth: 45 }, 3: { cellWidth: 45 } },
+    margin: hasContacts ? { left: 8, right: 8 } : undefined,
+    styles: { fontSize: hasContacts ? 6.5 : 7, cellPadding: hasContacts ? 1.5 : 2 },
+    headStyles: { fillColor: [20, 83, 45], fontSize: hasContacts ? 7 : 7.5, fontStyle: "bold" },
+    columnStyles,
   });
   await saveOrShareBlob(doc.output("blob"), filename);
 }
@@ -2365,6 +2380,21 @@ function BadgeCountryLabelInput({ participant, onSave, lang }) {
   );
 }
 
+// Cases à cocher "Inclure dans l'export : Email / Téléphone" (super admin).
+function ExportContactOptions({ lang, contacts, onChange }) {
+  return (
+    <div className="flex items-center gap-3 text-sm flex-wrap">
+      <span className="text-xs text-black/50">{t("export_include_label", lang)}</span>
+      <label className="flex items-center gap-1.5 cursor-pointer">
+        <input type="checkbox" checked={!!contacts.email} onChange={e => onChange({ ...contacts, email: e.target.checked })} /> {t("email", lang)}
+      </label>
+      <label className="flex items-center gap-1.5 cursor-pointer">
+        <input type="checkbox" checked={!!contacts.phone} onChange={e => onChange({ ...contacts, phone: e.target.checked })} /> {t("phone_label", lang)}
+      </label>
+    </div>
+  );
+}
+
 function BadgeFontSlider({ label, value, onChange, min = 6, max = 30 }) {
   return (
     <div className="mb-3">
@@ -2450,7 +2480,7 @@ function PresenceIndicator({ lang, adminUser, myRole }) {
   );
 }
 
-function ExcursionGroupsPanel({ lang, participants, hotelOptions, eventData, withContacts = false }) {
+function ExcursionGroupsPanel({ lang, participants, hotelOptions, eventData, contacts = {}, onContactsChange }) {
   const [open, setOpen] = useState(false);
   const [selectedHotels, setSelectedHotels] = useState([]);
   const [excLang, setExcLang] = useState("mixte"); // "fr" | "en" | "mixte"
@@ -2514,9 +2544,10 @@ function ExcursionGroupsPanel({ lang, participants, hotelOptions, eventData, wit
 
           <div className="flex items-center justify-between flex-wrap gap-3 pt-3 border-t" style={{ borderColor: "#E7DCC2" }}>
             <div className="text-sm">{t("matching_participants", lang)} : <span className="font-semibold">{list.length}</span></div>
+            {onContactsChange && <ExportContactOptions lang={lang} contacts={contacts} onChange={onContactsChange} />}
             <div className="flex gap-2">
-              <button onClick={() => downloadExcel(list, `groupes-excursion-${eventData.code || DEFAULT_EVENT.code}.xlsx`, buildTitle(), lang, withContacts)} disabled={list.length === 0} className="cb-btn-outline text-sm"><Download size={14} /> {t("export_excel", lang)}</button>
-              <button onClick={() => downloadPDF(list, `groupes-excursion-${eventData.code || DEFAULT_EVENT.code}.pdf`, buildTitle(), lang, withContacts)} disabled={list.length === 0} className="cb-btn-outline text-sm"><Download size={14} /> {t("export_pdf", lang)}</button>
+              <button onClick={() => downloadExcel(list, `groupes-excursion-${eventData.code || DEFAULT_EVENT.code}.xlsx`, buildTitle(), lang, contacts)} disabled={list.length === 0} className="cb-btn-outline text-sm"><Download size={14} /> {t("export_excel", lang)}</button>
+              <button onClick={() => downloadPDF(list, `groupes-excursion-${eventData.code || DEFAULT_EVENT.code}.pdf`, buildTitle(), lang, contacts)} disabled={list.length === 0} className="cb-btn-outline text-sm"><Download size={14} /> {t("export_pdf", lang)}</button>
             </div>
           </div>
         </div>
@@ -2531,12 +2562,20 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
   const [myHotels, setMyHotels] = useState([]);
   const [myCountries, setMyCountries] = useState([]);
   const [clearing, setClearing] = useState(false);
+  // Choix du super admin : colonnes email / téléphone dans les exports
+  // (cochées par défaut, comme avant).
+  const [exportContactsChoice, setExportContactsChoice] = useState({ email: true, phone: true });
   const canEdit = myRole === "super_admin" || myRole === "manager";
   const isSuperAdmin = myRole === "super_admin";
   const isHotelRole = myRole === "hotel";
   const isCountryRole = myRole === "country";
   // La colonne Téléphone n'est visible que pour le super admin et le rôle pays.
   const canSeePhone = isSuperAdmin || isCountryRole;
+  // Contacts inclus dans les exports : le super admin choisit, le rôle pays
+  // reçoit toujours les deux, les autres rôles aucun.
+  const exportContacts = isSuperAdmin
+    ? exportContactsChoice
+    : { email: isCountryRole, phone: isCountryRole };
 
   useEffect(() => {
     if (isHotelRole) listMyManagedHotels().then(setMyHotels);
@@ -2649,7 +2688,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       </div>
 
       {(isSuperAdmin || myRole === "viewer") && (
-        <ExcursionGroupsPanel lang={lang} participants={participants} hotelOptions={hotelOptions} eventData={eventData} withContacts={isSuperAdmin} />
+        <ExcursionGroupsPanel lang={lang} participants={participants} hotelOptions={hotelOptions} eventData={eventData} contacts={exportContacts} onContactsChange={isSuperAdmin ? setExportContactsChoice : undefined} />
       )}
 
       <div className="flex items-center gap-2 mb-4">
@@ -2662,8 +2701,9 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
           <input className="cb-input pl-9" placeholder={t("search_ph", lang)} value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
-        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, search }, participants, filtered.length, myRole), lang, canSeePhone)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
-        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, search }, participants, filtered.length, myRole), lang, canSeePhone)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
+        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, search }, participants, filtered.length, myRole), lang, exportContacts)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
+        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, search }, participants, filtered.length, myRole), lang, exportContacts)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
+        {isSuperAdmin && <ExportContactOptions lang={lang} contacts={exportContactsChoice} onChange={setExportContactsChoice} />}
         {!isHotelRole && !isCountryRole && <button onClick={handleDownloadBadges} disabled={generatingBadges || filtered.length === 0} className="cb-btn-outline whitespace-nowrap" style={{ opacity: generatingBadges ? 0.7 : 1 }}><Download size={15} /> {generatingBadges ? t("generating_badges", lang) : t("download_all_badges", lang)}</button>}
       </div>
       <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
