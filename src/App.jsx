@@ -400,6 +400,19 @@ const T = {
   is_other_label: { fr: "Déclenche le champ \"précisez\" (option \"Autre\")", en: "Triggers the \"please specify\" field (the \"Other\" option)", pt: "Ativa o campo \"especifique\" (opção \"Outro\")" },
   required_fields_error: { fr: "Merci de compléter les champs obligatoires :", en: "Please complete the required fields:", pt: "Preencha os campos obrigatórios:" },
   phone_format_error: { fr: "Merci d'indiquer l'indicatif pays (commençant par +) pour :", en: "Please include the country code (starting with +) for:", pt: "Indique o indicativo do país (começando por +) para:" },
+  val_fix_below: { fr: "Merci de corriger les informations suivantes :", en: "Please correct the following:", pt: "Corrija as seguintes informações:" },
+  val_email: { fr: "adresse email invalide (exemple : nom@domaine.com).", en: "invalid email address (example: name@domain.com).", pt: "endereço de email inválido (exemplo: nome@dominio.com)." },
+  val_phone_format: { fr: "numéro invalide — indiquez l'indicatif du pays en commençant par + (exemple : +221 77 123 45 67).", en: "invalid number — include the country code starting with + (example: +221 77 123 45 67).", pt: "número inválido — indique o indicativo do país começando por + (exemplo: +221 77 123 45 67)." },
+  val_phone_fake: { fr: "ce numéro ne semble pas réel.", en: "this number does not look real.", pt: "este número não parece real." },
+  val_name_chars: { fr: "un nom ne peut contenir que des lettres, espaces, apostrophes, points et tirets.", en: "a name may only contain letters, spaces, apostrophes, periods and hyphens.", pt: "um nome só pode conter letras, espaços, apóstrofos, pontos e hífenes." },
+  val_chars: { fr: "caractères non autorisés — utilisez uniquement des lettres, chiffres et la ponctuation courante.", en: "characters not allowed — use only letters, digits and common punctuation.", pt: "caracteres não permitidos — use apenas letras, números e pontuação comum." },
+  val_too_short: { fr: "saisie trop courte.", en: "too short.", pt: "demasiado curto." },
+  val_too_long: { fr: "saisie trop longue.", en: "too long.", pt: "demasiado longo." },
+  val_gibberish: { fr: "cette saisie ne semble pas valide.", en: "this entry does not look valid.", pt: "esta entrada não parece válida." },
+  val_flight: { fr: "numéro de vol invalide (exemple : AF 718).", en: "invalid flight number (example: AF 718).", pt: "número de voo inválido (exemplo: AF 718)." },
+  val_date: { fr: "date invalide.", en: "invalid date.", pt: "data inválida." },
+  val_dates_order: { fr: "cette date ne peut pas être antérieure à la date d'arrivée.", en: "this date cannot be earlier than the arrival date.", pt: "esta data não pode ser anterior à data de chegada." },
+  val_server_rejected: { fr: "Une information a été refusée car elle ne semble pas valide :", en: "An entry was rejected because it does not look valid:", pt: "Uma informação foi recusada por não parecer válida:" },
   form_fields_tab: { fr: "Champs du formulaire", en: "Form fields", pt: "Campos do formulário" },
   field_key_label: { fr: "Clé technique (unique, sans espace)", en: "Technical key (unique, no spaces)", pt: "Chave técnica (única, sem espaços)" },
   field_type_label: { fr: "Type de champ", en: "Field type", pt: "Tipo de campo" },
@@ -505,6 +518,172 @@ function normalizeUrl(url) {
   const trimmed = (url || "").trim();
   if (!trimmed) return "";
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+// ---------------------------------------------------------------------
+// Contrôle des saisies
+// Refuse les adresses email invalides et les informations manifestement
+// fantaisistes : caractères bizarres, suites de lettres au hasard,
+// numéros bidon, dates impossibles...
+// Les règles sont volontairement PRUDENTES : mieux vaut laisser passer
+// une saisie douteuse que bloquer un vrai participant (noms africains,
+// portugais ou anglais : accents, apostrophes, tirets, noms composés).
+// La base de données applique des règles équivalentes
+// (supabase/input_validation_schema.sql) : c'est elle qui protège
+// réellement contre les envois qui contournent le formulaire.
+// Chaque contrôle renvoie "" si tout va bien, sinon la clé du message
+// d'erreur à afficher (clés val_* dans T).
+// ---------------------------------------------------------------------
+const stripAccents = (s) => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const EMAIL_FORMAT = /^[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,24}$/;
+
+function checkEmail(raw) {
+  const v = String(raw ?? "").trim();
+  if (!v) return "";
+  const local = v.split("@")[0];
+  if (v.length > 254 || local.length > 64 || !EMAIL_FORMAT.test(v) || v.includes("..") || local.startsWith(".") || local.endsWith(".")) return "val_email";
+  return "";
+}
+
+// Numéro au format international (+ indicatif), 8 à 15 chiffres, qui
+// ne soit pas une suite évidente (0000000000, 12345678...).
+function checkPhone(raw) {
+  const v = String(raw ?? "").trim();
+  if (!v) return "";
+  const compact = v.replace(/[\s.()\-]/g, "");
+  if (!/^\+\d{8,15}$/.test(compact)) return "val_phone_format";
+  const digits = compact.slice(1);
+  if (/^(\d)\1+$/.test(digits) || "01234567890123456789".includes(digits) || "98765432109876543210".includes(digits)) return "val_phone_fake";
+  return "";
+}
+
+// Mots saisis à la place d'un vrai nom (comparés sans accents ni séparateurs).
+const NAME_BLOCKLIST = new Set([
+  "azerty", "qwerty", "azertyuiop", "qwertyuiop", "qsdfgh", "asdfgh", "asdf", "zxcv",
+  "abc", "abcd", "xxx", "nom", "prenom", "name", "firstname", "lastname",
+  "null", "none", "undefined", "blabla", "lorem", "ipsum", "inconnu", "unknown",
+  "anonymous", "anonyme", "aucun",
+]);
+
+function checkPersonName(raw) {
+  const v = String(raw ?? "").replace(/\s+/g, " ").trim();
+  if (!v) return "";
+  if (v.length < 2) return "val_too_short";
+  if (v.length > 60) return "val_too_long";
+  if (!/^[\p{L}\p{M}][\p{L}\p{M}'’ʼ. -]*$/u.test(v)) return "val_name_chars";
+  if ((v.match(/\p{L}/gu) || []).length < 2) return "val_too_short";
+  if (/(\p{L})\1{3,}/iu.test(v)) return "val_gibberish";
+  const plain = stripAccents(v).toLowerCase();
+  if (/[bcdfghjklmnpqrstvwxz]{6,}/.test(plain)) return "val_gibberish";
+  if (NAME_BLOCKLIST.has(plain.replace(/[^a-z]/g, ""))) return "val_gibberish";
+  return "";
+}
+
+// Texte libre (fonction, organisme, ville, adresse...) : lettres, chiffres
+// et ponctuation courante seulement.
+const FREE_TEXT_ALLOWED = /^[\p{L}\p{M}\p{N} '’"“”«»–—.,&()\/+:#°!?%-]+$/u;
+const FREE_TEXT_ALLOWED_MULTILINE = /^[\p{L}\p{M}\p{N} '’"“”«»–—.,&()\/+:#°!?%\n-]+$/u;
+
+function checkFreeText(raw, { max = 120, minLetters = 2, multiline = false } = {}) {
+  let v = String(raw ?? "");
+  v = multiline ? v.replace(/\r\n?/g, "\n").replace(/[ \t]+/g, " ").trim() : v.replace(/\s+/g, " ").trim();
+  if (!v) return "";
+  if (v.length > max) return "val_too_long";
+  if (!(multiline ? FREE_TEXT_ALLOWED_MULTILINE : FREE_TEXT_ALLOWED).test(v)) return "val_chars";
+  if ((v.match(/\p{L}/gu) || []).length < minLetters) return "val_gibberish";
+  if (/(\p{L})\1{3,}/iu.test(v)) return "val_gibberish";
+  return "";
+}
+
+// Numéro de vol : 2 à 3 caractères de compagnie puis des chiffres (AF 718, ET-917, 5Y 123).
+function checkFlightNumber(raw) {
+  const v = String(raw ?? "").replace(/\s+/g, " ").trim();
+  if (!v) return "";
+  if (v.length > 15) return "val_too_long";
+  if (!/^[A-Za-z0-9][A-Za-z0-9 \/-]*$/.test(v) || !/\d/.test(v) || /([A-Za-z0-9])\1{4,}/.test(v)) return "val_flight";
+  return "";
+}
+
+// Date plausible (année proche de l'année en cours, jour qui existe).
+function checkDate(raw) {
+  const v = String(raw ?? "").trim();
+  if (!v) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return "val_date";
+  const y = +m[1], mo = +m[2], d = +m[3];
+  const cur = new Date().getFullYear();
+  if (y < cur - 1 || y > cur + 2) return "val_date";
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return "val_date";
+  return "";
+}
+
+// Choisit la bonne règle selon le type et la clé du champ du formulaire.
+function checkFieldByDefinition(field, value) {
+  const key = field.field_key, type = field.field_type;
+  if (type === "email" || key === "email") return checkEmail(value);
+  if (type === "tel" || key === "phone") return checkPhone(value);
+  if (type === "date") return checkDate(value);
+  if (type === "time" || type === "number") return "";
+  if (key === "lastName" || key === "firstName") return checkPersonName(value);
+  if (key === "flightNumber" || key === "departureFlightNumber") return checkFlightNumber(value);
+  if (type === "textarea") return checkFreeText(value, { max: 500, multiline: true });
+  if (key === "address") return checkFreeText(value, { max: 250 });
+  return checkFreeText(value, { max: 120 });
+}
+
+// Libellé court d'un champ : retire l'éventuelle précision entre parenthèses.
+const shortLabel = (s) => String(s).replace(/\s*\([^)]*\)\s*$/, "").trim();
+
+// Liste lisible des problèmes d'un formulaire ("Email : adresse email
+// invalide..."). step = limite le contrôle aux champs d'une étape.
+function collectFormErrors(form, formFields, lang, { step = null, orgIsOther = false } = {}) {
+  const errs = [];
+  const inStep = (n) => step === null || step === n;
+  formFields.filter(f => step === null || f.step === step).forEach(f => {
+    const code = checkFieldByDefinition(f, form[f.field_key]);
+    if (code) errs.push(`${shortLabel(f.label[lang])} : ${t(code, lang)}`);
+  });
+  if (inStep(1) && orgIsOther) {
+    const code = checkFreeText(form.orgOther, { max: 100 });
+    if (code) errs.push(`${t("org_other", lang)} : ${t(code, lang)}`);
+  }
+  if (inStep(3) && form.wantsHotel === "yes") {
+    [["checkIn", "check_in"], ["checkOut", "check_out"]].forEach(([k, label]) => {
+      const code = checkDate(form[k]);
+      if (code) errs.push(`${t(label, lang)} : ${t(code, lang)}`);
+    });
+    if (form.checkIn && form.checkOut && form.checkOut < form.checkIn) errs.push(`${t("check_out", lang)} : ${t("val_dates_order", lang)}`);
+  }
+  if (inStep(4) && form.arrivalDate && form.departureDate && form.departureDate < form.arrivalDate) {
+    errs.push(`${t("departure_date", lang)} : ${t("val_dates_order", lang)}`);
+  }
+  return errs;
+}
+
+// Nettoie une valeur saisie : espaces superflus retirés, email en minuscules.
+function normalizeFieldValue(field, value) {
+  if (typeof value !== "string") return value;
+  const type = field.field_type, key = field.field_key;
+  if (type === "email" || key === "email") return value.trim().toLowerCase();
+  if (type === "textarea") return value.replace(/\r\n?/g, "\n").replace(/[ \t]+/g, " ").trim();
+  if (type === "date" || type === "time" || type === "number") return value.trim();
+  return value.replace(/\s+/g, " ").trim();
+}
+
+// Message à afficher quand la base de données refuse une saisie
+// (INVALID_INPUT:<champ>) ; message générique pour toute autre erreur.
+function rpcErrorMessage(error, lang) {
+  const m = /INVALID_INPUT:([a-z_]+)/.exec(String(error?.message || ""));
+  if (!m) return t("submit_error", lang);
+  const labelKey = {
+    email: "email", phone: "phone_label", last_name: "last_name", first_name: "first_name",
+    position: "position", organization: "organization", org_type: "org_type", org_other: "org_other",
+    city: "city", address: "address", airline: "airline", flight_number: "flight_number",
+    departure_flight_number: "flight_number",
+  }[m[1]];
+  return `${t("val_server_rejected", lang)} ${labelKey ? t(labelKey, lang) : m[1]}`;
 }
 
 function regNumber(seq) {
@@ -1531,6 +1710,14 @@ export default function App() {
     setSubmitError("");
     const isOtherSelected = orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther;
     const finalOrgType = isOtherSelected && form.orgOther.trim() ? form.orgOther.trim() : form.orgType;
+    // Dernier contrôle avant envoi (toutes les étapes), au cas où une
+    // valeur aurait échappé aux contrôles étape par étape.
+    const inputErrors = collectFormErrors(form, formFields, lang, { orgIsOther: !!isOtherSelected });
+    if (inputErrors.length) {
+      setSubmitting(false);
+      setSubmitError([t("val_fix_below", lang), ...inputErrors].join("\n"));
+      return;
+    }
     const payload = {
       ...form,
       orgType: finalOrgType,
@@ -1548,7 +1735,7 @@ export default function App() {
     const { data, error } = await supabase.rpc("register_participant", { payload });
     setSubmitting(false);
     if (error || !data) {
-      setSubmitError(t("submit_error", lang));
+      setSubmitError(error ? rpcErrorMessage(error, lang) : t("submit_error", lang));
       return;
     }
     const regNumber = data.regNumber;
@@ -2096,10 +2283,21 @@ function Captcha({ lang, valid, onValidChange }) {
 function DynamicField({ field, lang, value, onChange }) {
   const label = field.label[lang] + (field.required ? " *" : "");
   if (field.field_type === "textarea") {
-    return <Field label={label}><textarea className="cb-input" rows={3} value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
+    return <Field label={label}><textarea className="cb-input" rows={3} maxLength={500} value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
   }
   const type = ["email", "tel", "date", "number", "time"].includes(field.field_type) ? field.field_type : "text";
-  return <Field label={label}><input type={type} className="cb-input" value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
+  // Longueur maximale selon le champ (limite les saisies délirantes) et
+  // clavier adapté sur mobile pour l'email et le téléphone.
+  const key = field.field_key;
+  const maxLength = ["date", "time", "number"].includes(type) ? undefined
+    : type === "email" ? 254
+    : type === "tel" ? 25
+    : (key === "lastName" || key === "firstName") ? 60
+    : key === "address" ? 250
+    : (key === "flightNumber" || key === "departureFlightNumber") ? 15
+    : 120;
+  const inputMode = type === "email" ? "email" : type === "tel" ? "tel" : undefined;
+  return <Field label={label}><input type={type} inputMode={inputMode} maxLength={maxLength} className="cb-input" value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
 }
 
 function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels, orgTypes, formFields }) {
@@ -2114,10 +2312,25 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
       setStepError(t("required_fields_error", lang) + " " + missing.map(f => f.label[lang]).join(", "));
       return;
     }
-    const badPhones = fieldsForStep(step).filter(f => f.field_type === "tel" && form[f.field_key] && !/^\+\d{6,15}$/.test(String(form[f.field_key]).replace(/[\s.-]/g, "")));
-    if (badPhones.length) {
-      setStepError(t("phone_format_error", lang) + " " + badPhones.map(f => f.label[lang]).join(", "));
+    // Contrôle de fond : email valide, numéro réaliste, noms et textes
+    // sans caractères bizarres, dates plausibles... (remplace l'ancien
+    // contrôle du seul format du téléphone).
+    const orgIsOther = !!orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther;
+    const inputErrors = collectFormErrors(form, formFields, lang, { step, orgIsOther });
+    if (inputErrors.length) {
+      setStepError([t("val_fix_below", lang), ...inputErrors].join("\n"));
       return;
+    }
+    // Les saisies sont valides : on les nettoie (espaces en trop, email
+    // en minuscules) avant de continuer.
+    fieldsForStep(step).forEach(f => {
+      const cur = form[f.field_key];
+      const clean = normalizeFieldValue(f, cur);
+      if (clean !== cur) update(f.field_key, clean);
+    });
+    if (step === 1 && orgIsOther && typeof form.orgOther === "string") {
+      const cleanOther = form.orgOther.replace(/\s+/g, " ").trim();
+      if (cleanOther !== form.orgOther) update("orgOther", cleanOther);
     }
     setStepError("");
     if (step === 5 && !captchaValid) return;
@@ -2152,7 +2365,7 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
             </div>
           </div>
           {orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther && (
-            <div className="sm:col-span-2"><Field label={t("org_other", lang)}><input className="cb-input" value={form.orgOther} onChange={e=>update("orgOther", e.target.value)} /></Field></div>
+            <div className="sm:col-span-2"><Field label={t("org_other", lang)}><input className="cb-input" maxLength={100} value={form.orgOther} onChange={e=>update("orgOther", e.target.value)} /></Field></div>
           )}
         </div>
       )}
@@ -2269,10 +2482,10 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
       )}
 
       {stepError && (
-        <div className="mt-4 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0" }}>{stepError}</div>
+        <div className="mt-4 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0", whiteSpace: "pre-line" }}>{stepError}</div>
       )}
       {submitError && (
-        <div className="mt-4 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0" }}>{submitError}</div>
+        <div className="mt-4 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0", whiteSpace: "pre-line" }}>{submitError}</div>
       )}
 
       <div className="flex justify-between mt-8">
@@ -4123,8 +4336,19 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
     setError("");
     const isOtherSelected = orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther;
     const finalOrgType = isOtherSelected && form.orgOther.trim() ? form.orgOther.trim() : form.orgType;
+    // Valeurs nettoyées (espaces en trop, email en minuscules), puis
+    // mêmes contrôles de fond que lors de l'inscription.
+    const cleaned = { ...form };
+    formFields.forEach(f => { if (f.field_key in cleaned) cleaned[f.field_key] = normalizeFieldValue(f, cleaned[f.field_key]); });
+    if (typeof cleaned.orgOther === "string") cleaned.orgOther = cleaned.orgOther.replace(/\s+/g, " ").trim();
+    const inputErrors = collectFormErrors(cleaned, formFields, lang, { orgIsOther: !!isOtherSelected });
+    if (inputErrors.length) {
+      setSaving(false);
+      setError([t("val_fix_below", lang), ...inputErrors].join("\n"));
+      return;
+    }
     const payload = {
-      ...form,
+      ...cleaned,
       orgType: finalOrgType,
       // Même correctif que sur le formulaire d'inscription initial :
       // toujours envoyer l'identifiant réellement résolu, jamais la
@@ -4148,8 +4372,9 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
     };
     const { data, error } = await supabase.rpc("update_participant_by_token", { p_token: token, payload });
     setSaving(false);
-    if (error) { setError(t("submit_error", lang)); return; }
+    if (error) { setError(rpcErrorMessage(error, lang)); return; }
     if (data === false) { setExpired(true); return; }
+    setForm(cleaned);
     setSaved(true);
   }
 
@@ -4210,7 +4435,7 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
               </div>
             </div>
             {orgTypes.find(ot => ot.label.fr === form.orgType)?.isOther && (
-              <div className="sm:col-span-2"><Field label={t("org_other", lang)}><input className="cb-input" value={form.orgOther} onChange={e=>update("orgOther", e.target.value)} /></Field></div>
+              <div className="sm:col-span-2"><Field label={t("org_other", lang)}><input className="cb-input" maxLength={100} value={form.orgOther} onChange={e=>update("orgOther", e.target.value)} /></Field></div>
             )}
           </div>
         </div>
@@ -4266,7 +4491,7 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
         </div>
       </div>
 
-      {error && <div className="mt-6 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0" }}>{error}</div>}
+      {error && <div className="mt-6 text-sm px-4 py-3" style={{ background: "#FBEAEA", color: "#8A2A2A", border: "1px solid #E3B0B0", whiteSpace: "pre-line" }}>{error}</div>}
       {saved && <div className="mt-6 text-sm px-4 py-3" style={{ background: "#EAF6EE", color: "var(--vert-fonce)" }}>{t("update_saved", lang)}</div>}
 
       <div className="mt-8">
