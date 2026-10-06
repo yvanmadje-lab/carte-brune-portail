@@ -2520,6 +2520,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
   const isSuperAdmin = myRole === "super_admin";
   const isHotelRole = myRole === "hotel";
   const isCountryRole = myRole === "country";
+  // La colonne Téléphone n'est visible que pour le super admin et le rôle pays.
+  const canSeePhone = isSuperAdmin || isCountryRole;
 
   useEffect(() => {
     if (isHotelRole) listMyManagedHotels().then(setMyHotels);
@@ -2683,7 +2685,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         <table className="w-full text-sm" style={{ minWidth: "1400px" }}>
           <thead style={{ background: "var(--sable-deep)", position: "sticky", top: 0, zIndex: 1 }}>
             <tr className="text-left">
-              {["#", t("filter_registration_date", lang), t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("badge_country_col",lang), t("email",lang), t("nav_hotels",lang), t("room_type",lang), t(myRole === "hotel" ? "check_in" : "arrival_date", lang), t("arrival_time",lang), t("flight_arrival",lang), t(myRole === "hotel" ? "check_out" : "departure_date", lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
+              {["#", t("filter_registration_date", lang), t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("badge_country_col",lang), t("email",lang), ...(canSeePhone ? [t("phone_label",lang)] : []), t("nav_hotels",lang), t("room_type",lang), t(myRole === "hotel" ? "check_in" : "arrival_date", lang), t("arrival_time",lang), t("flight_arrival",lang), t(myRole === "hotel" ? "check_out" : "departure_date", lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
                 <th key={h} className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
               <th className="px-3 py-2"></th>
@@ -2692,7 +2694,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={19} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
+              <tr><td colSpan={18 + (canEdit ? 1 : 0) + (canSeePhone ? 1 : 0)} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
             )}
             {filtered.map(p => (
               <tr key={p.id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
@@ -2719,6 +2721,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
                     {p.confirmationEmailSent === null && <span className="text-[10px] text-black/40">…</span>}
                   </div>
                 </td>
+                {canSeePhone && <td className="px-3 py-2 whitespace-nowrap">{p.phone || "—"}</td>}
                 <td className="px-3 py-2 whitespace-nowrap">{p.hotelName || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.roomType || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{(myRole === "hotel" ? p.checkIn : p.arrivalDate) || "—"}</td>
