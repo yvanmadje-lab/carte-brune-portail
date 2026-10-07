@@ -19,6 +19,28 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Enregistre le résultat de l'envoi sur la ligne du participant.
+// Ne doit JAMAIS faire échouer la requête : l'email est déjà parti (ou
+// non), ce suivi n'est qu'un témoin.
+// NB : une requête Supabase n'est pas une vraie Promise (elle n'a pas de
+// .catch()). Appeler .catch() dessus provoquait une erreur APRÈS l'envoi
+// de l'email, avant l'enregistrement de son résultat : l'email partait
+// bien, mais l'admin continuait d'afficher « échec ». On utilise donc
+// try/await et on lit { error } dans la réponse.
+async function markStatus(supabase, editToken, sent, errorText) {
+  if (!supabase || !editToken) return;
+  try {
+    const { error } = await supabase.rpc("mark_confirmation_email_status", {
+      p_edit_token: editToken,
+      p_sent: sent,
+      p_error: sent ? null : errorText,
+    });
+    if (error) console.error("mark_confirmation_email_status:", error.message || error);
+  } catch (e) {
+    console.error("mark_confirmation_email_status:", e);
+  }
+}
+
 function extractEditToken(editLink) {
   try {
     const url = new URL(editLink);
@@ -51,6 +73,7 @@ export default async function handler(req, res) {
 
   let supabase = null;
   let editToken = null;
+  let sent = false; // true dès qu'un envoi a réussi (utile au bloc catch final)
 
   try {
     const { email, lang, firstName, lastName, regNumber, editLink, eventTitle } = req.body || {};
@@ -93,7 +116,7 @@ export default async function handler(req, res) {
 
     const resendKey = process.env.RESEND_API_KEY;
     if (!resendKey) {
-      if (editToken) await supabase.rpc("mark_confirmation_email_status", { p_edit_token: editToken, p_sent: false, p_error: "RESEND_API_KEY missing on server" }).catch(() => {});
+      await markStatus(supabase, editToken, false, "RESEND_API_KEY missing on server");
       res.status(500).json({ error: "RESEND_API_KEY missing on server" });
       return;
     }
@@ -104,7 +127,6 @@ export default async function handler(req, res) {
     // erreur transitoire chez Resend) ne se traduisent plus par un
     // email jamais parti sans qu'on le sache.
     let lastError = null;
-    let sent = false;
     for (let attempt = 1; attempt <= 3 && !sent; attempt++) {
       try {
         await sendViaResend({ resendKey, from, email, subject, text, html });
@@ -115,13 +137,7 @@ export default async function handler(req, res) {
       }
     }
 
-    if (editToken) {
-      await supabase.rpc("mark_confirmation_email_status", {
-        p_edit_token: editToken,
-        p_sent: sent,
-        p_error: sent ? null : lastError,
-      }).catch(() => { /* le suivi ne doit jamais faire échouer la requête */ });
-    }
+    await markStatus(supabase, editToken, sent, lastError);
 
     if (!sent) {
       res.status(502).json({ error: "Email provider error", detail: lastError });
@@ -131,9 +147,9 @@ export default async function handler(req, res) {
     res.status(200).json({ ok: true });
   } catch (err) {
     const message = String(err.message || err);
-    if (supabase && editToken) {
-      await supabase.rpc("mark_confirmation_email_status", { p_edit_token: editToken, p_sent: false, p_error: message }).catch(() => {});
-    }
-    res.status(500).json({ error: message });
+    // Si l'email est déjà parti, une erreur tardive ne doit pas le
+    // faire passer pour un échec.
+    if (!sent) await markStatus(supabase, editToken, false, message);
+    res.status(sent ? 200 : 500).json(sent ? { ok: true } : { error: message });
   }
 }
