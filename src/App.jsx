@@ -400,6 +400,25 @@ const T = {
   is_other_label: { fr: "Déclenche le champ \"précisez\" (option \"Autre\")", en: "Triggers the \"please specify\" field (the \"Other\" option)", pt: "Ativa o campo \"especifique\" (opção \"Outro\")" },
   required_fields_error: { fr: "Merci de compléter les champs obligatoires :", en: "Please complete the required fields:", pt: "Preencha os campos obrigatórios:" },
   phone_format_error: { fr: "Merci d'indiquer l'indicatif pays (commençant par +) pour :", en: "Please include the country code (starting with +) for:", pt: "Indique o indicativo do país (começando por +) para:" },
+  countries_ecowas: { fr: "Pays de la CEDEAO", en: "ECOWAS countries", pt: "Países da CEDEAO" },
+  countries_other: { fr: "Autres pays", en: "Other countries", pt: "Outros países" },
+  passport_title: { fr: "Copie de votre passeport", en: "Copy of your passport", pt: "Cópia do seu passaporte" },
+  passport_help: { fr: "Votre pays n'est pas membre de la CEDEAO : une copie de la page d'identité de votre passeport est exigée (JPG, PNG ou PDF). Ce document est confidentiel : il n'est visible que par l'organisation, uniquement pour la gestion de votre participation.", en: "Your country is not an ECOWAS member: a copy of your passport's identity page is required (JPG, PNG or PDF). This document is confidential: it is only visible to the organisers, solely to manage your participation.", pt: "O seu país não é membro da CEDEAO: é exigida uma cópia da página de identificação do seu passaporte (JPG, PNG ou PDF). Este documento é confidencial: só é visível pela organização, unicamente para gerir a sua participação." },
+  passport_choose: { fr: "Choisir un fichier", en: "Choose a file", pt: "Escolher um ficheiro" },
+  passport_replace: { fr: "Remplacer le fichier", en: "Replace the file", pt: "Substituir o ficheiro" },
+  passport_remove: { fr: "Retirer", en: "Remove", pt: "Remover" },
+  passport_already_sent: { fr: "Passeport déjà envoyé", en: "Passport already sent", pt: "Passaporte já enviado" },
+  passport_required: { fr: "Une copie de votre passeport est obligatoire pour un pays hors CEDEAO.", en: "A copy of your passport is required for a non-ECOWAS country.", pt: "É obrigatória uma cópia do seu passaporte para um país fora da CEDEAO." },
+  passport_bad_type: { fr: "Format non accepté : utilisez une image JPG, PNG ou un fichier PDF.", en: "Format not accepted: use a JPG or PNG image, or a PDF file.", pt: "Formato não aceite: use uma imagem JPG, PNG ou um ficheiro PDF." },
+  passport_too_big: { fr: "Fichier trop volumineux (images : 12 Mo maximum, PDF : 5 Mo maximum).", en: "File too large (images: 12 MB maximum, PDF: 5 MB maximum).", pt: "Ficheiro demasiado grande (imagens: 12 MB no máximo, PDF: 5 MB no máximo)." },
+  passport_upload_failed_title: { fr: "Passeport non envoyé", en: "Passport not sent", pt: "Passaporte não enviado" },
+  passport_upload_failed: { fr: "Votre inscription est bien enregistrée, mais l'envoi du passeport a échoué. Réessayez ci-dessous, ou plus tard depuis le lien reçu par email.", en: "Your registration is saved, but sending the passport failed. Try again below, or later from the link you received by email.", pt: "A sua inscrição está registada, mas o envio do passaporte falhou. Tente novamente abaixo, ou mais tarde a partir da ligação recebida por email." },
+  passport_retry: { fr: "Envoyer le passeport", en: "Send the passport", pt: "Enviar o passaporte" },
+  passport_received: { fr: "Passeport reçu", en: "Passport received", pt: "Passaporte recebido" },
+  passport_col: { fr: "Passeport", en: "Passport", pt: "Passaporte" },
+  passport_missing: { fr: "Manquant", en: "Missing", pt: "Em falta" },
+  passport_view: { fr: "Voir", en: "View", pt: "Ver" },
+  passport_open_error: { fr: "Impossible d'ouvrir le passeport (lien expiré ou accès refusé).", en: "Unable to open the passport (expired link or access denied).", pt: "Não foi possível abrir o passaporte (ligação expirada ou acesso recusado)." },
   val_fix_below: { fr: "Merci de corriger les informations suivantes :", en: "Please correct the following:", pt: "Corrija as seguintes informações:" },
   val_email: { fr: "adresse email invalide (exemple : nom@domaine.com).", en: "invalid email address (example: name@domain.com).", pt: "endereço de email inválido (exemplo: nome@dominio.com)." },
   val_phone_format: { fr: "numéro invalide — indiquez l'indicatif du pays en commençant par + (exemple : +221 77 123 45 67).", en: "invalid number — include the country code starting with + (example: +221 77 123 45 67).", pt: "número inválido — indique o indicativo do país começando por + (exemplo: +221 77 123 45 67)." },
@@ -684,6 +703,185 @@ function rpcErrorMessage(error, lang) {
     departure_flight_number: "flight_number",
   }[m[1]];
   return `${t("val_server_rejected", lang)} ${labelKey ? t(labelKey, lang) : m[1]}`;
+}
+
+// ---------------------------------------------------------------------
+// Pays & passeport
+// COUNTRIES (plus haut) = les pays de la CEDEAO. Tous les autres pays sont
+// acceptés ; pour eux, une copie du passeport est exigée.
+// La valeur enregistrée est TOUJOURS le nom français (stable d'un
+// navigateur à l'autre : statistiques, badges, comptes « pays »...) ;
+// seul le libellé affiché suit la langue de l'interface.
+// ---------------------------------------------------------------------
+const ECOWAS_ISO = { "Bénin": "BJ", "Cabo Verde": "CV", "Côte d'Ivoire": "CI", "Gambie": "GM", "Ghana": "GH", "Guinée": "GN", "Guinée-Bissau": "GW", "Liberia": "LR", "Nigeria": "NG", "Sénégal": "SN", "Sierra Leone": "SL", "Togo": "TG" };
+// Pays hors CEDEAO : code ISO + nom français (liste fixe, triée).
+const OTHER_COUNTRIES = "AF:Afghanistan|ZA:Afrique du Sud|AL:Albanie|DZ:Algérie|DE:Allemagne|AD:Andorre|AO:Angola|AI:Anguilla|AG:Antigua-et-Barbuda|SA:Arabie saoudite|AR:Argentine|AM:Arménie|AW:Aruba|AU:Australie|AT:Autriche|AZ:Azerbaïdjan|BS:Bahamas|BH:Bahreïn|BD:Bangladesh|BB:Barbade|BE:Belgique|BZ:Belize|BM:Bermudes|BT:Bhoutan|BY:Biélorussie|BO:Bolivie|BA:Bosnie-Herzégovine|BW:Botswana|BR:Brésil|BN:Brunei|BG:Bulgarie|BF:Burkina Faso|BI:Burundi|KH:Cambodge|CM:Cameroun|CA:Canada|CL:Chili|CN:Chine|CY:Chypre|CO:Colombie|KM:Comores|KP:Corée du Nord|KR:Corée du Sud|CR:Costa Rica|HR:Croatie|CU:Cuba|CW:Curaçao|DK:Danemark|DJ:Djibouti|DM:Dominique|EG:Égypte|AE:Émirats arabes unis|EC:Équateur|ER:Érythrée|ES:Espagne|EE:Estonie|SZ:Eswatini|US:États-Unis|ET:Éthiopie|FJ:Fidji|FI:Finlande|FR:France|GA:Gabon|GE:Géorgie|GI:Gibraltar|GR:Grèce|GD:Grenade|GL:Groenland|GP:Guadeloupe|GU:Guam|GT:Guatemala|GG:Guernesey|GQ:Guinée équatoriale|GY:Guyana|GF:Guyane française|HT:Haïti|HN:Honduras|HU:Hongrie|CX:Île Christmas|IM:Île de Man|NF:Île Norfolk|AX:Îles Åland|KY:Îles Caïmans|CC:Îles Cocos|CK:Îles Cook|FO:Îles Féroé|FK:Îles Malouines|MP:Îles Mariannes du Nord|MH:Îles Marshall|PN:Îles Pitcairn|SB:Îles Salomon|TC:Îles Turques-et-Caïques|VG:Îles Vierges britanniques|VI:Îles Vierges des États-Unis|IN:Inde|ID:Indonésie|IQ:Irak|IR:Iran|IE:Irlande|IS:Islande|IL:Israël|IT:Italie|JM:Jamaïque|JP:Japon|JE:Jersey|JO:Jordanie|KZ:Kazakhstan|KE:Kenya|KG:Kirghizstan|KI:Kiribati|XK:Kosovo|KW:Koweït|RE:La Réunion|LA:Laos|LS:Lesotho|LV:Lettonie|LB:Liban|LY:Libye|LI:Liechtenstein|LT:Lituanie|LU:Luxembourg|MK:Macédoine du Nord|MG:Madagascar|MY:Malaisie|MW:Malawi|MV:Maldives|ML:Mali|MT:Malte|MA:Maroc|MQ:Martinique|MU:Maurice|MR:Mauritanie|YT:Mayotte|MX:Mexique|FM:Micronésie|MD:Moldavie|MC:Monaco|MN:Mongolie|ME:Monténégro|MS:Montserrat|MZ:Mozambique|MM:Myanmar (Birmanie)|NA:Namibie|NR:Nauru|NP:Népal|NI:Nicaragua|NE:Niger|NU:Niue|NO:Norvège|NC:Nouvelle-Calédonie|NZ:Nouvelle-Zélande|OM:Oman|UG:Ouganda|UZ:Ouzbékistan|PK:Pakistan|PW:Palaos|PS:Palestine|PA:Panama|PG:Papouasie-Nouvelle-Guinée|PY:Paraguay|NL:Pays-Bas|BQ:Pays-Bas caribéens|PE:Pérou|PH:Philippines|PL:Pologne|PF:Polynésie française|PR:Porto Rico|PT:Portugal|QA:Qatar|HK:R.A.S. chinoise de Hong Kong|MO:R.A.S. chinoise de Macao|CF:République centrafricaine|CD:République démocratique du Congo|DO:République dominicaine|CG:République du Congo|RO:Roumanie|GB:Royaume-Uni|RU:Russie|RW:Rwanda|EH:Sahara occidental|BL:Saint-Barthélemy|KN:Saint-Christophe-et-Niévès|SM:Saint-Marin|MF:Saint-Martin|SX:Saint-Martin (partie néerlandaise)|PM:Saint-Pierre-et-Miquelon|VC:Saint-Vincent-et-les Grenadines|SH:Sainte-Hélène|LC:Sainte-Lucie|SV:Salvador|WS:Samoa|AS:Samoa américaines|ST:Sao Tomé-et-Principe|RS:Serbie|SC:Seychelles|SG:Singapour|SK:Slovaquie|SI:Slovénie|SO:Somalie|SD:Soudan|SS:Soudan du Sud|LK:Sri Lanka|SE:Suède|CH:Suisse|SR:Suriname|SJ:Svalbard et Jan Mayen|SY:Syrie|TJ:Tadjikistan|TW:Taïwan|TZ:Tanzanie|TD:Tchad|CZ:Tchéquie|TH:Thaïlande|TL:Timor oriental|TK:Tokelau|TO:Tonga|TT:Trinité-et-Tobago|TN:Tunisie|TM:Turkménistan|TR:Turquie|TV:Tuvalu|UA:Ukraine|UY:Uruguay|VU:Vanuatu|VA:Vatican|VE:Venezuela|VN:Viêt Nam|WF:Wallis-et-Futuna|YE:Yémen|ZM:Zambie|ZW:Zimbabwe".split("|").map(entry => {
+  const i = entry.indexOf(":");
+  return { iso: entry.slice(0, i), fr: entry.slice(i + 1) };
+});
+
+const needsPassport = (country) => !!country && !COUNTRIES.includes(country);
+
+const _regionNamesCache = {};
+function regionLabel(iso, fr, lang) {
+  if (lang === "fr") return fr;
+  try {
+    if (!_regionNamesCache[lang]) _regionNamesCache[lang] = new Intl.DisplayNames([lang], { type: "region" });
+    return _regionNamesCache[lang].of(iso) || fr;
+  } catch (e) { return fr; }
+}
+
+function buildCountryOptions(lang) {
+  const ecowas = COUNTRIES.map(fr => ({ value: fr, label: regionLabel(ECOWAS_ISO[fr], fr, lang) }));
+  const others = OTHER_COUNTRIES
+    .map(c => ({ value: c.fr, label: regionLabel(c.iso, c.fr, lang) }))
+    .sort((a, b) => a.label.localeCompare(b.label, lang));
+  return { ecowas, others };
+}
+
+// Liste déroulante des pays : CEDEAO d'abord, puis tous les autres pays.
+function CountrySelect({ lang, value, onChange }) {
+  const { ecowas, others } = useMemo(() => buildCountryOptions(lang), [lang]);
+  const known = value && (COUNTRIES.includes(value) || OTHER_COUNTRIES.some(c => c.fr === value));
+  return (
+    <select className="cb-input" value={value} onChange={e => onChange(e.target.value)}>
+      {value && !known && <option value={value}>{value}</option>}
+      <optgroup label={t("countries_ecowas", lang)}>
+        {ecowas.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+      </optgroup>
+      <optgroup label={t("countries_other", lang)}>
+        {others.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+      </optgroup>
+    </select>
+  );
+}
+
+// ----- Passeport -----
+const PASSPORT_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+const PASSPORT_MAX_PDF = 5 * 1024 * 1024;
+const PASSPORT_MAX_IMAGE = 12 * 1024 * 1024; // avant recompression
+
+// Certains navigateurs mobiles ne renseignent pas le type : on le déduit de l'extension.
+function guessFileType(file) {
+  if (file.type) return file.type;
+  const ext = (file.name || "").split(".").pop().toLowerCase();
+  return { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", pdf: "application/pdf" }[ext] || "";
+}
+
+// "" si le fichier est acceptable, sinon la clé du message d'erreur.
+function checkPassportFile(file) {
+  if (!file) return "";
+  const type = guessFileType(file);
+  if (!PASSPORT_TYPES.includes(type)) return "passport_bad_type";
+  if (file.size > (type === "application/pdf" ? PASSPORT_MAX_PDF : PASSPORT_MAX_IMAGE)) return "passport_too_big";
+  return "";
+}
+
+// Les images sont réduites (1800 px max) et recompressées en JPEG : un
+// passeport reste parfaitement lisible, pour une fraction du poids
+// (économise l'espace de stockage). Les PDF sont envoyés tels quels.
+async function preparePassportFile(file) {
+  const type = guessFileType(file);
+  if (type === "application/pdf") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    return blob && blob.size < file.size ? blob : file;
+  } catch (e) {
+    return file; // format que le navigateur ne sait pas relire : envoyé tel quel
+  }
+}
+
+// Envoie le passeport dans le stockage PRIVÉ, puis le rattache au
+// participant (via son jeton secret). Renvoie true si tout a réussi.
+async function uploadPassportFile(editToken, file) {
+  try {
+    const prepared = await preparePassportFile(file);
+    const type = prepared.type || guessFileType(file);
+    const ext = type === "application/pdf" ? "pdf" : type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg";
+    const path = `${editToken}/${crypto.randomUUID()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("passports").upload(path, prepared, { contentType: type, upsert: false });
+    if (upErr) return false;
+    const { data, error } = await supabase.rpc("set_participant_passport", { p_token: editToken, p_path: path });
+    return !error && data === true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Zone de chargement du passeport (inscription, confirmation, modification).
+function PassportUpload({ lang, file, onChange, alreadySent = false }) {
+  const [err, setErr] = useState("");
+  function pick(e) {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = ""; // permet de rechoisir le même fichier
+    if (!f) return;
+    const code = checkPassportFile(f);
+    if (code) { setErr(t(code, lang)); return; }
+    setErr("");
+    onChange(f);
+  }
+  return (
+    <div className="sm:col-span-2 p-4" style={{ background: "var(--sable-deep)", border: "1px solid #CFC4A3" }}>
+      <div className="text-sm font-semibold mb-1" style={{ color: "var(--vert-fonce)" }}>
+        {t("passport_title", lang)}{!alreadySent && <span style={{ color: "#8A2A2A" }}> *</span>}
+      </div>
+      <p className="text-xs text-black/60 mb-3">{t("passport_help", lang)}</p>
+      {alreadySent && !file && <div className="text-sm mb-2" style={{ color: "var(--vert-fonce)" }}>✓ {t("passport_already_sent", lang)}</div>}
+      {file ? (
+        <div className="flex items-center justify-between gap-3 bg-white border px-3 py-2 text-sm" style={{ borderColor: "#CFC4A3" }}>
+          <span className="truncate">{file.name} <span className="text-black/40">({Math.round(file.size / 1024)} Ko)</span></span>
+          <button type="button" onClick={() => onChange(null)} className="text-xs underline flex-shrink-0">{t("passport_remove", lang)}</button>
+        </div>
+      ) : (
+        <label className="cb-btn-outline text-sm cursor-pointer inline-flex items-center gap-2">
+          <ImageIcon size={15} /> {alreadySent ? t("passport_replace", lang) : t("passport_choose", lang)}
+          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={pick} className="hidden" />
+        </label>
+      )}
+      {err && <div className="text-xs mt-2" style={{ color: "#8A2A2A" }}>{err}</div>}
+    </div>
+  );
+}
+
+// Cellule « Passeport » du tableau d'admin (super admin et lecture seule).
+// Le fichier est dans un stockage privé : on demande un lien temporaire
+// (2 minutes) à chaque ouverture.
+function PassportCell({ p, lang }) {
+  const [opening, setOpening] = useState(false);
+  if (!needsPassport(p.country)) return <span className="text-black/30">—</span>;
+  if (!p.passportPath) {
+    return <span className="text-xs px-2 py-0.5" style={{ background: "#FBEAEA", color: "#8A2A2A" }}>{t("passport_missing", lang)}</span>;
+  }
+  async function openPassport() {
+    setOpening(true);
+    // Fenêtre ouverte tout de suite (sinon le navigateur bloque le pop-up
+    // après l'attente), puis dirigée vers le lien temporaire.
+    const w = window.open("about:blank", "_blank");
+    if (w) w.opener = null;
+    const { data, error } = await supabase.storage.from("passports").createSignedUrl(p.passportPath, 120);
+    setOpening(false);
+    if (error || !data?.signedUrl) {
+      if (w) w.close();
+      window.alert(t("passport_open_error", lang));
+      return;
+    }
+    if (w) w.location.href = data.signedUrl;
+    else window.open(data.signedUrl, "_blank", "noopener");
+  }
+  return (
+    <button onClick={openPassport} disabled={opening} className="text-xs flex items-center gap-1 underline" style={{ color: "var(--vert-fonce)" }}>
+      <Eye size={13} /> {opening ? "…" : t("passport_view", lang)}
+    </button>
+  );
 }
 
 function regNumber(seq) {
@@ -1356,6 +1554,10 @@ export default function App() {
   const [form, setForm] = useState(emptyForm);
   const [participants, setParticipants] = useState([]);
   const [confirmed, setConfirmed] = useState(null);
+  // Passeport (pays hors CEDEAO) : fichier choisi, et état d'un éventuel
+  // nouvel essai d'envoi depuis l'écran de confirmation.
+  const [passportFile, setPassportFile] = useState(null);
+  const [passportRetry, setPassportRetry] = useState("idle");
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
@@ -1647,6 +1849,7 @@ export default function App() {
       badgeCountryLabel: row.badge_country_label,
       registrationLang: row.registration_lang || "fr",
       registeredAt: row.created_at,
+      passportPath: row.passport_path || null,
     };
   }
 
@@ -1733,15 +1936,13 @@ export default function App() {
       lang,
     };
     const { data, error } = await supabase.rpc("register_participant", { payload });
-    setSubmitting(false);
     if (error || !data) {
+      setSubmitting(false);
       setSubmitError(error ? rpcErrorMessage(error, lang) : t("submit_error", lang));
       return;
     }
     const regNumber = data.regNumber;
     const editToken = data.editToken;
-    setConfirmed({ ...form, orgType: finalOrgType, regNumber });
-    setStep(6);
 
     // Envoi de l'email de confirmation — au mieux, n'empêche jamais
     // la confirmation de s'afficher si l'envoi échoue.
@@ -1777,10 +1978,33 @@ export default function App() {
         }),
       }).catch(() => { /* best effort */ });
     }
+
+    // Passeport (pays hors CEDEAO) : envoyé APRÈS l'inscription, avec le
+    // jeton secret du participant — jamais de fichier orphelin pour
+    // quelqu'un qui n'aurait pas terminé son inscription. Si l'envoi
+    // échoue, l'inscription reste valide : l'écran de confirmation propose
+    // de réessayer (et le lien reçu par email le permet aussi).
+    let passportFailed = false;
+    if (needsPassport(form.country)) {
+      passportFailed = !(passportFile && await uploadPassportFile(editToken, passportFile));
+    }
+    setSubmitting(false);
+    setPassportRetry("idle");
+    setConfirmed({ ...form, orgType: finalOrgType, regNumber, editToken, passportFailed });
+    setStep(6);
+  }
+
+  // Nouvel essai d'envoi du passeport depuis l'écran de confirmation.
+  async function retryPassportUpload() {
+    if (!confirmed?.editToken || !passportFile) return;
+    setPassportRetry("uploading");
+    const ok = await uploadPassportFile(confirmed.editToken, passportFile);
+    setPassportRetry(ok ? "done" : "error");
+    if (ok) setConfirmed(c => ({ ...c, passportFailed: false }));
   }
 
   function startOver() {
-    setForm(emptyForm); setStep(1); setConfirmed(null); setSubmitError(""); setView("public");
+    setForm(emptyForm); setStep(1); setConfirmed(null); setSubmitError(""); setPassportFile(null); setPassportRetry("idle"); setView("public");
   }
 
   const stats = useMemo(() => {
@@ -1921,11 +2145,11 @@ export default function App() {
       )}
 
       {view === "register" && step < 6 && (
-        <RegistrationWizard lang={lang} step={step} setStep={setStep} form={form} update={update} selectedHotel={selectedHotel} selectedRoom={selectedRoom} onSubmit={submitRegistration} setView={setView} submitting={submitting} submitError={submitError} hotels={hotels} orgTypes={orgTypes} formFields={formFields} />
+        <RegistrationWizard lang={lang} step={step} setStep={setStep} form={form} update={update} passportFile={passportFile} setPassportFile={setPassportFile} selectedHotel={selectedHotel} selectedRoom={selectedRoom} onSubmit={submitRegistration} setView={setView} submitting={submitting} submitError={submitError} hotels={hotels} orgTypes={orgTypes} formFields={formFields} />
       )}
 
       {view === "register" && step === 6 && confirmed && (
-        <Confirmation lang={lang} record={confirmed} onDone={startOver} eventData={eventData} />
+        <Confirmation lang={lang} record={confirmed} onDone={startOver} eventData={eventData} passportFile={passportFile} setPassportFile={setPassportFile} onRetryPassport={retryPassportUpload} passportRetry={passportRetry} />
       )}
 
       {view === "update" && (
@@ -2300,7 +2524,7 @@ function DynamicField({ field, lang, value, onChange }) {
   return <Field label={label}><input type={type} inputMode={inputMode} maxLength={maxLength} className="cb-input" value={value || ""} onChange={e=>onChange(e.target.value)} /></Field>;
 }
 
-function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels, orgTypes, formFields }) {
+function RegistrationWizard({ lang, step, setStep, form, update, passportFile, setPassportFile, selectedHotel, selectedRoom, onSubmit, setView, submitting, submitError, hotels, orgTypes, formFields }) {
   const titles = ["step1_title","step2_title","step3_title","step4_title","step5_title"];
   const [stepError, setStepError] = useState("");
   const [captchaValid, setCaptchaValid] = useState(false);
@@ -2310,6 +2534,11 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
     const missing = fieldsForStep(step).filter(f => f.required && !String(form[f.field_key] || "").trim());
     if (missing.length) {
       setStepError(t("required_fields_error", lang) + " " + missing.map(f => f.label[lang]).join(", "));
+      return;
+    }
+    // Pays hors CEDEAO : la copie du passeport est obligatoire.
+    if (step === 2 && needsPassport(form.country) && !passportFile) {
+      setStepError(t("passport_required", lang));
       return;
     }
     // Contrôle de fond : email valide, numéro réaliste, noms et textes
@@ -2373,13 +2602,12 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
       {step === 2 && (
         <div className="grid sm:grid-cols-2 gap-5">
           <Field label={t("country", lang)}>
-            <select className="cb-input" value={form.country} onChange={e=>update("country", e.target.value)}>
-              {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <CountrySelect lang={lang} value={form.country} onChange={v => { update("country", v); if (!needsPassport(v)) setPassportFile(null); }} />
           </Field>
           {fieldsForStep(2).map(f => (
             <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />
           ))}
+          {needsPassport(form.country) && <PassportUpload lang={lang} file={passportFile} onChange={setPassportFile} />}
         </div>
       )}
 
@@ -2445,6 +2673,7 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
             <div className="cb-label mb-2">{t("step2_title", lang)}</div>
             <div className="space-y-1">
               <ReviewRow label={t("country", lang)} value={form.country} />
+              {needsPassport(form.country) && <ReviewRow label={t("passport_title", lang)} value={passportFile ? passportFile.name : "—"} />}
               {fieldsForStep(2).map(f => (
                 <ReviewRow key={f.id} label={f.label[lang]} value={form[f.field_key]} />
               ))}
@@ -2502,7 +2731,7 @@ function RegistrationWizard({ lang, step, setStep, form, update, selectedHotel, 
   );
 }
 
-function Confirmation({ lang, record, onDone, eventData }) {
+function Confirmation({ lang, record, onDone, eventData, passportFile, setPassportFile, onRetryPassport, passportRetry }) {
   const [downloadingBadge, setDownloadingBadge] = useState(false);
 
   async function handleDownloadBadge() {
@@ -2534,6 +2763,22 @@ function Confirmation({ lang, record, onDone, eventData }) {
         <div className="font-mono font-semibold text-lg" style={{ color: "var(--argile)" }}>{record.regNumber}</div>
       </div>
       <p className="text-sm text-black/60 mb-6 max-w-sm mx-auto leading-relaxed">{t("email_sent_notice", lang)}</p>
+      {needsPassport(record.country) && !record.passportFailed && (
+        <p className="text-sm mb-6" style={{ color: "var(--vert-fonce)" }}>✓ {t("passport_received", lang)}</p>
+      )}
+      {record.passportFailed && (
+        <div className="text-left max-w-md mx-auto mb-6 p-4" style={{ background: "#FBEAEA", border: "1px solid #E3B0B0" }}>
+          <div className="text-sm font-semibold mb-1" style={{ color: "#8A2A2A" }}>{t("passport_upload_failed_title", lang)}</div>
+          <p className="text-xs text-black/70 mb-3">{t("passport_upload_failed", lang)}</p>
+          <PassportUpload lang={lang} file={passportFile} onChange={setPassportFile} />
+          {passportFile && (
+            <button onClick={onRetryPassport} disabled={passportRetry === "uploading"} className="cb-btn text-sm mt-3">
+              {passportRetry === "uploading" ? t("uploading", lang) : t("passport_retry", lang)}
+            </button>
+          )}
+          {passportRetry === "error" && <div className="text-xs mt-2" style={{ color: "#8A2A2A" }}>{t("passport_upload_failed", lang)}</div>}
+        </div>
+      )}
       <div className="mb-8">
         <button onClick={handleDownloadBadge} disabled={downloadingBadge} className="cb-btn">
           <QrCode size={15} /> {downloadingBadge ? t("uploading", lang) : t("download_badge", lang)}
@@ -2784,6 +3029,14 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
   const isCountryRole = myRole === "country";
   // La colonne Téléphone n'est visible que pour le super admin et le rôle pays.
   const canSeePhone = isSuperAdmin || isCountryRole;
+  // Les passeports sont visibles uniquement par le super admin et le rôle
+  // lecture seule (la base de données applique la même règle au stockage).
+  const canSeePassport = isSuperAdmin || myRole === "viewer";
+  // Filtre pays : la CEDEAO + les autres pays réellement présents.
+  const countryFilterOptions = [
+    ...COUNTRIES,
+    ...Array.from(new Set(participants.map(p => p.country).filter(c => c && !COUNTRIES.includes(c)))).sort((a, b) => a.localeCompare(b, "fr")),
+  ];
   // Contacts inclus dans les exports : le super admin choisit, le rôle pays
   // reçoit toujours les deux, les autres rôles aucun.
   const exportContacts = isSuperAdmin
@@ -2922,7 +3175,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
         <select className="cb-input sm:w-48" value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
           <option value="">{t("all_countries", lang)}</option>
-          {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+          {countryFilterOptions.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select className="cb-input sm:w-48" value={hotelFilter} onChange={e=>setHotelFilter(e.target.value)}>
           <option value="">{t("filter_hotel", lang)}</option>
@@ -2953,7 +3206,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         <table className="w-full text-sm" style={{ minWidth: "1400px" }}>
           <thead style={{ background: "var(--sable-deep)", position: "sticky", top: 0, zIndex: 1 }}>
             <tr className="text-left">
-              {["#", t("filter_registration_date", lang), t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("badge_country_col",lang), t("email",lang), ...(canSeePhone ? [t("phone_label",lang)] : []), t("nav_hotels",lang), t("room_type",lang), t(myRole === "hotel" ? "check_in" : "arrival_date", lang), t("arrival_time",lang), t("flight_arrival",lang), t(myRole === "hotel" ? "check_out" : "departure_date", lang), t("departure_time",lang), t("flight_departure",lang)].map(h => (
+              {["#", t("filter_registration_date", lang), t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("badge_country_col",lang), t("email",lang), ...(canSeePhone ? [t("phone_label",lang)] : []), t("nav_hotels",lang), t("room_type",lang), t(myRole === "hotel" ? "check_in" : "arrival_date", lang), t("arrival_time",lang), t("flight_arrival",lang), t(myRole === "hotel" ? "check_out" : "departure_date", lang), t("departure_time",lang), t("flight_departure",lang), ...(canSeePassport ? [t("passport_col",lang)] : [])].map(h => (
                 <th key={h} className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
               <th className="px-3 py-2"></th>
@@ -2962,7 +3215,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={18 + (canEdit ? 1 : 0) + (canSeePhone ? 1 : 0)} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
+              <tr><td colSpan={18 + (canEdit ? 1 : 0) + (canSeePhone ? 1 : 0) + (canSeePassport ? 1 : 0)} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
             )}
             {filtered.map(p => (
               <tr key={p.id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
@@ -2998,6 +3251,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
                 <td className="px-3 py-2 whitespace-nowrap">{(myRole === "hotel" ? p.checkOut : p.departureDate) || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureTime || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureFlightNumber || "—"}</td>
+                {canSeePassport && <td className="px-3 py-2 whitespace-nowrap"><PassportCell p={p} lang={lang} /></td>}
                 <td className="px-3 py-2 whitespace-nowrap">
                   {!isHotelRole && !isCountryRole && (
                     <button onClick={() => downloadBadges([p], eventData, lang, `badge-${p.regNumber}.pdf`)} title={t("download_badge", lang)}><QrCode size={14} color="var(--vert-fonce)" /></button>
@@ -4241,6 +4495,10 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
   const [expired, setExpired] = useState(false);
   const [form, setForm] = useState(null);
   const [badgeInfo, setBadgeInfo] = useState(null);
+  // Passeport (pays hors CEDEAO) : fichier choisi ici, et savoir si un
+  // passeport a déjà été envoyé pour ce participant.
+  const [passportFile, setPassportFile] = useState(null);
+  const [hasPassport, setHasPassport] = useState(false);
   // Si l'hôtel choisi par ce participant a depuis été retiré de la
   // liste (ex: plus de chambres disponibles), on le garde quand même
   // disponible dans SON formulaire à lui — sinon la sélection retombe
@@ -4316,6 +4574,8 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
         badgeCountryLabel: data.badge_country_label || "",
         registrationLang: data.registration_lang || lang,
       });
+      const { data: hp } = await supabase.rpc("participant_has_passport", { p_token: token });
+      setHasPassport(hp === true);
       setLoading(false);
     })();
   }, [token]);
@@ -4347,6 +4607,13 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
       setError([t("val_fix_below", lang), ...inputErrors].join("\n"));
       return;
     }
+    // Pays hors CEDEAO : une copie du passeport doit exister (déjà
+    // envoyée, ou choisie ici).
+    if (needsPassport(cleaned.country) && !hasPassport && !passportFile) {
+      setSaving(false);
+      setError(t("passport_required", lang));
+      return;
+    }
     const payload = {
       ...cleaned,
       orgType: finalOrgType,
@@ -4375,6 +4642,15 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
     if (error) { setError(rpcErrorMessage(error, lang)); return; }
     if (data === false) { setExpired(true); return; }
     setForm(cleaned);
+    // Nouveau passeport choisi : envoyé une fois les informations enregistrées.
+    if (needsPassport(cleaned.country) && passportFile) {
+      setSaving(true);
+      const ok = await uploadPassportFile(token, passportFile);
+      setSaving(false);
+      if (!ok) { setError(t("passport_upload_failed", lang)); return; }
+      setHasPassport(true);
+      setPassportFile(null);
+    }
     setSaved(true);
   }
 
@@ -4444,11 +4720,10 @@ function UpdateRegistration({ lang, token, hotels, orgTypes, formFields, setView
           <div className="cb-label mb-3">{t("step2_title", lang)}</div>
           <div className="grid sm:grid-cols-2 gap-5">
             <Field label={t("country", lang)}>
-              <select className="cb-input" value={form.country} onChange={e=>update("country", e.target.value)}>
-                {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <CountrySelect lang={lang} value={form.country} onChange={v => update("country", v)} />
             </Field>
             {fieldsForStep(2).map(f => <DynamicField key={f.id} field={f} lang={lang} value={form[f.field_key]} onChange={v => update(f.field_key, v)} />)}
+            {needsPassport(form.country) && <PassportUpload lang={lang} file={passportFile} onChange={f => { setPassportFile(f); setSaved(false); }} alreadySent={hasPassport} />}
           </div>
         </div>
 
