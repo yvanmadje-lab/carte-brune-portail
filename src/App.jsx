@@ -410,7 +410,7 @@ const T = {
   passport_already_sent: { fr: "Passeport déjà envoyé", en: "Passport already sent", pt: "Passaporte já enviado" },
   passport_required: { fr: "Une copie de votre passeport est obligatoire pour un pays hors CEDEAO.", en: "A copy of your passport is required for a non-ECOWAS country.", pt: "É obrigatória uma cópia do seu passaporte para um país fora da CEDEAO." },
   passport_bad_type: { fr: "Format non accepté : utilisez une image JPG, PNG ou un fichier PDF.", en: "Format not accepted: use a JPG or PNG image, or a PDF file.", pt: "Formato não aceite: use uma imagem JPG, PNG ou um ficheiro PDF." },
-  passport_too_big: { fr: "Fichier trop volumineux (images : 12 Mo maximum, PDF : 5 Mo maximum).", en: "File too large (images: 12 MB maximum, PDF: 5 MB maximum).", pt: "Ficheiro demasiado grande (imagens: 12 MB no máximo, PDF: 5 MB no máximo)." },
+  passport_too_big: { fr: "Fichier trop volumineux (images : 12 Mo maximum, PDF : 4 Mo maximum).", en: "File too large (images: 12 MB maximum, PDF: 4 MB maximum).", pt: "Ficheiro demasiado grande (imagens: 12 MB no máximo, PDF: 4 MB no máximo)." },
   passport_upload_failed_title: { fr: "Passeport non envoyé", en: "Passport not sent", pt: "Passaporte não enviado" },
   passport_upload_failed: { fr: "Votre inscription est bien enregistrée, mais l'envoi du passeport a échoué. Réessayez ci-dessous, ou plus tard depuis le lien reçu par email.", en: "Your registration is saved, but sending the passport failed. Try again below, or later from the link you received by email.", pt: "A sua inscrição está registada, mas o envio do passaporte falhou. Tente novamente abaixo, ou mais tarde a partir da ligação recebida por email." },
   passport_retry: { fr: "Envoyer le passeport", en: "Send the passport", pt: "Enviar o passaporte" },
@@ -758,7 +758,9 @@ function CountrySelect({ lang, value, onChange }) {
 
 // ----- Passeport -----
 const PASSPORT_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-const PASSPORT_MAX_PDF = 5 * 1024 * 1024;
+// 4 Mo : une fonction du serveur ne peut renvoyer qu'environ 4,5 Mo, or c'est
+// elle qui affiche le passeport à l'administrateur.
+const PASSPORT_MAX_PDF = 4 * 1024 * 1024;
 const PASSPORT_MAX_IMAGE = 12 * 1024 * 1024; // avant recompression
 
 // Certains navigateurs mobiles ne renseignent pas le type : on le déduit de l'extension.
@@ -805,6 +807,7 @@ async function preparePassportFile(file) {
 async function uploadPassportFile(editToken, file) {
   try {
     const prepared = await preparePassportFile(file);
+    if (prepared.size > PASSPORT_MAX_PDF) return false; // trop lourd pour être réaffiché
     const type = prepared.type || guessFileType(file);
     const ext = type === "application/pdf" ? "pdf" : type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg";
     const path = `${editToken}/${crypto.randomUUID()}.${ext}`;
@@ -852,9 +855,30 @@ function PassportUpload({ lang, file, onChange, alreadySent = false }) {
   );
 }
 
+// Ouvre un passeport SANS jamais exposer l'adresse du stockage : le fichier
+// est demandé à NOTRE serveur (/api/passport) avec la session de
+// l'administrateur, puis affiché depuis une adresse locale (blob:) de notre
+// propre site. Renvoie cette adresse, ou lève une erreur.
+async function fetchPassportBlobUrl(path) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) throw new Error("no session");
+  const res = await fetch("/api/passport", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ path }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // On ne fait confiance qu'à un type d'image ou de PDF connu (jamais de HTML).
+  const type = (res.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
+  if (!PASSPORT_TYPES.includes(type)) throw new Error("unexpected type");
+  const blob = new Blob([await res.arrayBuffer()], { type });
+  return URL.createObjectURL(blob);
+}
+
 // Cellule « Passeport » du tableau d'admin (super admin et lecture seule).
-// Le fichier est dans un stockage privé : on demande un lien temporaire
-// (2 minutes) à chaque ouverture.
+// Le fichier est dans un stockage privé : il s'ouvre via notre serveur, qui
+// vérifie le droit d'accès, sans qu'aucune adresse Supabase n'apparaisse.
 function PassportCell({ p, lang }) {
   const [opening, setOpening] = useState(false);
   if (!needsPassport(p.country)) return <span className="text-black/30">—</span>;
@@ -864,18 +888,19 @@ function PassportCell({ p, lang }) {
   async function openPassport() {
     setOpening(true);
     // Fenêtre ouverte tout de suite (sinon le navigateur bloque le pop-up
-    // après l'attente), puis dirigée vers le lien temporaire.
+    // après l'attente), puis dirigée vers le fichier.
     const w = window.open("about:blank", "_blank");
     if (w) w.opener = null;
-    const { data, error } = await supabase.storage.from("passports").createSignedUrl(p.passportPath, 120);
-    setOpening(false);
-    if (error || !data?.signedUrl) {
+    try {
+      const url = await fetchPassportBlobUrl(p.passportPath);
+      if (w) w.location.href = url;
+      else window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
+    } catch (e) {
       if (w) w.close();
       window.alert(t("passport_open_error", lang));
-      return;
     }
-    if (w) w.location.href = data.signedUrl;
-    else window.open(data.signedUrl, "_blank", "noopener");
+    setOpening(false);
   }
   return (
     <button onClick={openPassport} disabled={opening} className="text-xs flex items-center gap-1 underline" style={{ color: "var(--vert-fonce)" }}>
