@@ -528,7 +528,10 @@ const T = {
   vip_count_label: { fr: "VIP", en: "VIP", pt: "VIP" },
   edit_participant: { fr: "Modifier les données du participant", en: "Edit participant data", pt: "Editar dados do participante" },
   edit_participant_btn: { fr: "Modifier", en: "Edit", pt: "Editar" },
-  edit_participant_note: { fr: "L'hôtel et la chambre ne se modifient pas ici (ils sont liés aux comptes hôtel). Le participant n'est pas notifié.", en: "Hotel and room cannot be changed here (they are linked to hotel accounts). The participant is not notified.", pt: "O hotel e o quarto não se alteram aqui (estão ligados às contas de hotel). O participante não é notificado." },
+  assign_hotel_title: { fr: "Attribuer un hôtel (ce participant n'en a pas choisi)", en: "Assign a hotel (this participant has not chosen one)", pt: "Atribuir um hotel (este participante não escolheu)" },
+  assign_hotel_none: { fr: "— Aucun hôtel —", en: "— No hotel —", pt: "— Nenhum hotel —" },
+  assign_hotel_room: { fr: "Type de chambre", en: "Room type", pt: "Tipo de quarto" },
+  edit_participant_note: { fr: "L'hôtel et la chambre ne se modifient pas ici (ils sont liés aux comptes hôtel) sauf pour un participant sans hôtel. Le participant n'est pas notifié.", en: "Hotel and room cannot be changed here (they are linked to hotel accounts). The participant is not notified.", pt: "O hotel e o quarto não se alteram aqui (estão ligados às contas de hotel). O participante não é notificado." },
   edit_save_error: { fr: "Enregistrement impossible. Vérifiez votre connexion et vos droits.", en: "Could not save. Check your connection and permissions.", pt: "Não foi possível guardar. Verifique a ligação e as permissões." },
   edit_invalid: { fr: "Champ invalide :", en: "Invalid field:", pt: "Campo inválido:" },
   reset_filters: { fr: "Réinitialiser les filtres", en: "Reset filters", pt: "Repor filtros" },
@@ -1891,6 +1894,7 @@ export default function App() {
       registeredAt: row.created_at,
       passportPath: row.passport_path || null,
       isVip: row.is_vip === true,
+      hotelId: row.hotel_id || "",
     };
   }
 
@@ -2216,7 +2220,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} registrationDateFilter={registrationDateFilter} setRegistrationDateFilter={setRegistrationDateFilter} registrationDateFilterTo={registrationDateFilterTo} setRegistrationDateFilterTo={setRegistrationDateFilterTo} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} vipFilter={vipFilter} setVipFilter={setVipFilter} onSetVip={setParticipantVip} onUpdateParticipant={updateParticipantData} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} registrationDateFilter={registrationDateFilter} setRegistrationDateFilter={setRegistrationDateFilter} registrationDateFilterTo={registrationDateFilterTo} setRegistrationDateFilterTo={setRegistrationDateFilterTo} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} vipFilter={vipFilter} setVipFilter={setVipFilter} hotels={hotels} onSetVip={setParticipantVip} onUpdateParticipant={updateParticipantData} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
       )}
 
       {view === "archives" && (
@@ -2905,7 +2909,7 @@ const PARTICIPANT_EDIT_FIELDS = [
   { key: "departureFlightNumber", col: "departure_flight_number", label: "flight_departure", check: checkFlightNumber },
 ];
 
-function ParticipantEditModal({ lang, participant, orgTypes, onClose, onSave }) {
+function ParticipantEditModal({ hotels, lang, participant, orgTypes, onClose, onSave }) {
   const initial = useMemo(() => {
     const o = {};
     PARTICIPANT_EDIT_FIELDS.forEach(f => {
@@ -2919,6 +2923,12 @@ function ParticipantEditModal({ lang, participant, orgTypes, onClose, onSave }) 
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Attribution d'hôtel : uniquement pour un participant qui n'en a pas.
+  const canAssignHotel = !participant.hotelName && !participant.hotelId;
+  const [assignHotelId, setAssignHotelId] = useState("");
+  const [assignRoomId, setAssignRoomId] = useState("");
+  const assignHotel = (hotels || []).find(h => h.id === assignHotelId) || null;
+  const assignRoom = assignHotel ? (assignHotel.rooms.find(r => r.id === assignRoomId) || assignHotel.rooms[0]) : null;
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   async function save() {
@@ -2938,6 +2948,13 @@ function ParticipantEditModal({ lang, participant, orgTypes, onClose, onSave }) 
       cols[f.col] = (v === "" && isOptional) ? null : v;
       local[f.key] = v;
     });
+    if (canAssignHotel && assignHotel && assignRoom) {
+      const rl = ["fr", "en", "pt"].includes(participant.registrationLang) ? participant.registrationLang : "fr";
+      const hName = assignHotel.name[rl] || assignHotel.name.fr;
+      const rType = assignRoom.type[rl] || assignRoom.type.fr;
+      Object.assign(cols, { wants_hotel: "yes", hotel_id: assignHotel.id, hotel_name: hName, room_id: assignRoom.id, room_type: rType });
+      Object.assign(local, { hotelId: assignHotel.id, hotelName: hName, roomType: rType });
+    }
     if (Object.keys(cols).length === 0) { onClose(); return; }
     setSaving(true); setError("");
     try {
@@ -2975,6 +2992,22 @@ function ParticipantEditModal({ lang, participant, orgTypes, onClose, onSave }) 
             </div>
           ))}
         </div>
+        {canAssignHotel && (hotels || []).length > 0 && (
+          <div className="mt-4 p-3 border" style={{ borderColor: "#CFC4A3", background: "var(--sable-deep)" }}>
+            <p className="text-sm font-semibold mb-2">{t("assign_hotel_title", lang)}</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <select className="cb-input" value={assignHotelId} onChange={e => { setAssignHotelId(e.target.value); setAssignRoomId(""); }}>
+                <option value="">{t("assign_hotel_none", lang)}</option>
+                {hotels.map(h => <option key={h.id} value={h.id}>{h.name[lang] || h.name.fr}</option>)}
+              </select>
+              {assignHotel && (
+                <select className="cb-input" aria-label={t("assign_hotel_room", lang)} value={assignRoom?.id || ""} onChange={e => setAssignRoomId(e.target.value)}>
+                  {assignHotel.rooms.map(r => <option key={r.id} value={r.id}>{r.type[lang] || r.type.fr}</option>)}
+                </select>
+              )}
+            </div>
+          </div>
+        )}
         {error && <p className="text-sm mt-3" style={{ color: "#8A2A2A" }}>{error}</p>}
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="cb-btn-outline">{t("cancel", lang)}</button>
@@ -3176,7 +3209,7 @@ function ExcursionGroupsPanel({ lang, participants, hotelOptions, eventData, con
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, registrationDateFilter, setRegistrationDateFilter, registrationDateFilterTo, setRegistrationDateFilterTo, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, vipFilter, setVipFilter, onSetVip, onUpdateParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, registrationDateFilter, setRegistrationDateFilter, registrationDateFilterTo, setRegistrationDateFilterTo, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, vipFilter, setVipFilter, hotels, onSetVip, onUpdateParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const [myHotels, setMyHotels] = useState([]);
@@ -3456,7 +3489,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       )}
 
       {isSuperAdmin && editingParticipant && (
-        <ParticipantEditModal lang={lang} participant={editingParticipant} orgTypes={orgTypes} onClose={() => setEditingParticipant(null)} onSave={onUpdateParticipant} />
+        <ParticipantEditModal hotels={hotels} lang={lang} participant={editingParticipant} orgTypes={orgTypes} onClose={() => setEditingParticipant(null)} onSave={onUpdateParticipant} />
       )}
 
       {tab === "events" && isSuperAdmin && <EventsManager lang={lang} activeEventId={eventData.id} onActiveEventChanged={onEventChange} eventData={eventData} />}
