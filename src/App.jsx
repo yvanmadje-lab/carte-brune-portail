@@ -933,7 +933,7 @@ function regNumber(seq) {
 // rôle pays reçoit les deux ; les autres rôles aucune — leurs exports
 // restent strictement identiques à avant.
 function exportHeaders(lang, contacts = {}) {
-  return [t("name_col",lang), ...(contacts.email ? [t("email",lang)] : []), ...(contacts.phone ? [t("phone_label",lang)] : []), t("org_type_col",lang), t("country",lang), t("hotel_room_col",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang), ...(contacts.vip ? [t("vip_label",lang)] : [])];
+  return [t("name_col",lang), ...(contacts.email ? [t("email",lang)] : []), ...(contacts.phone ? [t("phone_label",lang)] : []), t("org_type_col",lang), t("country",lang), ...(contacts.badge ? [t("badge_country_col",lang)] : []), t("hotel_room_col",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang), ...(contacts.vip ? [t("vip_label",lang)] : [])];
 }
 
 function exportRows(rows, contacts = {}, lang = "fr") {
@@ -943,6 +943,7 @@ function exportRows(rows, contacts = {}, lang = "fr") {
     ...(contacts.phone ? [r.phone || ""] : []),
     r.orgType || "",
     r.country,
+    ...(contacts.badge ? [r.badgeCountryLabel || r.country || ""] : []),
     [r.hotelName, r.roomType].filter(Boolean).join(" - "),
     r.arrivalDate || "",
     r.arrivalTime || "",
@@ -1049,7 +1050,7 @@ async function downloadExcel(rows, filename, titleText, lang, contacts = {}) {
 async function downloadPDF(rows, filename, titleText, lang, contacts = {}) {
   const cols = exportHeaders(lang, contacts);
   const body = exportRows(rows, contacts, lang);
-  const hasContacts = !!(contacts.email || contacts.phone);
+  const hasContacts = !!(contacts.email || contacts.phone || contacts.badge);
   const doc = new jsPDF({ orientation: "landscape" });
   doc.setFontSize(11);
   doc.text(titleText, hasContacts ? 8 : 14, 12);
@@ -1060,7 +1061,7 @@ async function downloadPDF(rows, filename, titleText, lang, contacts = {}) {
   let next = 1;
   const emailIdx = contacts.email ? next++ : -1;
   const phoneIdx = contacts.phone ? next++ : -1;
-  const hotelIdx = next + 2; // après "type d'organisme" et "pays"
+  const hotelIdx = next + 2 + (contacts.badge ? 1 : 0); // après "type d'organisme", "pays" [et pays badge]
   const columnStyles = hasContacts
     ? {
         0: { cellWidth: 36 },
@@ -3044,6 +3045,9 @@ function ExportContactOptions({ lang, contacts, onChange }) {
       <label className="flex items-center gap-1.5 cursor-pointer">
         <input type="checkbox" checked={!!contacts.phone} onChange={e => onChange({ ...contacts, phone: e.target.checked })} /> {t("phone_label", lang)}
       </label>
+      <label className="flex items-center gap-1.5 cursor-pointer">
+        <input type="checkbox" checked={!!contacts.badge} onChange={e => onChange({ ...contacts, badge: e.target.checked })} /> {t("badge_country_col", lang)}
+      </label>
     </div>
   );
 }
@@ -3218,7 +3222,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
   const [editingParticipant, setEditingParticipant] = useState(null);
   // Choix du super admin : colonnes email / téléphone dans les exports
   // (cochées par défaut, comme avant).
-  const [exportContactsChoice, setExportContactsChoice] = useState({ email: true, phone: true });
+  const [exportContactsChoice, setExportContactsChoice] = useState({ email: true, phone: true, badge: false });
   const canEdit = myRole === "super_admin" || myRole === "manager";
   const isSuperAdmin = myRole === "super_admin";
   const isHotelRole = myRole === "hotel";
