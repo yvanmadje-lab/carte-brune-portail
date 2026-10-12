@@ -519,6 +519,18 @@ const T = {
   export_include_label: { fr: "Inclure dans l'export :", en: "Include in export:", pt: "Incluir na exportação:" },
   filter_departure: { fr: "Date de départ de l'hôtel", en: "Hotel departure date", pt: "Data de saída do hotel" },
   filter_departure_flight: { fr: "Date de départ", en: "Departure date", pt: "Data de saída" },
+  vip_label: { fr: "VIP", en: "VIP", pt: "VIP" },
+  vip_filter_all: { fr: "Tous (VIP ou non)", en: "All (VIP or not)", pt: "Todos (VIP ou não)" },
+  vip_filter_only: { fr: "VIP uniquement", en: "VIP only", pt: "Apenas VIP" },
+  vip_filter_non: { fr: "Hors VIP", en: "Non-VIP", pt: "Não VIP" },
+  vip_toggle_hint: { fr: "Cliquer pour classer / déclasser VIP", en: "Click to mark / unmark as VIP", pt: "Clique para marcar / desmarcar VIP" },
+  vip_yes: { fr: "Oui", en: "Yes", pt: "Sim" },
+  vip_count_label: { fr: "VIP", en: "VIP", pt: "VIP" },
+  edit_participant: { fr: "Modifier les données du participant", en: "Edit participant data", pt: "Editar dados do participante" },
+  edit_participant_btn: { fr: "Modifier", en: "Edit", pt: "Editar" },
+  edit_participant_note: { fr: "L'hôtel et la chambre ne se modifient pas ici (ils sont liés aux comptes hôtel). Le participant n'est pas notifié.", en: "Hotel and room cannot be changed here (they are linked to hotel accounts). The participant is not notified.", pt: "O hotel e o quarto não se alteram aqui (estão ligados às contas de hotel). O participante não é notificado." },
+  edit_save_error: { fr: "Enregistrement impossible. Vérifiez votre connexion et vos droits.", en: "Could not save. Check your connection and permissions.", pt: "Não foi possível guardar. Verifique a ligação e as permissões." },
+  edit_invalid: { fr: "Champ invalide :", en: "Invalid field:", pt: "Campo inválido:" },
   reset_filters: { fr: "Réinitialiser les filtres", en: "Reset filters", pt: "Repor filtros" },
   view_site: { fr: "Voir le site public", en: "View public site", pt: "Ver site público" },
   hotel_none: { fr: "Hébergement personnel", en: "Own accommodation", pt: "Alojamento próprio" },
@@ -918,10 +930,10 @@ function regNumber(seq) {
 // rôle pays reçoit les deux ; les autres rôles aucune — leurs exports
 // restent strictement identiques à avant.
 function exportHeaders(lang, contacts = {}) {
-  return [t("name_col",lang), ...(contacts.email ? [t("email",lang)] : []), ...(contacts.phone ? [t("phone_label",lang)] : []), t("org_type_col",lang), t("country",lang), t("hotel_room_col",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang)];
+  return [t("name_col",lang), ...(contacts.email ? [t("email",lang)] : []), ...(contacts.phone ? [t("phone_label",lang)] : []), t("org_type_col",lang), t("country",lang), t("hotel_room_col",lang), t("arrival_date",lang), t("arrival_time",lang), t("flight_arrival",lang), t("departure_date",lang), t("departure_time",lang), t("flight_departure",lang), ...(contacts.vip ? [t("vip_label",lang)] : [])];
 }
 
-function exportRows(rows, contacts = {}) {
+function exportRows(rows, contacts = {}, lang = "fr") {
   return rows.map(r => [
     `${r.lastName || ""} ${r.firstName || ""}`.trim(),
     ...(contacts.email ? [r.email || ""] : []),
@@ -935,6 +947,7 @@ function exportRows(rows, contacts = {}) {
     r.departureDate || "",
     r.departureTime || "",
     r.departureFlightNumber || "",
+    ...(contacts.vip ? [r.isVip ? t("vip_yes", lang) : ""] : []),
   ]);
 }
 
@@ -983,6 +996,7 @@ function buildExportTitle(lang, filters, participants, totalCount, myRole) {
       : (from || to);
     parts.push(`${t("filter_registration_date", lang)} : ${label} (${countFor(p => matchesDateOrRange(localDateKey(p.registeredAt), from, to))})`);
   }
+  if (filters.vipFilter) parts.push(`${t("vip_label", lang)} : ${t(filters.vipFilter === "vip" ? "vip_filter_only" : "vip_filter_non", lang)} (${countFor(p => filters.vipFilter === "vip" ? p.isVip : !p.isVip)})`);
   if (filters.search) parts.push(`${t("search_label", lang)} : ${filters.search}`);
   const base = t("participants_list_title", lang);
   let title = parts.length ? `${base} - ${parts.join(" - ")}` : base;
@@ -992,7 +1006,7 @@ function buildExportTitle(lang, filters, participants, totalCount, myRole) {
 
 async function downloadExcel(rows, filename, titleText, lang, contacts = {}) {
   const headers = exportHeaders(lang, contacts);
-  const body = exportRows(rows, contacts);
+  const body = exportRows(rows, contacts, lang);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Participants");
 
@@ -1031,7 +1045,7 @@ async function downloadExcel(rows, filename, titleText, lang, contacts = {}) {
 
 async function downloadPDF(rows, filename, titleText, lang, contacts = {}) {
   const cols = exportHeaders(lang, contacts);
-  const body = exportRows(rows, contacts);
+  const body = exportRows(rows, contacts, lang);
   const hasContacts = !!(contacts.email || contacts.phone);
   const doc = new jsPDF({ orientation: "landscape" });
   doc.setFontSize(11);
@@ -1589,6 +1603,7 @@ export default function App() {
   const [hotelFilter, setHotelFilter] = useState("");
   const [arrivalFilter, setArrivalFilter] = useState("");
   const [registrationDateFilter, setRegistrationDateFilter] = useState("");
+  const [vipFilter, setVipFilter] = useState(""); // "" | "vip" | "non"
   const [registrationDateFilterTo, setRegistrationDateFilterTo] = useState("");
   const [departureFilter, setDepartureFilter] = useState("");
   const [showBootSplash, setShowBootSplash] = useState(() => Capacitor.isNativePlatform());
@@ -1875,6 +1890,7 @@ export default function App() {
       registrationLang: row.registration_lang || "fr",
       registeredAt: row.created_at,
       passportPath: row.passport_path || null,
+      isVip: row.is_vip === true,
     };
   }
 
@@ -1902,6 +1918,23 @@ export default function App() {
     try {
       await upsertRow("participants", { id, badge_country_label: trimmed || null });
     } catch (e) { /* best effort */ }
+  }
+
+  async function setParticipantVip(id, value) {
+    const previous = participants.find(x => x.id === id)?.isVip === true;
+    setParticipants(list => list.map(x => x.id === id ? { ...x, isVip: value } : x));
+    try {
+      await upsertRow("participants", { id, is_vip: value });
+    } catch (e) {
+      setParticipants(list => list.map(x => x.id === id ? { ...x, isVip: previous } : x));
+    }
+  }
+
+  // Modification des données d'un participant (super admin). `fields` est
+  // déjà en noms de colonnes ; on met à jour l'écran seulement si la base accepte.
+  async function updateParticipantData(id, fields, local) {
+    await upsertRow("participants", { id, ...fields });
+    setParticipants(list => list.map(x => x.id === id ? { ...x, ...local } : x));
   }
 
   async function resendConfirmationEmail(p) {
@@ -2057,9 +2090,10 @@ export default function App() {
       const matchesDeparture = !departureFilter || norm(isHotelRoleFilter ? p.checkOut : p.departureDate) === departureFilter;
       // Une seule date = ce jour-là ; deux dates = période complète.
       const matchesRegistrationDate = matchesDateOrRange(localDateKey(p.registeredAt), registrationDateFilter, registrationDateFilterTo);
-      return matchesSearch && matchesCountry && matchesHotel && matchesArrival && matchesDeparture && matchesRegistrationDate;
+      const matchesVip = !vipFilter || (vipFilter === "vip" ? p.isVip : !p.isVip);
+      return matchesSearch && matchesCountry && matchesHotel && matchesArrival && matchesDeparture && matchesRegistrationDate && matchesVip;
     });
-  }, [participants, search, countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, myRole]);
+  }, [participants, search, countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, vipFilter, myRole]);
 
   const hotelOptions = useMemo(() => Array.from(new Set(participants.map(p => p.hotelName).filter(Boolean))), [participants]);
 
@@ -2182,7 +2216,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} registrationDateFilter={registrationDateFilter} setRegistrationDateFilter={setRegistrationDateFilter} registrationDateFilterTo={registrationDateFilterTo} setRegistrationDateFilterTo={setRegistrationDateFilterTo} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} registrationDateFilter={registrationDateFilter} setRegistrationDateFilter={setRegistrationDateFilter} registrationDateFilterTo={registrationDateFilterTo} setRegistrationDateFilterTo={setRegistrationDateFilterTo} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} vipFilter={vipFilter} setVipFilter={setVipFilter} onSetVip={setParticipantVip} onUpdateParticipant={updateParticipantData} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
       )}
 
       {view === "archives" && (
@@ -2848,6 +2882,109 @@ function AdminLogin({ lang }) {
   );
 }
 
+// Fenêtre de modification des données d'un participant (super admin).
+// Mêmes contrôles de saisie que le formulaire public. L'hôtel et la
+// chambre ne sont volontairement pas modifiables ici.
+const PARTICIPANT_EDIT_FIELDS = [
+  { key: "lastName", col: "last_name", label: "last_name", check: checkPersonName },
+  { key: "firstName", col: "first_name", label: "first_name", check: checkPersonName },
+  { key: "position", col: "position", label: "position", check: v => checkFreeText(v, { max: 120 }) },
+  { key: "organization", col: "organization", label: "organization", check: v => checkFreeText(v, { max: 120 }) },
+  { key: "orgType", col: "org_type", label: "org_type", type: "orgType" },
+  { key: "country", col: "country", label: "country", type: "country" },
+  { key: "badgeCountryLabel", col: "badge_country_label", label: "badge_country_col", check: v => checkFreeText(v, { max: 60, minLetters: 0 }) },
+  { key: "email", col: "email", label: "email", check: checkEmail, inputType: "email" },
+  { key: "phone", col: "phone", label: "phone_label", check: checkPhone, inputType: "tel" },
+  { key: "checkIn", col: "check_in", label: "check_in", check: checkDate, inputType: "date" },
+  { key: "checkOut", col: "check_out", label: "check_out", check: checkDate, inputType: "date" },
+  { key: "arrivalDate", col: "arrival_date", label: "arrival_date", check: checkDate, inputType: "date" },
+  { key: "arrivalTime", col: "arrival_time", label: "arrival_time", inputType: "time" },
+  { key: "flightNumber", col: "flight_number", label: "flight_arrival", check: checkFlightNumber },
+  { key: "departureDate", col: "departure_date", label: "departure_date", check: checkDate, inputType: "date" },
+  { key: "departureTime", col: "departure_time", label: "departure_time", inputType: "time" },
+  { key: "departureFlightNumber", col: "departure_flight_number", label: "flight_departure", check: checkFlightNumber },
+];
+
+function ParticipantEditModal({ lang, participant, orgTypes, onClose, onSave }) {
+  const initial = useMemo(() => {
+    const o = {};
+    PARTICIPANT_EDIT_FIELDS.forEach(f => {
+      let v = participant[f.key] ?? "";
+      if (f.inputType === "date") v = String(v).slice(0, 10);
+      if (f.inputType === "time") v = String(v).slice(0, 5);
+      o[f.key] = v;
+    });
+    return o;
+  }, [participant.id]);
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function save() {
+    for (const f of PARTICIPANT_EDIT_FIELDS) {
+      const code = f.check ? f.check(form[f.key]) : "";
+      if (code) { setError(`${t("edit_invalid", lang)} ${t(f.label, lang)} — ${t(code, lang)}`); return; }
+    }
+    if (!String(form.lastName).trim() || !String(form.firstName).trim()) {
+      setError(`${t("edit_invalid", lang)} ${t("last_name", lang)} / ${t("first_name", lang)}`); return;
+    }
+    const cols = {}, local = {};
+    PARTICIPANT_EDIT_FIELDS.forEach(f => {
+      if (String(form[f.key] ?? "") === String(initial[f.key] ?? "")) return;
+      let v = typeof form[f.key] === "string" ? form[f.key].replace(/\s+/g, " ").trim() : form[f.key];
+      if (f.key === "email") v = v.toLowerCase();
+      const isOptional = !["lastName", "firstName", "country", "orgType", "organization"].includes(f.key);
+      cols[f.col] = (v === "" && isOptional) ? null : v;
+      local[f.key] = v;
+    });
+    if (Object.keys(cols).length === 0) { onClose(); return; }
+    setSaving(true); setError("");
+    try {
+      await onSave(participant.id, cols, local);
+      onClose();
+    } catch (e) {
+      setError(t("edit_save_error", lang));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3" style={{ background: "rgba(11,13,12,.6)" }} onClick={onClose}>
+      <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-auto p-5" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-display font-semibold text-lg" style={{ color: "var(--navy)" }}>{t("edit_participant", lang)}</h3>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <p className="text-xs text-black/50 mb-1 font-mono">{participant.regNumber}</p>
+        <p className="text-xs text-black/60 mb-4">{t("edit_participant_note", lang)}</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {PARTICIPANT_EDIT_FIELDS.map(f => (
+            <div key={f.key}>
+              <label className="cb-label">{t(f.label, lang)}</label>
+              {f.type === "country" ? (
+                <CountrySelect lang={lang} value={form.country} onChange={v => set("country", v)} />
+              ) : f.type === "orgType" ? (
+                <select className="cb-input" value={form.orgType} onChange={e => set("orgType", e.target.value)}>
+                  {form.orgType && !(orgTypes || []).some(o => o.label.fr === form.orgType) && <option value={form.orgType}>{form.orgType}</option>}
+                  {(orgTypes || []).map(o => <option key={o.label.fr} value={o.label.fr}>{o.label[lang] || o.label.fr}</option>)}
+                </select>
+              ) : (
+                <input className="cb-input" type={f.inputType || "text"} value={form[f.key]} onChange={e => set(f.key, e.target.value)} />
+              )}
+            </div>
+          ))}
+        </div>
+        {error && <p className="text-sm mt-3" style={{ color: "#8A2A2A" }}>{error}</p>}
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="cb-btn-outline">{t("cancel", lang)}</button>
+          <button onClick={save} disabled={saving} className="cb-btn" style={{ opacity: saving ? 0.7 : 1 }}>{t("save", lang)}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BadgeCountryLabelInput({ participant, onSave, lang }) {
   const [value, setValue] = useState(participant.badgeCountryLabel || "");
   useEffect(() => { setValue(participant.badgeCountryLabel || ""); }, [participant.id, participant.badgeCountryLabel]);
@@ -3039,12 +3176,13 @@ function ExcursionGroupsPanel({ lang, participants, hotelOptions, eventData, con
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, registrationDateFilter, setRegistrationDateFilter, registrationDateFilterTo, setRegistrationDateFilterTo, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, registrationDateFilter, setRegistrationDateFilter, registrationDateFilterTo, setRegistrationDateFilterTo, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, vipFilter, setVipFilter, onSetVip, onUpdateParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const [myHotels, setMyHotels] = useState([]);
   const [myCountries, setMyCountries] = useState([]);
   const [clearing, setClearing] = useState(false);
+  const [editingParticipant, setEditingParticipant] = useState(null);
   // Choix du super admin : colonnes email / téléphone dans les exports
   // (cochées par défaut, comme avant).
   const [exportContactsChoice, setExportContactsChoice] = useState({ email: true, phone: true });
@@ -3192,8 +3330,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
           <input className="cb-input pl-9" placeholder={t("search_ph", lang)} value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
-        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, search }, participants, filtered.length, myRole), lang, exportContacts)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
-        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, search }, participants, filtered.length, myRole), lang, exportContacts)} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
+        <button onClick={() => downloadExcel(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.xlsx`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, vipFilter, search }, participants, filtered.length, myRole), lang, { ...exportContacts, vip: isSuperAdmin })} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_excel", lang)}</button>
+        <button onClick={() => downloadPDF(filtered, `participants-${eventData.code || DEFAULT_EVENT.code}-${eventData.year || DEFAULT_EVENT.year}.pdf`, buildExportTitle(lang, { countryFilter, hotelFilter, arrivalFilter, departureFilter, registrationDateFilter, registrationDateFilterTo, vipFilter, search }, participants, filtered.length, myRole), lang, { ...exportContacts, vip: isSuperAdmin })} className="cb-btn-outline whitespace-nowrap"><Download size={15} /> {t("export_pdf", lang)}</button>
         {isSuperAdmin && <ExportContactOptions lang={lang} contacts={exportContactsChoice} onChange={setExportContactsChoice} />}
         {!isHotelRole && !isCountryRole && <button onClick={handleDownloadBadges} disabled={generatingBadges || filtered.length === 0} className="cb-btn-outline whitespace-nowrap" style={{ opacity: generatingBadges ? 0.7 : 1 }}><Download size={15} /> {generatingBadges ? t("generating_badges", lang) : t("download_all_badges", lang)}</button>}
       </div>
@@ -3214,6 +3352,16 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <label className="cb-label">{t(myRole === "hotel" ? "filter_departure" : "filter_departure_flight", lang)}</label>
           <input type="date" className="cb-input" value={departureFilter} onChange={e=>setDepartureFilter(e.target.value)} />
         </div>
+        {isSuperAdmin && (
+          <div className="sm:w-48">
+            <label className="cb-label">{t("vip_label", lang)}</label>
+            <select className="cb-input" value={vipFilter} onChange={e=>setVipFilter(e.target.value)}>
+              <option value="">{t("vip_filter_all", lang)}</option>
+              <option value="vip">{t("vip_filter_only", lang)} ({participants.filter(p => p.isVip).length})</option>
+              <option value="non">{t("vip_filter_non", lang)}</option>
+            </select>
+          </div>
+        )}
         <div className="sm:w-44" title={t("filter_registration_hint", lang)}>
           <label className="cb-label">{t("filter_registration_from", lang)}</label>
           <input type="date" className="cb-input" value={registrationDateFilter} onChange={e=>setRegistrationDateFilter(e.target.value)} />
@@ -3222,8 +3370,8 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           <label className="cb-label">{t("filter_registration_to", lang)}</label>
           <input type="date" className="cb-input" value={registrationDateFilterTo} min={registrationDateFilter || undefined} onChange={e=>setRegistrationDateFilterTo(e.target.value)} />
         </div>
-        {(countryFilter || hotelFilter || arrivalFilter || departureFilter || registrationDateFilter || registrationDateFilterTo) && (
-          <button onClick={() => { setCountryFilter(""); setHotelFilter(""); setArrivalFilter(""); setDepartureFilter(""); setRegistrationDateFilter(""); setRegistrationDateFilterTo(""); }} className="text-xs text-black/50 underline">{t("reset_filters", lang)}</button>
+        {(countryFilter || hotelFilter || arrivalFilter || departureFilter || registrationDateFilter || registrationDateFilterTo || vipFilter) && (
+          <button onClick={() => { setCountryFilter(""); setHotelFilter(""); setArrivalFilter(""); setDepartureFilter(""); setRegistrationDateFilter(""); setRegistrationDateFilterTo(""); setVipFilter(""); }} className="text-xs text-black/50 underline">{t("reset_filters", lang)}</button>
         )}
       </div>
 
@@ -3234,13 +3382,15 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
               {["#", t("filter_registration_date", lang), t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("badge_country_col",lang), t("email",lang), ...(canSeePhone ? [t("phone_label",lang)] : []), t("nav_hotels",lang), t("room_type",lang), t(myRole === "hotel" ? "check_in" : "arrival_date", lang), t("arrival_time",lang), t("flight_arrival",lang), t(myRole === "hotel" ? "check_out" : "departure_date", lang), t("departure_time",lang), t("flight_departure",lang), ...(canSeePassport ? [t("passport_col",lang)] : [])].map(h => (
                 <th key={h} className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
+              {isSuperAdmin && <th className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{t("vip_label", lang)}</th>}
               <th className="px-3 py-2"></th>
+              {isSuperAdmin && <th className="px-3 py-2"></th>}
               {canEdit && <th className="px-3 py-2"></th>}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={18 + (canEdit ? 1 : 0) + (canSeePhone ? 1 : 0) + (canSeePassport ? 1 : 0)} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
+              <tr><td colSpan={18 + (isSuperAdmin ? 2 : 0) + (canEdit ? 1 : 0) + (canSeePhone ? 1 : 0) + (canSeePassport ? 1 : 0)} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
             )}
             {filtered.map(p => (
               <tr key={p.id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
@@ -3277,11 +3427,21 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureTime || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.departureFlightNumber || "—"}</td>
                 {canSeePassport && <td className="px-3 py-2 whitespace-nowrap"><PassportCell p={p} lang={lang} /></td>}
+                {isSuperAdmin && (
+                  <td className="px-3 py-2 whitespace-nowrap text-center">
+                    <button onClick={() => onSetVip(p.id, !p.isVip)} title={t("vip_toggle_hint", lang)} className="text-xs font-semibold px-2 py-0.5 border" style={p.isVip ? { background: "#C9A227", color: "#fff", borderColor: "#C9A227" } : { background: "transparent", color: "#999", borderColor: "#CFC4A3" }}>{p.isVip ? "★ VIP" : "☆"}</button>
+                  </td>
+                )}
                 <td className="px-3 py-2 whitespace-nowrap">
                   {!isHotelRole && !isCountryRole && (
                     <button onClick={() => downloadBadges([p], eventData, lang, `badge-${p.regNumber}.pdf`)} title={t("download_badge", lang)}><QrCode size={14} color="var(--vert-fonce)" /></button>
                   )}
                 </td>
+                {isSuperAdmin && (
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <button onClick={() => setEditingParticipant(p)} title={t("edit_participant", lang)}><Pencil size={14} color="var(--navy)" /></button>
+                  </td>
+                )}
                 {canEdit && (
                   <td className="px-3 py-2 whitespace-nowrap">
                     <button onClick={() => onDeleteParticipant(p.id)} title={t("delete", lang)}><Trash2 size={14} color="#8A2A2A" /></button>
@@ -3293,6 +3453,10 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         </table>
       </div>
       </>
+      )}
+
+      {isSuperAdmin && editingParticipant && (
+        <ParticipantEditModal lang={lang} participant={editingParticipant} orgTypes={orgTypes} onClose={() => setEditingParticipant(null)} onSave={onUpdateParticipant} />
       )}
 
       {tab === "events" && isSuperAdmin && <EventsManager lang={lang} activeEventId={eventData.id} onActiveEventChanged={onEventChange} eventData={eventData} />}
