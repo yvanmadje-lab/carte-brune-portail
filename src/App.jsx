@@ -529,6 +529,7 @@ const T = {
   edit_participant: { fr: "Modifier les données du participant", en: "Edit participant data", pt: "Editar dados do participante" },
   edit_participant_btn: { fr: "Modifier", en: "Edit", pt: "Editar" },
   assign_hotel_title: { fr: "Attribuer un hôtel (ce participant n'en a pas choisi)", en: "Assign a hotel (this participant has not chosen one)", pt: "Atribuir um hotel (este participante não escolheu)" },
+  assign_hotel_empty: { fr: "Aucun hôtel trouvé pour cet événement. Créez-en un dans Contenu → Hôtels.", en: "No hotel found for this event. Create one in Content → Hotels.", pt: "Nenhum hotel encontrado para este evento. Crie um em Conteúdo → Hotéis." },
   assign_hotel_none: { fr: "— Aucun hôtel —", en: "— No hotel —", pt: "— Nenhum hotel —" },
   assign_hotel_room: { fr: "Type de chambre", en: "Room type", pt: "Tipo de quarto" },
   edit_participant_note: { fr: "L'hôtel et la chambre ne se modifient pas ici (ils sont liés aux comptes hôtel) sauf pour un participant sans hôtel. Le participant n'est pas notifié.", en: "Hotel and room cannot be changed here (they are linked to hotel accounts). The participant is not notified.", pt: "O hotel e o quarto não se alteram aqui (estão ligados às contas de hotel). O participante não é notificado." },
@@ -2910,7 +2911,7 @@ const PARTICIPANT_EDIT_FIELDS = [
   { key: "departureFlightNumber", col: "departure_flight_number", label: "flight_departure", check: checkFlightNumber },
 ];
 
-function ParticipantEditModal({ hotels, lang, participant, orgTypes, onClose, onSave }) {
+function ParticipantEditModal({ hotels: publishedHotels, eventId, lang, participant, orgTypes, onClose, onSave }) {
   const initial = useMemo(() => {
     const o = {};
     PARTICIPANT_EDIT_FIELDS.forEach(f => {
@@ -2925,7 +2926,35 @@ function ParticipantEditModal({ hotels, lang, participant, orgTypes, onClose, on
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   // Attribution d'hôtel : uniquement pour un participant qui n'en a pas.
-  const canAssignHotel = !participant.hotelName && !participant.hotelId;
+  const canAssignHotel = !participant.hotelName;
+  // Liste complète des hôtels de l'événement (publiés ET brouillons),
+  // lue directement : le super admin peut ainsi attribuer n'importe quel
+  // hôtel, même si la liste publique est vide ou n'a pas été rechargée.
+  const [hotels, setHotelsList] = useState(publishedHotels || []);
+  const [hotelsLoaded, setHotelsLoaded] = useState(false);
+  useEffect(() => {
+    if (!canAssignHotel) return;
+    let alive = true;
+    (async () => {
+      try {
+        const rows = await fetchAllForEvent("cms_hotels", eventId);
+        if (!alive || !Array.isArray(rows) || rows.length === 0) return;
+        const normType = (type) => typeof type === "object" && type !== null
+          ? { fr: type.fr || "", en: type.en || type.fr || "", pt: type.pt || type.fr || "" }
+          : { fr: type || "Standard", en: type || "Standard", pt: type || "Standard" };
+        setHotelsList(rows.map(r => {
+          const extra = Array.isArray(r.rooms) ? r.rooms : [];
+          const rooms = extra.length
+            ? extra.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).map((room, i) => ({ id: `${r.id}-r${i}`, type: normType(room.type) }))
+            : [{ id: r.id + "-r1", type: normType(r.room_type) }];
+          const nameFr = r.name_fr || r.name || "";
+          return { id: r.id, name: { fr: nameFr, en: r.name_en || nameFr, pt: r.name_pt || nameFr }, rooms, draft: !!r.status && r.status !== "published" };
+        }).filter(h => h.name.fr));
+      } catch (e) { /* on garde la liste publiée */ }
+      finally { if (alive) setHotelsLoaded(true); }
+    })();
+    return () => { alive = false; };
+  }, [participant.id]);
   const [assignHotelId, setAssignHotelId] = useState("");
   const [assignRoomId, setAssignRoomId] = useState("");
   const assignHotel = (hotels || []).find(h => h.id === assignHotelId) || null;
@@ -2993,13 +3022,14 @@ function ParticipantEditModal({ hotels, lang, participant, orgTypes, onClose, on
             </div>
           ))}
         </div>
-        {canAssignHotel && (hotels || []).length > 0 && (
+        {canAssignHotel && (
           <div className="mt-4 p-3 border" style={{ borderColor: "#CFC4A3", background: "var(--sable-deep)" }}>
             <p className="text-sm font-semibold mb-2">{t("assign_hotel_title", lang)}</p>
             <div className="grid sm:grid-cols-2 gap-3">
+              {(hotels || []).length === 0 && <p className="text-xs" style={{ color: "#8A2A2A" }}>{hotelsLoaded ? t("assign_hotel_empty", lang) : "…"}</p>}
               <select className="cb-input" value={assignHotelId} onChange={e => { setAssignHotelId(e.target.value); setAssignRoomId(""); }}>
                 <option value="">{t("assign_hotel_none", lang)}</option>
-                {hotels.map(h => <option key={h.id} value={h.id}>{h.name[lang] || h.name.fr}</option>)}
+                {(hotels || []).map(h => <option key={h.id} value={h.id}>{(h.name[lang] || h.name.fr)}{h.draft ? ` (${t("status_draft", lang)})` : ""}</option>)}
               </select>
               {assignHotel && (
                 <select className="cb-input" aria-label={t("assign_hotel_room", lang)} value={assignRoom?.id || ""} onChange={e => setAssignRoomId(e.target.value)}>
@@ -3493,7 +3523,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
       )}
 
       {isSuperAdmin && editingParticipant && (
-        <ParticipantEditModal hotels={hotels} lang={lang} participant={editingParticipant} orgTypes={orgTypes} onClose={() => setEditingParticipant(null)} onSave={onUpdateParticipant} />
+        <ParticipantEditModal hotels={hotels} eventId={eventData.id} lang={lang} participant={editingParticipant} orgTypes={orgTypes} onClose={() => setEditingParticipant(null)} onSave={onUpdateParticipant} />
       )}
 
       {tab === "events" && isSuperAdmin && <EventsManager lang={lang} activeEventId={eventData.id} onActiveEventChanged={onEventChange} eventData={eventData} />}
