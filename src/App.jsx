@@ -1938,6 +1938,17 @@ export default function App() {
     }
   }
 
+  async function setParticipantLang(id, value) {
+    if (!["fr", "en", "pt"].includes(value)) return;
+    const previous = participants.find(x => x.id === id)?.registrationLang || "fr";
+    setParticipants(list => list.map(x => x.id === id ? { ...x, registrationLang: value } : x));
+    try {
+      await upsertRow("participants", { id, registration_lang: value });
+    } catch (e) {
+      setParticipants(list => list.map(x => x.id === id ? { ...x, registrationLang: previous } : x));
+    }
+  }
+
   // Modification des données d'un participant (super admin). `fields` est
   // déjà en noms de colonnes ; on met à jour l'écran seulement si la base accepte.
   async function updateParticipantData(id, fields, local) {
@@ -2224,7 +2235,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} registrationDateFilter={registrationDateFilter} setRegistrationDateFilter={setRegistrationDateFilter} registrationDateFilterTo={registrationDateFilterTo} setRegistrationDateFilterTo={setRegistrationDateFilterTo} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} vipFilter={vipFilter} setVipFilter={setVipFilter} hotels={hotels} onSetVip={setParticipantVip} onUpdateParticipant={updateParticipantData} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
+        <AdminPanel lang={lang} participants={participants} stats={stats} filtered={filtered} search={search} setSearch={setSearch} countryFilter={countryFilter} setCountryFilter={setCountryFilter} hotelFilter={hotelFilter} setHotelFilter={setHotelFilter} arrivalFilter={arrivalFilter} setArrivalFilter={setArrivalFilter} departureFilter={departureFilter} setDepartureFilter={setDepartureFilter} registrationDateFilter={registrationDateFilter} setRegistrationDateFilter={setRegistrationDateFilter} registrationDateFilterTo={registrationDateFilterTo} setRegistrationDateFilterTo={setRegistrationDateFilterTo} hotelOptions={hotelOptions} setView={setView} adminUser={adminUser} authChecked={authChecked} participantsLoading={participantsLoading} onRefresh={fetchParticipants} onDeleteParticipant={deleteParticipant} onResendConfirmation={resendConfirmationEmail} onUpdateBadgeLabel={updateBadgeCountryLabel} vipFilter={vipFilter} setVipFilter={setVipFilter} hotels={hotels} onSetVip={setParticipantVip} onSetLang={setParticipantLang} onUpdateParticipant={updateParticipantData} logoUrl={logoUrl} onLogoChange={setLogoUrl} eventData={eventData} onEventChange={loadPublicContent} orgTypes={orgTypes} formFields={formFields} myRole={myRole} footerText={footerText} onFooterChange={loadPublicContent} privacyPolicy={privacyPolicy} needsMfa={needsMfa} mfaFactorId={mfaFactorId} onMfaVerified={checkMfaStatus} />
       )}
 
       {view === "archives" && (
@@ -3246,7 +3257,7 @@ function ExcursionGroupsPanel({ lang, participants, hotelOptions, eventData, con
   );
 }
 
-function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, registrationDateFilter, setRegistrationDateFilter, registrationDateFilterTo, setRegistrationDateFilterTo, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, vipFilter, setVipFilter, hotels, onSetVip, onUpdateParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
+function AdminPanel({ lang, participants, stats, filtered, search, setSearch, countryFilter, setCountryFilter, hotelFilter, setHotelFilter, arrivalFilter, setArrivalFilter, departureFilter, setDepartureFilter, registrationDateFilter, setRegistrationDateFilter, registrationDateFilterTo, setRegistrationDateFilterTo, hotelOptions, setView, adminUser, authChecked, participantsLoading, onRefresh, onDeleteParticipant, onResendConfirmation, onUpdateBadgeLabel, vipFilter, setVipFilter, hotels, onSetVip, onSetLang, onUpdateParticipant, logoUrl, onLogoChange, eventData, onEventChange, orgTypes, formFields, myRole, footerText, onFooterChange, privacyPolicy, needsMfa, mfaFactorId, onMfaVerified }) {
   const [tab, setTab] = useState("participants");
   const [generatingBadges, setGeneratingBadges] = useState(false);
   const [myHotels, setMyHotels] = useState([]);
@@ -3449,7 +3460,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
         <table className="w-full text-sm" style={{ minWidth: "1400px" }}>
           <thead style={{ background: "var(--sable-deep)", position: "sticky", top: 0, zIndex: 1 }}>
             <tr className="text-left">
-              {["#", t("filter_registration_date", lang), t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), t("badge_country_col",lang), t("email",lang), ...(canSeePhone ? [t("phone_label",lang)] : []), t("nav_hotels",lang), t("room_type",lang), t(myRole === "hotel" ? "check_in" : "arrival_date", lang), t("arrival_time",lang), t("flight_arrival",lang), t(myRole === "hotel" ? "check_out" : "departure_date", lang), t("departure_time",lang), t("flight_departure",lang), ...(canSeePassport ? [t("passport_col",lang)] : [])].map(h => (
+              {["#", t("filter_registration_date", lang), t("last_name",lang), t("first_name",lang), t("organization",lang), t("org_type_col",lang), t("country",lang), ...(isSuperAdmin ? [t("excursion_lang_label",lang)] : []), t("badge_country_col",lang), t("email",lang), ...(canSeePhone ? [t("phone_label",lang)] : []), t("nav_hotels",lang), t("room_type",lang), t(myRole === "hotel" ? "check_in" : "arrival_date", lang), t("arrival_time",lang), t("flight_arrival",lang), t(myRole === "hotel" ? "check_out" : "departure_date", lang), t("departure_time",lang), t("flight_departure",lang), ...(canSeePassport ? [t("passport_col",lang)] : [])].map(h => (
                 <th key={h} className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
               {isSuperAdmin && <th className="px-3 py-2 font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{t("vip_label", lang)}</th>}
@@ -3460,7 +3471,7 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={18 + (isSuperAdmin ? 2 : 0) + (canEdit ? 1 : 0) + (canSeePhone ? 1 : 0) + (canSeePassport ? 1 : 0)} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
+              <tr><td colSpan={18 + (isSuperAdmin ? 3 : 0) + (canEdit ? 1 : 0) + (canSeePhone ? 1 : 0) + (canSeePassport ? 1 : 0)} className="px-3 py-8 text-center text-black/40">{t("no_participants", lang)}</td></tr>
             )}
             {filtered.map(p => (
               <tr key={p.id} className="border-t" style={{ borderColor: "#E7DCC2" }}>
@@ -3471,6 +3482,13 @@ function AdminPanel({ lang, participants, stats, filtered, search, setSearch, co
                 <td className="px-3 py-2 whitespace-nowrap">{p.organization}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.orgType || "—"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{p.country}</td>
+                {isSuperAdmin && (
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <select className="text-xs px-1.5 py-1 border" style={{ borderColor: "#CFC4A3" }} value={["fr", "en", "pt"].includes(p.registrationLang) ? p.registrationLang : "fr"} onChange={e => onSetLang(p.id, e.target.value)} title={t("excursion_lang_label", lang)}>
+                      <option value="fr">FR</option><option value="en">EN</option><option value="pt">PT</option>
+                    </select>
+                  </td>
+                )}
                 <td className="px-3 py-2 whitespace-nowrap">
                   {canEdit ? (
                     <BadgeCountryLabelInput participant={p} onSave={onUpdateBadgeLabel} lang={lang} />
