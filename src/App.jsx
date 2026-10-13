@@ -530,9 +530,11 @@ const T = {
   edit_participant_btn: { fr: "Modifier", en: "Edit", pt: "Editar" },
   assign_hotel_title: { fr: "Attribuer un hôtel (ce participant n'en a pas choisi)", en: "Assign a hotel (this participant has not chosen one)", pt: "Atribuir um hotel (este participante não escolheu)" },
   assign_hotel_empty: { fr: "Aucun hôtel trouvé pour cet événement. Créez-en un dans Contenu → Hôtels.", en: "No hotel found for this event. Create one in Content → Hotels.", pt: "Nenhum hotel encontrado para este evento. Crie um em Conteúdo → Hotéis." },
+  change_hotel_title: { fr: "Changer l'hôtel — actuel :", en: "Change hotel — current:", pt: "Mudar o hotel — atual:" },
+  change_hotel_keep: { fr: "— Garder l'hôtel actuel —", en: "— Keep current hotel —", pt: "— Manter o hotel atual —" },
   assign_hotel_none: { fr: "— Aucun hôtel —", en: "— No hotel —", pt: "— Nenhum hotel —" },
   assign_hotel_room: { fr: "Type de chambre", en: "Room type", pt: "Tipo de quarto" },
-  edit_participant_note: { fr: "L'hôtel et la chambre ne se modifient pas ici (ils sont liés aux comptes hôtel) sauf pour un participant sans hôtel. Le participant n'est pas notifié.", en: "Hotel and room cannot be changed here (they are linked to hotel accounts). The participant is not notified.", pt: "O hotel e o quarto não se alteram aqui (estão ligados às contas de hotel). O participante não é notificado." },
+  edit_participant_note: { fr: "Changer l'hôtel déplace le participant vers le compte de ce nouvel hôtel (l'ancien hôtel ne le voit plus). Le participant n'est pas notifié.", en: "Changing the hotel moves the participant to the new hotel's account (the previous hotel no longer sees them). The participant is not notified.", pt: "Mudar o hotel move o participante para a conta do novo hotel (o anterior deixa de o ver). O participante não é notificado." },
   edit_save_error: { fr: "Enregistrement impossible. Vérifiez votre connexion et vos droits.", en: "Could not save. Check your connection and permissions.", pt: "Não foi possível guardar. Verifique a ligação e as permissões." },
   edit_invalid: { fr: "Champ invalide :", en: "Invalid field:", pt: "Campo inválido:" },
   reset_filters: { fr: "Réinitialiser les filtres", en: "Reset filters", pt: "Repor filtros" },
@@ -2926,7 +2928,8 @@ function ParticipantEditModal({ hotels: publishedHotels, eventId, lang, particip
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   // Attribution d'hôtel : uniquement pour un participant qui n'en a pas.
-  const canAssignHotel = !participant.hotelName;
+  const hasHotel = !!participant.hotelName;
+  const canAssignHotel = true; // super admin : attribuer OU changer l'hôtel
   // Liste complète des hôtels de l'événement (publiés ET brouillons),
   // lue directement : le super admin peut ainsi attribuer n'importe quel
   // hôtel, même si la liste publique est vide ou n'a pas été rechargée.
@@ -3024,11 +3027,11 @@ function ParticipantEditModal({ hotels: publishedHotels, eventId, lang, particip
         </div>
         {canAssignHotel && (
           <div className="mt-4 p-3 border" style={{ borderColor: "#CFC4A3", background: "var(--sable-deep)" }}>
-            <p className="text-sm font-semibold mb-2">{t("assign_hotel_title", lang)}</p>
+            <p className="text-sm font-semibold mb-2">{hasHotel ? `${t("change_hotel_title", lang)} ${participant.hotelName}${participant.roomType ? " — " + participant.roomType : ""}` : t("assign_hotel_title", lang)}</p>
             <div className="grid sm:grid-cols-2 gap-3">
               {(hotels || []).length === 0 && <p className="text-xs" style={{ color: "#8A2A2A" }}>{hotelsLoaded ? t("assign_hotel_empty", lang) : "…"}</p>}
               <select className="cb-input" value={assignHotelId} onChange={e => { setAssignHotelId(e.target.value); setAssignRoomId(""); }}>
-                <option value="">{t("assign_hotel_none", lang)}</option>
+                <option value="">{hasHotel ? t("change_hotel_keep", lang) : t("assign_hotel_none", lang)}</option>
                 {(hotels || []).map(h => <option key={h.id} value={h.id}>{(h.name[lang] || h.name.fr)}{h.draft ? ` (${t("status_draft", lang)})` : ""}</option>)}
               </select>
               {assignHotel && (
