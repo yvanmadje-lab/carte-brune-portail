@@ -530,6 +530,7 @@ const T = {
   edit_participant_btn: { fr: "Modifier", en: "Edit", pt: "Editar" },
   assign_hotel_title: { fr: "Attribuer un hôtel (ce participant n'en a pas choisi)", en: "Assign a hotel (this participant has not chosen one)", pt: "Atribuir um hotel (este participante não escolheu)" },
   assign_hotel_empty: { fr: "Aucun hôtel trouvé pour cet événement. Créez-en un dans Contenu → Hôtels.", en: "No hotel found for this event. Create one in Content → Hotels.", pt: "Nenhum hotel encontrado para este evento. Crie um em Conteúdo → Hotéis." },
+  cancel_hotel_label: { fr: "Annuler l'hôtel : le participant se loge ailleurs (l'hôtel, la chambre et les dates d'hôtel sont retirés)", en: "Cancel hotel: the participant will stay elsewhere (hotel, room and hotel dates are removed)", pt: "Cancelar o hotel: o participante ficará alojado noutro local (hotel, quarto e datas de hotel são removidos)" },
   change_hotel_title: { fr: "Changer l'hôtel — actuel :", en: "Change hotel — current:", pt: "Mudar o hotel — atual:" },
   change_hotel_keep: { fr: "— Garder l'hôtel actuel —", en: "— Keep current hotel —", pt: "— Manter o hotel atual —" },
   assign_hotel_none: { fr: "— Aucun hôtel —", en: "— No hotel —", pt: "— Nenhum hotel —" },
@@ -2969,6 +2970,7 @@ function ParticipantEditModal({ hotels: publishedHotels, eventId, lang, particip
     })();
     return () => { alive = false; };
   }, [participant.id]);
+  const [cancelHotel, setCancelHotel] = useState(false);
   const [assignHotelId, setAssignHotelId] = useState("");
   const [assignRoomId, setAssignRoomId] = useState("");
   const assignHotel = (hotels || []).find(h => h.id === assignHotelId) || null;
@@ -2992,7 +2994,12 @@ function ParticipantEditModal({ hotels: publishedHotels, eventId, lang, particip
       cols[f.col] = (v === "" && isOptional) ? null : v;
       local[f.key] = v;
     });
-    if (canAssignHotel && assignHotel && assignRoom) {
+    if (hasHotel && cancelHotel) {
+      // Le participant se loge ailleurs : on retire l'hôtel (et ses dates
+      // d'hôtel). Il n'apparaît plus chez aucun compte hôtel.
+      Object.assign(cols, { wants_hotel: "no", hotel_id: "", hotel_name: "", room_id: "", room_type: "", check_in: null, check_out: null });
+      Object.assign(local, { hotelId: "", hotelName: "", roomType: "", checkIn: "", checkOut: "" });
+    } else if (canAssignHotel && assignHotel && assignRoom) {
       const rl = ["fr", "en", "pt"].includes(participant.registrationLang) ? participant.registrationLang : "fr";
       const hName = assignHotel.name[rl] || assignHotel.name.fr;
       const rType = assignRoom.type[rl] || assignRoom.type.fr;
@@ -3039,7 +3046,13 @@ function ParticipantEditModal({ hotels: publishedHotels, eventId, lang, particip
         {canAssignHotel && (
           <div className="mt-4 p-3 border" style={{ borderColor: "#CFC4A3", background: "var(--sable-deep)" }}>
             <p className="text-sm font-semibold mb-2">{hasHotel ? `${t("change_hotel_title", lang)} ${participant.hotelName}${participant.roomType ? " — " + participant.roomType : ""}` : t("assign_hotel_title", lang)}</p>
-            <div className="grid sm:grid-cols-2 gap-3">
+            {hasHotel && (
+              <label className="flex items-start gap-2 text-sm mb-3 cursor-pointer" style={{ color: cancelHotel ? "#8A2A2A" : undefined }}>
+                <input type="checkbox" className="mt-1" checked={cancelHotel} onChange={e => setCancelHotel(e.target.checked)} />
+                <span>{t("cancel_hotel_label", lang)}</span>
+              </label>
+            )}
+            <div className="grid sm:grid-cols-2 gap-3" style={cancelHotel ? { opacity: 0.4, pointerEvents: "none" } : undefined}>
               {(hotels || []).length === 0 && <p className="text-xs" style={{ color: "#8A2A2A" }}>{hotelsLoaded ? t("assign_hotel_empty", lang) : "…"}</p>}
               <select className="cb-input" value={assignHotelId} onChange={e => { setAssignHotelId(e.target.value); setAssignRoomId(""); }}>
                 <option value="">{hasHotel ? t("change_hotel_keep", lang) : t("assign_hotel_none", lang)}</option>
